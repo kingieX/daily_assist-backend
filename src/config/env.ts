@@ -10,7 +10,14 @@ const envSchema = z.object({
   JWT_REFRESH_SECRET: z.string().min(32, 'JWT_REFRESH_SECRET must be at least 32 characters'),
   JWT_ACCESS_EXPIRES_IN: z.string().default('15m'),
   JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
-  BCRYPT_SALT_ROUNDS: z.coerce.number().int().min(8).max(15).default(12)
+  BCRYPT_SALT_ROUNDS: z.coerce.number().int().min(8).max(15).default(12),
+  // Email config — optional in dev (reset links are logged to console when not set)
+  EMAIL_HOST: z.string().optional(),
+  EMAIL_PORT: z.coerce.number().optional(),
+  EMAIL_USER: z.string().optional(),
+  EMAIL_PASS: z.string().optional(),
+  EMAIL_FROM: z.string().default('noreply@dailyassist.local'),
+  FRONTEND_URL: z.string().default('http://localhost:3000')
 });
 
 const parsedEnv = envSchema.safeParse(process.env);

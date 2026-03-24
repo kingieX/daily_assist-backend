@@ -8,6 +8,7 @@ async function startServer(): Promise<void> {
 
   const server = app.listen(env.PORT, () => {
     logger.info(`DailyAssist backend started on port ${env.PORT}`);
+    logger.info(`Swagger UI available at http://localhost:${env.PORT}/api/docs`);
   });
 
   const shutdown = async (signal: string): Promise<void> => {

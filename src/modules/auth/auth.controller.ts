@@ -85,6 +85,21 @@ const me = asyncHandler(async (req: Request, res: Response) => {
   return sendSuccess(res, 200, 'Current user fetched', req.user);
 });
 
+const forgotPassword = asyncHandler(async (req: Request, res: Response) => {
+  await authService.forgotPassword(req.body.email);
+  // Always return 200 — don't reveal whether the email exists
+  return sendSuccess(
+    res,
+    200,
+    'If that email is registered and active, a password reset link has been sent.'
+  );
+});
+
+const resetPassword = asyncHandler(async (req: Request, res: Response) => {
+  await authService.resetPassword(req.body.token, req.body.newPassword);
+  return sendSuccess(res, 200, 'Password reset successful. Please log in with your new password.');
+});
+
 const adminCheck = asyncHandler(async (_req: Request, res: Response) => {
   return sendSuccess(res, 200, 'Admin RBAC check passed');
 });
@@ -95,5 +110,7 @@ export const authController = {
   refresh,
   logout,
   me,
+  forgotPassword,
+  resetPassword,
   adminCheck
 };

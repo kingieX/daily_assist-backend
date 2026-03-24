@@ -1,32 +1,79 @@
 generator client {
   provider = "prisma-client-js"
 }
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
 enum Role {
   SUPER_ADMIN
   ADMIN
   STAFF
 }
+
 enum UserStatus {
   ACTIVE
   INACTIVE
   SUSPENDED
 }
+
+enum ClientStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum ClientSource {
+  WEB_BOOKING
+  ADMIN_CREATED
+}
+
+enum BookingStatus {
+  REQUESTED
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum ServiceType {
+  SELECTED
+  ADDITIONAL
+}
+
+enum ApplicationStatus {
+  PENDING
+  SHORTLISTED
+  INTERVIEWED
+  APPROVED
+  REJECTED
+  CONVERTED_TO_STAFF
+}
+
+// ─── Identity & Security ──────────────────────────────────────────────────────
+
 model User {
-  id           String         @id @default(uuid())
-  email        String         @unique
-  passwordHash String         @map("password_hash")
-  role         Role           @default(STAFF)
-  status       UserStatus     @default(ACTIVE)
-  lastLoginAt  DateTime?      @map("last_login_at")
-  createdAt    DateTime       @default(now()) @map("created_at")
-  updatedAt    DateTime       @updatedAt @map("updated_at")
-  refreshTokens RefreshToken[]
+  id                   String               @id @default(uuid())
+  email                String               @unique
+  passwordHash         String               @map("password_hash")
+  role                 Role                 @default(STAFF)
+  status               UserStatus           @default(ACTIVE)
+  lastLoginAt          DateTime?            @map("last_login_at")
+  createdAt            DateTime             @default(now()) @map("created_at")
+  updatedAt            DateTime             @updatedAt @map("updated_at")
+  refreshTokens        RefreshToken[]
+  passwordResetTokens  PasswordResetToken[]
+  staffProfile         StaffProfile?
+  assignedBookings     Booking[]            @relation("AssignedBookings")
+  bookingsAssignedBy   Booking[]            @relation("BookingsAssignedBy")
+  reviewedApplications WorkerApplication[]
+
   @@map("users")
 }
+
 model RefreshToken {
   id            String    @id @default(uuid())
   userId        String    @map("user_id")
@@ -37,6 +84,170 @@ model RefreshToken {
   revokedAt     DateTime? @map("revoked_at")
   replacedByJti String?   @map("replaced_by_jti")
   createdAt     DateTime  @default(now()) @map("created_at")
+
   @@index([userId])
   @@map("refresh_tokens")
+}
+
+model StaffProfile {
+  id                           String   @id @default(uuid())
+  userId                       String   @unique @map("user_id")
+  user                         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  firstName                    String   @map("first_name")
+  lastName                     String   @map("last_name")
+  phone                        String
+  address                      String?
+  city                         String?
+  zipcode                      String?
+  emergencyContactName         String?  @map("emergency_contact_name")
+  emergencyContactPhone        String?  @map("emergency_contact_phone")
+  emergencyContactRelationship String?  @map("emergency_contact_relationship")
+  photoUrl                     String?  @map("photo_url")
+  summary                      String?
+  skills                       String?
+  createdAt                    DateTime @default(now()) @map("created_at")
+  updatedAt                    DateTime @updatedAt @map("updated_at")
+
+  @@map("staff_profiles")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+// ─── Public Intake ────────────────────────────────────────────────────────────
+
+model Client {
+  id        String       @id @default(uuid())
+  firstName String       @map("first_name")
+  lastName  String       @map("last_name")
+  email     String?
+  phone     String
+  address   String?
+  city      String?
+  zipcode   String?
+  status    ClientStatus @default(ACTIVE)
+  source    ClientSource @default(WEB_BOOKING)
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @updatedAt @map("updated_at")
+  bookings  Booking[]
+
+  @@index([email])
+  @@map("clients")
+}
+
+model Package {
+  id              String           @id @default(uuid())
+  name            String
+  slug            String           @unique
+  description     String?
+  priceMin        Float?           @map("price_min")
+  priceMax        Float?           @map("price_max")
+  isActive        Boolean          @default(true) @map("is_active")
+  displayOrder    Int              @default(0) @map("display_order")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  packageServices PackageService[]
+  bookings        Booking[]
+
+  @@map("packages")
+}
+
+model Service {
+  id              String           @id @default(uuid())
+  name            String
+  slug            String           @unique
+  category        String?
+  description     String?
+  isAdditional    Boolean          @default(false) @map("is_additional")
+  isActive        Boolean          @default(true) @map("is_active")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  packageServices PackageService[]
+  bookingServices BookingService[]
+
+  @@map("services")
+}
+
+model PackageService {
+  id        String  @id @default(uuid())
+  packageId String  @map("package_id")
+  package   Package @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  serviceId String  @map("service_id")
+  service   Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@unique([packageId, serviceId])
+  @@map("package_services")
+}
+
+model Booking {
+  id                           String          @id @default(uuid())
+  clientId                     String          @map("client_id")
+  client                       Client          @relation(fields: [clientId], references: [id])
+  packageId                    String?         @map("package_id")
+  package                      Package?        @relation(fields: [packageId], references: [id])
+  selectedPlanSnapshot         Json?           @map("selected_plan_snapshot")
+  preferredDate                DateTime?       @map("preferred_date")
+  preferredTime                String?         @map("preferred_time")
+  startDate                    DateTime?       @map("start_date")
+  specialMessage               String?         @map("special_message")
+  emergencyContactName         String?         @map("emergency_contact_name")
+  emergencyContactPhone        String?         @map("emergency_contact_phone")
+  emergencyContactRelationship String?         @map("emergency_contact_relationship")
+  agreeToTerms                 Boolean         @default(false) @map("agree_to_terms")
+  consentToDailyassist         Boolean         @default(false) @map("consent_to_dailyassist")
+  status                       BookingStatus   @default(REQUESTED)
+  assignedStaffId              String?         @map("assigned_staff_id")
+  assignedStaff                User?           @relation("AssignedBookings", fields: [assignedStaffId], references: [id])
+  assignedBy                   String?         @map("assigned_by")
+  assignedByUser               User?           @relation("BookingsAssignedBy", fields: [assignedBy], references: [id])
+  assignedAt                   DateTime?       @map("assigned_at")
+  cancelledReason              String?         @map("cancelled_reason")
+  createdAt                    DateTime        @default(now()) @map("created_at")
+  updatedAt                    DateTime        @updatedAt @map("updated_at")
+  bookingServices              BookingService[]
+
+  @@map("bookings")
+}
+
+model BookingService {
+  id                  String      @id @default(uuid())
+  bookingId           String      @map("booking_id")
+  booking             Booking     @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  serviceId           String?     @map("service_id")
+  service             Service?    @relation(fields: [serviceId], references: [id])
+  serviceNameSnapshot String      @map("service_name_snapshot")
+  serviceType         ServiceType @map("service_type")
+  createdAt           DateTime    @default(now()) @map("created_at")
+
+  @@map("booking_services")
+}
+
+// ─── Recruitment ──────────────────────────────────────────────────────────────
+
+model WorkerApplication {
+  id          String            @id @default(uuid())
+  firstName   String            @map("first_name")
+  lastName    String            @map("last_name")
+  email       String
+  phone       String
+  cvFileUrl   String?           @map("cv_file_url")
+  status      ApplicationStatus @default(PENDING)
+  reviewNotes String?           @map("review_notes")
+  reviewedBy  String?           @map("reviewed_by")
+  reviewer    User?             @relation(fields: [reviewedBy], references: [id])
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+
+  @@index([email])
+  @@map("worker_applications")
 }

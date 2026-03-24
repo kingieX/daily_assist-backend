@@ -1,4 +1,7 @@
 import { Role, UserStatus } from '@prisma/client';
+import crypto from 'crypto';
+import { sendPasswordResetEmail } from '../../config/mailer';
+import { env } from '../../config/env';
 import { prisma } from '../../config/prisma';
 import { ApiError } from '../../utils/api-error';
 import { hashValue } from '../../utils/hash';
@@ -7,7 +10,7 @@ import {
   signRefreshToken,
   verifyRefreshToken
 } from '../../utils/jwt';
-import { comparePassword } from '../../utils/password';
+import { comparePassword, hashPassword } from '../../utils/password';
 
 interface LoginInput {
   email: string;
@@ -199,8 +202,76 @@ async function logout(refreshToken: string): Promise<void> {
   });
 }
 
+async function forgotPassword(email: string): Promise<void> {
+  const normalizedEmail = email.toLowerCase().trim();
+  const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+
+  // Always return without revealing whether the email exists (prevents enumeration)
+  if (!user || user.status !== UserStatus.ACTIVE) return;
+
+  // Invalidate any existing unused tokens for this user
+  await prisma.passwordResetToken.deleteMany({
+    where: { userId: user.id, usedAt: null }
+  });
+
+  const rawToken = crypto.randomBytes(32).toString('hex');
+  const tokenHash = hashValue(rawToken);
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+  await prisma.passwordResetToken.create({
+    data: { userId: user.id, tokenHash, expiresAt }
+  });
+
+  const resetUrl = `${env.FRONTEND_URL}/reset-password?token=${rawToken}`;
+  await sendPasswordResetEmail(user.email, resetUrl);
+}
+
+async function resetPassword(rawToken: string, newPassword: string): Promise<void> {
+  const tokenHash = hashValue(rawToken);
+
+  const resetToken = await prisma.passwordResetToken.findUnique({
+    where: { tokenHash },
+    include: {
+      user: { select: { id: true, status: true } }
+    }
+  });
+
+  if (!resetToken) {
+    throw new ApiError(400, 'Invalid or expired reset token');
+  }
+  if (resetToken.usedAt) {
+    throw new ApiError(400, 'Reset token has already been used');
+  }
+  if (resetToken.expiresAt < new Date()) {
+    throw new ApiError(400, 'Reset token has expired');
+  }
+  if (resetToken.user.status !== UserStatus.ACTIVE) {
+    throw new ApiError(403, 'User account is not active');
+  }
+
+  const passwordHash = await hashPassword(newPassword);
+
+  await prisma.$transaction([
+    prisma.user.update({
+      where: { id: resetToken.userId },
+      data: { passwordHash }
+    }),
+    prisma.passwordResetToken.update({
+      where: { id: resetToken.id },
+      data: { usedAt: new Date() }
+    }),
+    // Revoke all active refresh tokens so existing sessions are invalidated
+    prisma.refreshToken.updateMany({
+      where: { userId: resetToken.userId, revokedAt: null },
+      data: { revokedAt: new Date() }
+    })
+  ]);
+}
+
 export const authService = {
   login,
   refreshSession,
-  logout
+  logout,
+  forgotPassword,
+  resetPassword
 };

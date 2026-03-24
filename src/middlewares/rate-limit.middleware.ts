@@ -10,3 +10,15 @@ export const authRateLimiter = rateLimit({
     message: 'Too many authentication requests. Please try again later.'
   }
 });
+
+// Public form submissions (bookings, worker applications)
+export const publicFormRateLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 10,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many submission requests from this IP. Please try again later.'
+  }
+});
