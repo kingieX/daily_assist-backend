@@ -223,17 +223,16 @@ export const schemas: SchemasMap = {
 
   WorkerApplicationRequest: {
     type: 'object',
-    required: ['firstName', 'lastName', 'email', 'phone'],
+    required: ['firstName', 'lastName', 'email', 'phone', 'cv'],
     properties: {
       firstName: { type: 'string', example: 'Alice' },
       lastName: { type: 'string', example: 'Smith' },
       email: { type: 'string', format: 'email', example: 'alice.smith@example.com' },
       phone: { type: 'string', example: '+1 555 123 4567' },
-      cvFileUrl: {
+      cv: {
         type: 'string',
-        format: 'uri',
-        example: 'https://drive.google.com/file/d/abc123/view',
-        description: 'Link to CV (Google Drive, Dropbox, etc.). File upload via S3 available in later release.'
+        format: 'binary',
+        description: 'Upload CV file (PDF, DOC, or DOCX), max size 5MB.'
       }
     }
   },

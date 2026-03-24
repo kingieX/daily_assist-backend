@@ -206,6 +206,11 @@ export const publicPaths: OpenAPIV3.PathsObject = {
       description: [
         'Submits a job application for a domestic assistance worker position. No authentication required.',
         '',
+        '**CV upload requirements:**',
+        '- Field name: `cv`',
+        '- Allowed types: PDF, DOC, DOCX',
+        '- Maximum size: 5MB',
+        '',
         '**Duplicate prevention:**',
         '- Rejected if an active/pending application exists for the same email',
         '- Rejected if the email is already registered as a user account',
@@ -215,14 +220,13 @@ export const publicPaths: OpenAPIV3.PathsObject = {
       requestBody: {
         required: true,
         content: {
-          'application/json': {
+          'multipart/form-data': {
             schema: { $ref: '#/components/schemas/WorkerApplicationRequest' },
-            example: {
-              firstName: 'Alice',
-              lastName: 'Smith',
-              email: 'alice.smith@example.com',
-              phone: '+1 555 123 4567',
-              cvFileUrl: 'https://drive.google.com/file/d/abc123/view'
+            encoding: {
+              cv: {
+                contentType:
+                  'application/pdf, application/msword, application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+              }
             }
           }
         }

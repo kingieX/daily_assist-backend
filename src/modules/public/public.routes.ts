@@ -1,8 +1,9 @@
 import { Router } from 'express';
 import { publicFormRateLimiter } from '../../middlewares/rate-limit.middleware';
+import { uploadWorkerCv } from '../../middlewares/upload.middleware';
 import { validate } from '../../middlewares/validate.middleware';
 import { publicController } from './public.controller';
-import { createBookingSchema, workerApplicationSchema } from './public.validation';
+import { createBookingSchema } from './public.validation';
 
 const publicRouter = Router();
 
@@ -22,7 +23,7 @@ publicRouter.post(
 publicRouter.post(
   '/worker-applications',
   publicFormRateLimiter,
-  validate({ body: workerApplicationSchema }),
+  uploadWorkerCv,
   publicController.createWorkerApplication
 );
 

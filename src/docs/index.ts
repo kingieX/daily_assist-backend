@@ -3,6 +3,7 @@ import { responses } from './components/responses';
 import { schemas } from './components/schemas';
 import { securitySchemes } from './components/security';
 import { authPaths } from './paths/auth.paths';
+import { adminPaths } from './paths/admin.paths';
 import { healthPaths } from './paths/health.paths';
 import { protectedPaths } from './paths/protected.paths';
 import { publicPaths } from './paths/public.paths';
@@ -19,6 +20,7 @@ import { publicPaths } from './paths/public.paths';
  * Phase coverage:
  *  ✅ Phase 1 — Health, Auth (login/refresh/logout/me/admin-check), Protected test route
  *  ✅ Phase 2 — Auth (forgot/reset password), Public catalog (packages, services), Public intake (booking, worker application)
+ *  ✅ Phase 3 — Admin operations (bookings, clients, staff, recruitment conversion)
  */
 export const openApiSpec: OpenAPIV3.Document = {
   openapi: '3.0.0',
@@ -84,6 +86,22 @@ export const openApiSpec: OpenAPIV3.Document = {
     {
       name: 'Public — Intake',
       description: 'Public form submissions: booking requests and worker applications (no auth, rate-limited)'
+    },
+    {
+      name: 'Admin — Bookings',
+      description: 'Admin booking operations: list, detail, assign, and cancel'
+    },
+    {
+      name: 'Admin — Clients',
+      description: 'Admin client management: create, read, update, delete'
+    },
+    {
+      name: 'Admin — Staff',
+      description: 'Admin staff account provisioning and profile management'
+    },
+    {
+      name: 'Admin — Recruitment',
+      description: 'Recruitment review pipeline and applicant-to-staff conversion'
     }
   ],
 
@@ -97,7 +115,8 @@ export const openApiSpec: OpenAPIV3.Document = {
     ...healthPaths,
     ...authPaths,
     ...protectedPaths,
-    ...publicPaths
+    ...publicPaths,
+    ...adminPaths
     // Phase 3+: spread additional path modules here
     // e.g. ...adminBookingPaths, ...adminClientPaths, ...staffPaths
   }
