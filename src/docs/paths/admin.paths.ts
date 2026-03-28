@@ -9,14 +9,64 @@ const idParam: OpenAPIV3.ParameterObject = {
   schema: { type: 'string', format: 'uuid' }
 };
 
+const paginationParameters: OpenAPIV3.ParameterObject[] = [
+  {
+    name: 'page',
+    in: 'query',
+    schema: { type: 'integer', minimum: 1, default: 1 }
+  },
+  {
+    name: 'limit',
+    in: 'query',
+    schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 }
+  }
+];
+
 export const adminPaths: OpenAPIV3.PathsObject = {
+  '/admin/dashboard/summary': {
+    get: {
+      tags: ['Admin — Dashboard'],
+      summary: 'Get dashboard summary',
+      security: adminSecurity,
+      responses: {
+        '200': { description: 'Dashboard summary retrieved' },
+        '401': { $ref: '#/components/responses/UnauthorizedError' },
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+      }
+    }
+  },
+  '/admin/dashboard/charts': {
+    get: {
+      tags: ['Admin — Dashboard'],
+      summary: 'Get dashboard chart aggregates',
+      security: adminSecurity,
+      responses: {
+        '200': { description: 'Dashboard charts retrieved' },
+        '401': { $ref: '#/components/responses/UnauthorizedError' },
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+      }
+    }
+  },
+  '/admin/dashboard/alerts': {
+    get: {
+      tags: ['Admin — Dashboard'],
+      summary: 'Get dashboard operational alerts',
+      security: adminSecurity,
+      responses: {
+        '200': { description: 'Dashboard alerts retrieved' },
+        '401': { $ref: '#/components/responses/UnauthorizedError' },
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+      }
+    }
+  },
   '/admin/bookings': {
     get: {
       tags: ['Admin — Bookings'],
       summary: 'List bookings',
-      description: 'Returns bookings for admin operations. Supports optional filtering by status/client/staff.',
+      description: 'Returns paginated bookings with stable sorting and optional filters.',
       security: adminSecurity,
       parameters: [
+        ...paginationParameters,
         {
           name: 'status',
           in: 'query',
@@ -25,26 +75,21 @@ export const adminPaths: OpenAPIV3.PathsObject = {
             enum: ['REQUESTED', 'ASSIGNED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED']
           }
         },
+        { name: 'clientId', in: 'query', schema: { type: 'string', format: 'uuid' } },
+        { name: 'assignedStaffId', in: 'query', schema: { type: 'string', format: 'uuid' } },
         {
-          name: 'clientId',
+          name: 'sortBy',
           in: 'query',
-          schema: { type: 'string', format: 'uuid' }
+          schema: { type: 'string', enum: ['createdAt', 'preferredDate', 'updatedAt'], default: 'createdAt' }
         },
         {
-          name: 'assignedStaffId',
+          name: 'sortOrder',
           in: 'query',
-          schema: { type: 'string', format: 'uuid' }
+          schema: { type: 'string', enum: ['asc', 'desc'], default: 'desc' }
         }
       ],
       responses: {
-        '200': {
-          description: 'Bookings retrieved',
-          content: {
-            'application/json': {
-              schema: { $ref: '#/components/schemas/SuccessResponse' }
-            }
-          }
-        },
+        '200': { description: 'Bookings retrieved' },
         '401': { $ref: '#/components/responses/UnauthorizedError' },
         '403': { $ref: '#/components/responses/ForbiddenError' }
       }
@@ -57,16 +102,39 @@ export const adminPaths: OpenAPIV3.PathsObject = {
       security: adminSecurity,
       parameters: [idParam],
       responses: {
-        '200': {
-          description: 'Booking retrieved',
-          content: {
-            'application/json': {
-              schema: { $ref: '#/components/schemas/SuccessResponse' }
-            }
-          }
-        },
+        '200': { description: 'Booking retrieved' },
         '401': { $ref: '#/components/responses/UnauthorizedError' },
         '403': { $ref: '#/components/responses/ForbiddenError' },
+        '404': { $ref: '#/components/responses/NotFound' }
+      }
+    },
+    patch: {
+      tags: ['Admin — Bookings'],
+      summary: 'Update mutable booking fields',
+      security: adminSecurity,
+      parameters: [idParam],
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              properties: {
+                preferredDate: { type: 'string', format: 'date-time' },
+                preferredTime: { type: 'string' },
+                startDate: { type: 'string', format: 'date-time' },
+                specialMessage: { type: 'string' },
+                emergencyContactName: { type: 'string' },
+                emergencyContactPhone: { type: 'string' },
+                emergencyContactRelationship: { type: 'string' }
+              }
+            }
+          }
+        }
+      },
+      responses: {
+        '200': { description: 'Booking updated' },
+        '400': { $ref: '#/components/responses/ValidationError' },
         '404': { $ref: '#/components/responses/NotFound' }
       }
     }
@@ -92,17 +160,8 @@ export const adminPaths: OpenAPIV3.PathsObject = {
         }
       },
       responses: {
-        '200': {
-          description: 'Booking assigned',
-          content: {
-            'application/json': {
-              schema: { $ref: '#/components/schemas/SuccessResponse' }
-            }
-          }
-        },
+        '200': { description: 'Booking assigned' },
         '400': { $ref: '#/components/responses/ValidationError' },
-        '401': { $ref: '#/components/responses/UnauthorizedError' },
-        '403': { $ref: '#/components/responses/ForbiddenError' },
         '404': { $ref: '#/components/responses/NotFound' }
       }
     }
@@ -120,25 +179,40 @@ export const adminPaths: OpenAPIV3.PathsObject = {
             schema: {
               type: 'object',
               required: ['reason'],
+              properties: { reason: { type: 'string', minLength: 3, maxLength: 500 } }
+            }
+          }
+        }
+      },
+      responses: {
+        '200': { description: 'Booking cancelled' },
+        '400': { $ref: '#/components/responses/ValidationError' },
+        '404': { $ref: '#/components/responses/NotFound' }
+      }
+    }
+  },
+  '/admin/bookings/{id}/complete': {
+    post: {
+      tags: ['Admin — Bookings'],
+      summary: 'Complete booking',
+      security: adminSecurity,
+      parameters: [idParam],
+      requestBody: {
+        required: false,
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
               properties: {
-                reason: { type: 'string', minLength: 3, maxLength: 500 }
+                completionNotes: { type: 'string', maxLength: 1000 }
               }
             }
           }
         }
       },
       responses: {
-        '200': {
-          description: 'Booking cancelled',
-          content: {
-            'application/json': {
-              schema: { $ref: '#/components/schemas/SuccessResponse' }
-            }
-          }
-        },
+        '200': { description: 'Booking completed' },
         '400': { $ref: '#/components/responses/ValidationError' },
-        '401': { $ref: '#/components/responses/UnauthorizedError' },
-        '403': { $ref: '#/components/responses/ForbiddenError' },
         '404': { $ref: '#/components/responses/NotFound' }
       }
     }
@@ -149,27 +223,24 @@ export const adminPaths: OpenAPIV3.PathsObject = {
       summary: 'List clients',
       security: adminSecurity,
       parameters: [
+        ...paginationParameters,
         {
           name: 'status',
           in: 'query',
-          schema: {
-            type: 'string',
-            enum: ['ACTIVE', 'INACTIVE']
-          }
+          schema: { type: 'string', enum: ['ACTIVE', 'INACTIVE'] }
+        },
+        {
+          name: 'sortBy',
+          in: 'query',
+          schema: { type: 'string', enum: ['createdAt', 'updatedAt', 'firstName'], default: 'createdAt' }
+        },
+        {
+          name: 'sortOrder',
+          in: 'query',
+          schema: { type: 'string', enum: ['asc', 'desc'], default: 'desc' }
         }
       ],
-      responses: {
-        '200': {
-          description: 'Clients retrieved',
-          content: {
-            'application/json': {
-              schema: { $ref: '#/components/schemas/SuccessResponse' }
-            }
-          }
-        },
-        '401': { $ref: '#/components/responses/UnauthorizedError' },
-        '403': { $ref: '#/components/responses/ForbiddenError' }
-      }
+      responses: { '200': { description: 'Clients retrieved' } }
     },
     post: {
       tags: ['Admin — Clients'],
@@ -177,41 +248,9 @@ export const adminPaths: OpenAPIV3.PathsObject = {
       security: adminSecurity,
       requestBody: {
         required: true,
-        content: {
-          'application/json': {
-            schema: {
-              type: 'object',
-              required: ['firstName', 'lastName', 'phone'],
-              properties: {
-                firstName: { type: 'string' },
-                lastName: { type: 'string' },
-                email: { type: 'string', format: 'email' },
-                phone: { type: 'string' },
-                address: { type: 'string' },
-                city: { type: 'string' },
-                zipcode: { type: 'string' },
-                status: {
-                  type: 'string',
-                  enum: ['ACTIVE', 'INACTIVE']
-                }
-              }
-            }
-          }
-        }
+        content: { 'application/json': { schema: { type: 'object', required: ['firstName','lastName','phone'], properties: { firstName: { type: 'string' }, lastName: { type: 'string' }, email: { type: 'string', format: 'email' }, phone: { type: 'string' }, address: { type: 'string' }, city: { type: 'string' }, zipcode: { type: 'string' }, status: { type: 'string', enum: ['ACTIVE','INACTIVE'] } } } } }
       },
-      responses: {
-        '201': {
-          description: 'Client created',
-          content: {
-            'application/json': {
-              schema: { $ref: '#/components/schemas/SuccessResponse' }
-            }
-          }
-        },
-        '400': { $ref: '#/components/responses/ValidationError' },
-        '401': { $ref: '#/components/responses/UnauthorizedError' },
-        '403': { $ref: '#/components/responses/ForbiddenError' }
-      }
+      responses: { '201': { description: 'Client created' } }
     }
   },
   '/admin/clients/{id}': {
@@ -220,19 +259,7 @@ export const adminPaths: OpenAPIV3.PathsObject = {
       summary: 'Get client by ID',
       security: adminSecurity,
       parameters: [idParam],
-      responses: {
-        '200': {
-          description: 'Client retrieved',
-          content: {
-            'application/json': {
-              schema: { $ref: '#/components/schemas/SuccessResponse' }
-            }
-          }
-        },
-        '401': { $ref: '#/components/responses/UnauthorizedError' },
-        '403': { $ref: '#/components/responses/ForbiddenError' },
-        '404': { $ref: '#/components/responses/NotFound' }
-      }
+      responses: { '200': { description: 'Client retrieved' }, '404': { $ref: '#/components/responses/NotFound' } }
     },
     patch: {
       tags: ['Admin — Clients'],
@@ -241,68 +268,16 @@ export const adminPaths: OpenAPIV3.PathsObject = {
       parameters: [idParam],
       requestBody: {
         required: true,
-        content: {
-          'application/json': {
-            schema: {
-              type: 'object',
-              properties: {
-                firstName: { type: 'string' },
-                lastName: { type: 'string' },
-                email: { type: 'string', format: 'email' },
-                phone: { type: 'string' },
-                address: { type: 'string' },
-                city: { type: 'string' },
-                zipcode: { type: 'string' },
-                status: {
-                  type: 'string',
-                  enum: ['ACTIVE', 'INACTIVE']
-                }
-              }
-            }
-          }
-        }
+        content: { 'application/json': { schema: { type: 'object' } } }
       },
-      responses: {
-        '200': {
-          description: 'Client updated',
-          content: {
-            'application/json': {
-              schema: { $ref: '#/components/schemas/SuccessResponse' }
-            }
-          }
-        },
-        '400': { $ref: '#/components/responses/ValidationError' },
-        '401': { $ref: '#/components/responses/UnauthorizedError' },
-        '403': { $ref: '#/components/responses/ForbiddenError' },
-        '404': { $ref: '#/components/responses/NotFound' }
-      }
+      responses: { '200': { description: 'Client updated' } }
     },
     delete: {
       tags: ['Admin — Clients'],
       summary: 'Delete client',
       security: adminSecurity,
       parameters: [idParam],
-      responses: {
-        '200': {
-          description: 'Client deleted',
-          content: {
-            'application/json': {
-              schema: { $ref: '#/components/schemas/SuccessResponse' }
-            }
-          }
-        },
-        '401': { $ref: '#/components/responses/UnauthorizedError' },
-        '403': { $ref: '#/components/responses/ForbiddenError' },
-        '404': { $ref: '#/components/responses/NotFound' },
-        '409': {
-          description: 'Client has related bookings and cannot be deleted',
-          content: {
-            'application/json': {
-              schema: { $ref: '#/components/schemas/ErrorResponse' }
-            }
-          }
-        }
-      }
+      responses: { '200': { description: 'Client deleted' }, '409': { description: 'Client has related bookings' } }
     }
   },
   '/admin/staff': {
@@ -311,82 +286,31 @@ export const adminPaths: OpenAPIV3.PathsObject = {
       summary: 'List staff',
       security: adminSecurity,
       parameters: [
+        ...paginationParameters,
         {
           name: 'status',
           in: 'query',
-          schema: {
-            type: 'string',
-            enum: ['ACTIVE', 'INACTIVE', 'SUSPENDED']
-          }
+          schema: { type: 'string', enum: ['ACTIVE', 'INACTIVE', 'SUSPENDED'] }
+        },
+        {
+          name: 'sortBy',
+          in: 'query',
+          schema: { type: 'string', enum: ['createdAt', 'updatedAt', 'lastLoginAt', 'email'], default: 'createdAt' }
+        },
+        {
+          name: 'sortOrder',
+          in: 'query',
+          schema: { type: 'string', enum: ['asc', 'desc'], default: 'desc' }
         }
       ],
-      responses: {
-        '200': {
-          description: 'Staff list retrieved',
-          content: {
-            'application/json': {
-              schema: { $ref: '#/components/schemas/SuccessResponse' }
-            }
-          }
-        },
-        '401': { $ref: '#/components/responses/UnauthorizedError' },
-        '403': { $ref: '#/components/responses/ForbiddenError' }
-      }
+      responses: { '200': { description: 'Staff retrieved' } }
     },
     post: {
       tags: ['Admin — Staff'],
-      summary: 'Create staff account',
-      description: 'Creates a new STAFF user and linked staff profile. Admin-only.',
+      summary: 'Create staff',
       security: adminSecurity,
-      requestBody: {
-        required: true,
-        content: {
-          'application/json': {
-            schema: {
-              type: 'object',
-              required: ['email', 'password', 'firstName', 'lastName', 'phone'],
-              properties: {
-                email: { type: 'string', format: 'email' },
-                password: { type: 'string', minLength: 8 },
-                firstName: { type: 'string' },
-                lastName: { type: 'string' },
-                phone: { type: 'string' },
-                address: { type: 'string' },
-                city: { type: 'string' },
-                zipcode: { type: 'string' },
-                emergencyContactName: { type: 'string' },
-                emergencyContactPhone: { type: 'string' },
-                emergencyContactRelationship: { type: 'string' },
-                photoUrl: { type: 'string', format: 'uri' },
-                summary: { type: 'string' },
-                skills: { type: 'string' },
-                status: { type: 'string', enum: ['ACTIVE', 'INACTIVE', 'SUSPENDED'] }
-              }
-            }
-          }
-        }
-      },
-      responses: {
-        '201': {
-          description: 'Staff created',
-          content: {
-            'application/json': {
-              schema: { $ref: '#/components/schemas/SuccessResponse' }
-            }
-          }
-        },
-        '400': { $ref: '#/components/responses/ValidationError' },
-        '401': { $ref: '#/components/responses/UnauthorizedError' },
-        '403': { $ref: '#/components/responses/ForbiddenError' },
-        '409': {
-          description: 'Email already exists',
-          content: {
-            'application/json': {
-              schema: { $ref: '#/components/schemas/ErrorResponse' }
-            }
-          }
-        }
-      }
+      requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+      responses: { '201': { description: 'Staff created' } }
     }
   },
   '/admin/staff/{id}': {
@@ -395,192 +319,97 @@ export const adminPaths: OpenAPIV3.PathsObject = {
       summary: 'Get staff by ID',
       security: adminSecurity,
       parameters: [idParam],
-      responses: {
-        '200': {
-          description: 'Staff retrieved',
-          content: {
-            'application/json': {
-              schema: { $ref: '#/components/schemas/SuccessResponse' }
-            }
-          }
-        },
-        '401': { $ref: '#/components/responses/UnauthorizedError' },
-        '403': { $ref: '#/components/responses/ForbiddenError' },
-        '404': { $ref: '#/components/responses/NotFound' }
-      }
+      responses: { '200': { description: 'Staff retrieved' } }
     },
     patch: {
       tags: ['Admin — Staff'],
       summary: 'Update staff',
       security: adminSecurity,
       parameters: [idParam],
+      requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+      responses: { '200': { description: 'Staff updated' } }
+    },
+    delete: {
+      tags: ['Admin — Staff'],
+      summary: 'Deactivate staff',
+      security: adminSecurity,
+      parameters: [idParam],
+      responses: { '200': { description: 'Staff deactivated' } }
+    }
+  },
+  '/admin/staff/{id}/reset-password': {
+    post: {
+      tags: ['Admin — Staff'],
+      summary: 'Reset staff password',
+      security: adminSecurity,
+      parameters: [idParam],
       requestBody: {
         required: true,
         content: {
           'application/json': {
             schema: {
               type: 'object',
-              properties: {
-                email: { type: 'string', format: 'email' },
-                status: { type: 'string', enum: ['ACTIVE', 'INACTIVE', 'SUSPENDED'] },
-                firstName: { type: 'string' },
-                lastName: { type: 'string' },
-                phone: { type: 'string' },
-                address: { type: 'string' },
-                city: { type: 'string' },
-                zipcode: { type: 'string' },
-                emergencyContactName: { type: 'string' },
-                emergencyContactPhone: { type: 'string' },
-                emergencyContactRelationship: { type: 'string' },
-                photoUrl: { type: 'string', format: 'uri' },
-                summary: { type: 'string' },
-                skills: { type: 'string' }
-              }
+              required: ['newPassword'],
+              properties: { newPassword: { type: 'string', minLength: 8 } }
             }
           }
         }
       },
-      responses: {
-        '200': {
-          description: 'Staff updated',
-          content: {
-            'application/json': {
-              schema: { $ref: '#/components/schemas/SuccessResponse' }
-            }
-          }
-        },
-        '400': { $ref: '#/components/responses/ValidationError' },
-        '401': { $ref: '#/components/responses/UnauthorizedError' },
-        '403': { $ref: '#/components/responses/ForbiddenError' },
-        '404': { $ref: '#/components/responses/NotFound' }
-      }
-    },
-    delete: {
-      tags: ['Admin — Staff'],
-      summary: 'Deactivate staff',
-      description: 'Soft delete behavior. Marks staff user as INACTIVE and revokes active refresh tokens.',
-      security: adminSecurity,
-      parameters: [idParam],
-      responses: {
-        '200': {
-          description: 'Staff deactivated',
-          content: {
-            'application/json': {
-              schema: { $ref: '#/components/schemas/SuccessResponse' }
-            }
-          }
-        },
-        '401': { $ref: '#/components/responses/UnauthorizedError' },
-        '403': { $ref: '#/components/responses/ForbiddenError' },
-        '404': { $ref: '#/components/responses/NotFound' }
-      }
+      responses: { '200': { description: 'Password reset successful' } }
     }
   },
   '/admin/recruitment/applications': {
     get: {
       tags: ['Admin — Recruitment'],
-      summary: 'List worker applications',
+      summary: 'List recruitment applications',
       security: adminSecurity,
       parameters: [
+        ...paginationParameters,
         {
           name: 'status',
           in: 'query',
           schema: {
             type: 'string',
-            enum: [
-              'PENDING',
-              'SHORTLISTED',
-              'INTERVIEWED',
-              'APPROVED',
-              'REJECTED',
-              'CONVERTED_TO_STAFF'
-            ]
-          }
-        }
-      ],
-      responses: {
-        '200': {
-          description: 'Applications retrieved',
-          content: {
-            'application/json': {
-              schema: { $ref: '#/components/schemas/SuccessResponse' }
-            }
+            enum: ['PENDING', 'SHORTLISTED', 'INTERVIEWED', 'APPROVED', 'REJECTED', 'CONVERTED_TO_STAFF']
           }
         },
-        '401': { $ref: '#/components/responses/UnauthorizedError' },
-        '403': { $ref: '#/components/responses/ForbiddenError' }
-      }
+        {
+          name: 'sortBy',
+          in: 'query',
+          schema: { type: 'string', enum: ['createdAt', 'updatedAt', 'status'], default: 'createdAt' }
+        },
+        {
+          name: 'sortOrder',
+          in: 'query',
+          schema: { type: 'string', enum: ['asc', 'desc'], default: 'desc' }
+        }
+      ],
+      responses: { '200': { description: 'Applications retrieved' } }
     }
   },
   '/admin/recruitment/applications/{id}': {
     get: {
       tags: ['Admin — Recruitment'],
-      summary: 'Get worker application by ID',
+      summary: 'Get application by ID',
       security: adminSecurity,
       parameters: [idParam],
-      responses: {
-        '200': {
-          description: 'Application retrieved',
-          content: {
-            'application/json': {
-              schema: { $ref: '#/components/schemas/SuccessResponse' }
-            }
-          }
-        },
-        '401': { $ref: '#/components/responses/UnauthorizedError' },
-        '403': { $ref: '#/components/responses/ForbiddenError' },
-        '404': { $ref: '#/components/responses/NotFound' }
-      }
+      responses: { '200': { description: 'Application retrieved' }, '404': { $ref: '#/components/responses/NotFound' } }
     }
   },
   '/admin/recruitment/applications/{id}/status': {
     patch: {
       tags: ['Admin — Recruitment'],
-      summary: 'Update worker application status',
-      description:
-        'Updates recruitment review state. Use convert-to-staff endpoint for conversion instead of setting CONVERTED_TO_STAFF directly.',
+      summary: 'Update application status',
       security: adminSecurity,
       parameters: [idParam],
-      requestBody: {
-        required: true,
-        content: {
-          'application/json': {
-            schema: {
-              type: 'object',
-              required: ['status'],
-              properties: {
-                status: {
-                  type: 'string',
-                  enum: ['PENDING', 'SHORTLISTED', 'INTERVIEWED', 'APPROVED', 'REJECTED']
-                },
-                reviewNotes: { type: 'string' }
-              }
-            }
-          }
-        }
-      },
-      responses: {
-        '200': {
-          description: 'Application status updated',
-          content: {
-            'application/json': {
-              schema: { $ref: '#/components/schemas/SuccessResponse' }
-            }
-          }
-        },
-        '400': { $ref: '#/components/responses/ValidationError' },
-        '401': { $ref: '#/components/responses/UnauthorizedError' },
-        '403': { $ref: '#/components/responses/ForbiddenError' },
-        '404': { $ref: '#/components/responses/NotFound' }
-      }
+      requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+      responses: { '200': { description: 'Status updated' } }
     }
   },
   '/admin/recruitment/applications/{id}/convert-to-staff': {
     post: {
       tags: ['Admin — Recruitment'],
-      summary: 'Convert approved applicant to staff',
-      description:
-        'Creates a STAFF user and profile from an APPROVED worker application, then marks the application as CONVERTED_TO_STAFF.',
+      summary: 'Convert approved application to staff account',
       security: adminSecurity,
       parameters: [idParam],
       requestBody: {
@@ -590,35 +419,12 @@ export const adminPaths: OpenAPIV3.PathsObject = {
             schema: {
               type: 'object',
               required: ['password'],
-              properties: {
-                password: { type: 'string', minLength: 8 }
-              }
+              properties: { password: { type: 'string', minLength: 8 } }
             }
           }
         }
       },
-      responses: {
-        '201': {
-          description: 'Applicant converted to staff',
-          content: {
-            'application/json': {
-              schema: { $ref: '#/components/schemas/SuccessResponse' }
-            }
-          }
-        },
-        '400': { $ref: '#/components/responses/ValidationError' },
-        '401': { $ref: '#/components/responses/UnauthorizedError' },
-        '403': { $ref: '#/components/responses/ForbiddenError' },
-        '404': { $ref: '#/components/responses/NotFound' },
-        '409': {
-          description: 'Email conflict with existing user account',
-          content: {
-            'application/json': {
-              schema: { $ref: '#/components/schemas/ErrorResponse' }
-            }
-          }
-        }
-      }
+      responses: { '201': { description: 'Applicant converted to staff' } }
     }
   }
 };
