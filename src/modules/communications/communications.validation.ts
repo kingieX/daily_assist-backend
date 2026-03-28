@@ -1,4 +1,4 @@
-import { AudienceType, NotificationType, Role } from '@prisma/client';
+import { Role } from '@prisma/client';
 import { z } from 'zod';
 
 export const idParamSchema = z.object({
@@ -9,6 +9,17 @@ const paginationSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20)
 });
+
+const COMM_AUDIENCE = {
+  ALL_STAFF: 'ALL_STAFF',
+  SELECTED_STAFF: 'SELECTED_STAFF'
+} as const;
+
+const COMM_NOTIFICATION_TYPE = {
+  MESSAGE: 'MESSAGE',
+  ANNOUNCEMENT: 'ANNOUNCEMENT',
+  SYSTEM: 'SYSTEM'
+} as const;
 
 export const listThreadsQuerySchema = paginationSchema.extend({
   staffId: z.string().uuid().optional()
@@ -23,11 +34,11 @@ export const createAnnouncementSchema = z
   .object({
     title: z.string().trim().min(1).max(200),
     body: z.string().trim().min(1).max(4000),
-    audienceType: z.nativeEnum(AudienceType),
+    audienceType: z.enum([COMM_AUDIENCE.ALL_STAFF, COMM_AUDIENCE.SELECTED_STAFF]),
     staffIds: z.array(z.string().uuid()).optional()
   })
   .superRefine((data, ctx) => {
-    if (data.audienceType === AudienceType.SELECTED_STAFF && (!data.staffIds || data.staffIds.length === 0)) {
+    if (data.audienceType === COMM_AUDIENCE.SELECTED_STAFF && (!data.staffIds || data.staffIds.length === 0)) {
       ctx.addIssue({
         code: 'custom',
         message: 'staffIds is required when audienceType is SELECTED_STAFF',
@@ -37,7 +48,13 @@ export const createAnnouncementSchema = z
   });
 
 export const listNotificationsQuerySchema = paginationSchema.extend({
-  type: z.nativeEnum(NotificationType).optional(),
+  type: z
+    .enum([
+      COMM_NOTIFICATION_TYPE.MESSAGE,
+      COMM_NOTIFICATION_TYPE.ANNOUNCEMENT,
+      COMM_NOTIFICATION_TYPE.SYSTEM
+    ])
+    .optional(),
   unreadOnly: z.coerce.boolean().optional()
 });
 

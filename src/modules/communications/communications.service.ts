@@ -1,4 +1,4 @@
-import { AudienceType, NotificationType, Prisma, Role } from '@prisma/client';
+import { Prisma, Role } from '@prisma/client';
 import { prisma } from '../../config/prisma';
 import { ApiError } from '../../utils/api-error';
 import type {
@@ -7,6 +7,17 @@ import type {
   ListThreadsQuery,
   PostMessageInput
 } from './communications.validation';
+
+
+const COMM_AUDIENCE = {
+  ALL_STAFF: 'ALL_STAFF',
+  SELECTED_STAFF: 'SELECTED_STAFF'
+} as const;
+
+const COMM_NOTIFICATION_TYPE = {
+  MESSAGE: 'MESSAGE',
+  ANNOUNCEMENT: 'ANNOUNCEMENT'
+} as const;
 
 function paginated<T>(items: T[], total: number, page: number, limit: number) {
   return {
@@ -142,7 +153,7 @@ async function postMessage(
       await tx.notification.create({
         data: {
           userId: conversation.staffId,
-          type: NotificationType.MESSAGE,
+          type: COMM_NOTIFICATION_TYPE.MESSAGE,
           title: 'New message',
           body: input.body.slice(0, 150),
           metadataJson: { conversationId }
@@ -219,7 +230,7 @@ async function createAnnouncement(input: CreateAnnouncementInput, actorUserId: s
     status: 'ACTIVE'
   };
 
-  if (input.audienceType === AudienceType.SELECTED_STAFF) {
+  if (input.audienceType === COMM_AUDIENCE.SELECTED_STAFF) {
     staffWhere.id = { in: input.staffIds ?? [] };
   }
 
@@ -253,7 +264,7 @@ async function createAnnouncement(input: CreateAnnouncementInput, actorUserId: s
     await tx.notification.createMany({
       data: recipients.map((recipient) => ({
         userId: recipient.id,
-        type: NotificationType.ANNOUNCEMENT,
+        type: COMM_NOTIFICATION_TYPE.ANNOUNCEMENT,
         title: input.title,
         body: input.body.slice(0, 200),
         metadataJson: { announcementId: announcement.id }
