@@ -53,6 +53,26 @@ enum ApplicationStatus {
   CONVERTED_TO_STAFF
 }
 
+enum VisitStatus {
+  ASSIGNED
+  ACKNOWLEDGED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum VisitEventType {
+  ASSIGNED
+  REASSIGNED
+  ACKNOWLEDGED
+  CHECKED_IN
+  CHECKED_OUT
+  CANCELLED
+  COMPLETED
+  NOTE_UPDATED
+}
+
 // ─── Identity & Security ──────────────────────────────────────────────────────
 
 model User {
@@ -70,6 +90,8 @@ model User {
   assignedBookings     Booking[]            @relation("AssignedBookings")
   bookingsAssignedBy   Booking[]            @relation("BookingsAssignedBy")
   reviewedApplications WorkerApplication[]
+  visitsAsStaff        Visit[]             @relation("VisitsAsStaff")
+  visitEvents          VisitEvent[]
 
   @@map("users")
 }
@@ -215,6 +237,7 @@ model Booking {
   createdAt                    DateTime        @default(now()) @map("created_at")
   updatedAt                    DateTime        @updatedAt @map("updated_at")
   bookingServices              BookingService[]
+  visits                       Visit[]
 
   @@map("bookings")
 }
@@ -230,6 +253,45 @@ model BookingService {
   createdAt           DateTime    @default(now()) @map("created_at")
 
   @@map("booking_services")
+}
+
+model Visit {
+  id                String      @id @default(uuid())
+  bookingId         String      @map("booking_id")
+  booking           Booking     @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  staffId           String      @map("staff_id")
+  staff             User        @relation("VisitsAsStaff", fields: [staffId], references: [id])
+  scheduledStartAt  DateTime    @map("scheduled_start_at")
+  scheduledEndAt    DateTime    @map("scheduled_end_at")
+  status            VisitStatus @default(ASSIGNED)
+  acknowledgedAt    DateTime?   @map("acknowledged_at")
+  checkInAt         DateTime?   @map("check_in_at")
+  checkOutAt        DateTime?   @map("check_out_at")
+  adminNotes        String?     @map("admin_notes")
+  staffNotes        String?     @map("staff_notes")
+  completionSummary String?     @map("completion_summary")
+  createdAt         DateTime    @default(now()) @map("created_at")
+  updatedAt         DateTime    @updatedAt @map("updated_at")
+  events            VisitEvent[]
+
+  @@index([bookingId])
+  @@index([staffId, status])
+  @@map("visits")
+}
+
+model VisitEvent {
+  id          String         @id @default(uuid())
+  visitId     String         @map("visit_id")
+  visit       Visit          @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  actorUserId String         @map("actor_user_id")
+  actorUser   User           @relation(fields: [actorUserId], references: [id])
+  eventType   VisitEventType @map("event_type")
+  payloadJson Json?          @map("payload_json")
+  createdAt   DateTime       @default(now()) @map("created_at")
+
+  @@index([visitId, createdAt])
+  @@index([actorUserId])
+  @@map("visit_events")
 }
 
 // ─── Recruitment ──────────────────────────────────────────────────────────────

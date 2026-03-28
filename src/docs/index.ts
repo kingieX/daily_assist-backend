@@ -20,7 +20,8 @@ import { publicPaths } from './paths/public.paths';
  * Phase coverage:
  *  ✅ Phase 1 — Health, Auth (login/refresh/logout/me/admin-check), Protected test route
  *  ✅ Phase 2 — Auth (forgot/reset password), Public catalog (packages, services), Public intake (booking, worker application)
- *  ✅ Phase 3 — Admin operations (bookings, clients, staff, recruitment conversion)
+ *  ✅ Phase 3 — Admin operations (dashboard, bookings, clients, staff, recruitment conversion)
+ *  🚧 Phase 4 kickoff — Visits schema and migration added
  */
 export const openApiSpec: OpenAPIV3.Document = {
   openapi: '3.0.0',
@@ -86,6 +87,10 @@ export const openApiSpec: OpenAPIV3.Document = {
     {
       name: 'Public — Intake',
       description: 'Public form submissions: booking requests and worker applications (no auth, rate-limited)'
+    },
+    {
+      name: 'Admin — Dashboard',
+      description: 'Admin dashboard summary, charts, and alert widgets'
     },
     {
       name: 'Admin — Bookings',
