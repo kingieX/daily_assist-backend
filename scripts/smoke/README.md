@@ -59,7 +59,8 @@ STAFF_ID='<staff-user-uuid>' \
 
 Checks:
 1. `POST /admin/visits`
-2. `POST /staff/visits/:id/acknowledge`
-3. `POST /staff/visits/:id/check-in`
-4. `POST /staff/visits/:id/check-out`
-5. `GET /admin/visits/:id` (verify event timeline)
+2. `GET /staff/dashboard/summary`
+3. `POST /staff/visits/:id/acknowledge`
+4. `POST /staff/visits/:id/check-in`
+5. `POST /staff/visits/:id/check-out`
+6. `GET /admin/visits/:id` (verify event timeline)

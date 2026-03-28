@@ -3,7 +3,8 @@
 - ✅ Phase 1 implemented: base server, auth, RBAC, middleware stack
 - ✅ Phase 2 implemented: public packages/services, bookings, worker applications
 - ✅ Phase 3 implemented: admin dashboard, bookings/client/staff/recruitment operations
-- 🚧 Phase 4 in progress: visits/admin/staff lifecycle endpoints + `visit_events` transition logging implemented
+- ✅ Phase 4 completed in code: visits lifecycle APIs, transition guards, visit-event logging, and staff dashboard summary aggregation implemented
+- 🧭 Phase 5 prep active: conversations/messages, announcements, notifications modules to follow roadmap scope
 
 ## 1. Product Summary
 DailyAssist is a responsive web platform that connects clients (especially elderly people and families) with domestic assistance workers. The backend must support:

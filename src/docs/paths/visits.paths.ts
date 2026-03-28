@@ -11,6 +11,16 @@ const visitIdParam: OpenAPIV3.ParameterObject = {
 };
 
 export const visitPaths: OpenAPIV3.PathsObject = {
+  '/staff/dashboard/summary': {
+    get: {
+      tags: ['Staff — Visits'],
+      summary: 'Get staff dashboard summary',
+      description:
+        'Returns today visit counts by status, the next scheduled actionable visit, recent completed visits, and completion-rate metrics.',
+      security: staffSecurity,
+      responses: { '200': { description: 'Staff dashboard summary retrieved' } }
+    }
+  },
   '/admin/visits': {
     get: {
       tags: ['Admin — Visits'],

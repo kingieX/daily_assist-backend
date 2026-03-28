@@ -22,7 +22,7 @@ import { visitPaths } from './paths/visits.paths';
  *  ✅ Phase 1 — Health, Auth (login/refresh/logout/me/admin-check), Protected test route
  *  ✅ Phase 2 — Auth (forgot/reset password), Public catalog (packages, services), Public intake (booking, worker application)
  *  ✅ Phase 3 — Admin operations (dashboard, bookings, clients, staff, recruitment conversion)
- *  🚧 Phase 4 in progress — Visits admin/staff lifecycle endpoints + schema/migration added
+ *  ✅ Phase 4 — Visits admin/staff lifecycle endpoints, event logging, and staff dashboard summary
  */
 export const openApiSpec: OpenAPIV3.Document = {
   openapi: '3.0.0',

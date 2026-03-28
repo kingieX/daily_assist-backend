@@ -43,6 +43,8 @@ fi
 
 echo "Visit created: $visit_id"
 
+curl -sS "$BASE_URL/staff/dashboard/summary" -H "Authorization: Bearer $staff_token" | jq .
+
 curl -sS -X POST "$BASE_URL/staff/visits/$visit_id/acknowledge" -H "Authorization: Bearer $staff_token" | jq .
 curl -sS -X POST "$BASE_URL/staff/visits/$visit_id/check-in" -H "Authorization: Bearer $staff_token" | jq .
 curl -sS -X POST "$BASE_URL/staff/visits/$visit_id/check-out" \
