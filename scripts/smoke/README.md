@@ -64,3 +64,23 @@ Checks:
 4. `POST /staff/visits/:id/check-in`
 5. `POST /staff/visits/:id/check-out`
 6. `GET /admin/visits/:id` (verify event timeline)
+
+
+## Script 3 — Phase 5 communications smoke (read endpoints)
+
+```bash
+BASE_URL=http://localhost:4000/api/v1 \
+ADMIN_EMAIL=admin@dailyassist.local \
+ADMIN_PASSWORD='Admin@12345' \
+STAFF_EMAIL=staff@dailyassist.local \
+STAFF_PASSWORD='Staff@12345' \
+./scripts/smoke/phase5-communications-curl.sh
+```
+
+Checks:
+1. `GET /admin/messages/threads`
+2. `GET /admin/announcements`
+3. `GET /admin/notifications/history`
+4. `GET /staff/messages/threads`
+5. `GET /staff/announcements`
+6. `GET /staff/notifications`

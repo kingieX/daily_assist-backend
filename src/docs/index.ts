@@ -8,6 +8,7 @@ import { healthPaths } from './paths/health.paths';
 import { protectedPaths } from './paths/protected.paths';
 import { publicPaths } from './paths/public.paths';
 import { visitPaths } from './paths/visits.paths';
+import { communicationsPaths } from './paths/communications.paths';
 
 /**
  * DailyAssist OpenAPI 3.0 specification.
@@ -23,6 +24,7 @@ import { visitPaths } from './paths/visits.paths';
  *  ✅ Phase 2 — Auth (forgot/reset password), Public catalog (packages, services), Public intake (booking, worker application)
  *  ✅ Phase 3 — Admin operations (dashboard, bookings, clients, staff, recruitment conversion)
  *  ✅ Phase 4 — Visits admin/staff lifecycle endpoints, event logging, and staff dashboard summary
+ *  🚧 Phase 5 started — communications routes (messages, announcements, notifications)
  */
 export const openApiSpec: OpenAPIV3.Document = {
   openapi: '3.0.0',
@@ -117,6 +119,14 @@ export const openApiSpec: OpenAPIV3.Document = {
       name: 'Staff — Visits',
       description: 'Staff visit lifecycle actions: acknowledge, check-in, check-out, history'
     },
+    {
+      name: 'Admin — Communications',
+      description: 'Admin messaging, announcements, and notification history operations'
+    },
+    {
+      name: 'Staff — Communications',
+      description: 'Staff messaging, announcement reads, and notification actions'
+    },
   ],
 
   components: {
@@ -131,7 +141,8 @@ export const openApiSpec: OpenAPIV3.Document = {
     ...protectedPaths,
     ...publicPaths,
     ...adminPaths,
-    ...visitPaths
+    ...visitPaths,
+    ...communicationsPaths
     // Phase 3+: spread additional path modules here
     // e.g. ...adminBookingPaths, ...adminClientPaths, ...staffPaths
   }
