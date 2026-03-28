@@ -11,8 +11,23 @@ function getActorUserId(req: Request): string {
   return req.user.id;
 }
 
+const getDashboardSummary = asyncHandler(async (_req: Request, res: Response) => {
+  const summary = await adminService.getDashboardSummary();
+  return sendSuccess(res, 200, 'Dashboard summary retrieved', summary);
+});
+
+const getDashboardCharts = asyncHandler(async (_req: Request, res: Response) => {
+  const charts = await adminService.getDashboardCharts();
+  return sendSuccess(res, 200, 'Dashboard charts retrieved', charts);
+});
+
+const getDashboardAlerts = asyncHandler(async (_req: Request, res: Response) => {
+  const alerts = await adminService.getDashboardAlerts();
+  return sendSuccess(res, 200, 'Dashboard alerts retrieved', alerts);
+});
+
 const listBookings = asyncHandler(async (req: Request, res: Response) => {
-  const bookings = await adminService.listBookings(req.query);
+  const bookings = await adminService.listBookings(req.query as any);
   return sendSuccess(res, 200, 'Bookings retrieved', bookings);
 });
 
@@ -35,8 +50,18 @@ const cancelBooking = asyncHandler(async (req: Request, res: Response) => {
   return sendSuccess(res, 200, 'Booking cancelled successfully', booking);
 });
 
+const completeBooking = asyncHandler(async (req: Request, res: Response) => {
+  const booking = await adminService.completeBooking(req.params.id as string, req.body);
+  return sendSuccess(res, 200, 'Booking completed successfully', booking);
+});
+
+const updateBooking = asyncHandler(async (req: Request, res: Response) => {
+  const booking = await adminService.updateBooking(req.params.id as string, req.body);
+  return sendSuccess(res, 200, 'Booking updated successfully', booking);
+});
+
 const listClients = asyncHandler(async (req: Request, res: Response) => {
-  const clients = await adminService.listClients(req.query);
+  const clients = await adminService.listClients(req.query as any);
   return sendSuccess(res, 200, 'Clients retrieved', clients);
 });
 
@@ -61,7 +86,7 @@ const deleteClient = asyncHandler(async (req: Request, res: Response) => {
 });
 
 const listStaff = asyncHandler(async (req: Request, res: Response) => {
-  const staff = await adminService.listStaff(req.query);
+  const staff = await adminService.listStaff(req.query as any);
   return sendSuccess(res, 200, 'Staff list retrieved', staff);
 });
 
@@ -75,6 +100,11 @@ const getStaffById = asyncHandler(async (req: Request, res: Response) => {
   return sendSuccess(res, 200, 'Staff retrieved', staff);
 });
 
+const resetStaffPassword = asyncHandler(async (req: Request, res: Response) => {
+  const result = await adminService.resetStaffPassword(req.params.id as string, req.body);
+  return sendSuccess(res, 200, 'Staff password reset successfully', result);
+});
+
 const updateStaff = asyncHandler(async (req: Request, res: Response) => {
   const staff = await adminService.updateStaff(req.params.id as string, req.body);
   return sendSuccess(res, 200, 'Staff updated successfully', staff);
@@ -86,7 +116,7 @@ const deleteStaff = asyncHandler(async (req: Request, res: Response) => {
 });
 
 const listRecruitmentApplications = asyncHandler(async (req: Request, res: Response) => {
-  const applications = await adminService.listRecruitmentApplications(req.query);
+  const applications = await adminService.listRecruitmentApplications(req.query as any);
   return sendSuccess(res, 200, 'Recruitment applications retrieved', applications);
 });
 
@@ -114,10 +144,15 @@ const convertApplicationToStaff = asyncHandler(async (req: Request, res: Respons
 });
 
 export const adminController = {
+  getDashboardSummary,
+  getDashboardCharts,
+  getDashboardAlerts,
   listBookings,
   getBookingById,
   assignBooking,
   cancelBooking,
+  completeBooking,
+  updateBooking,
   listClients,
   createClient,
   getClientById,
@@ -126,6 +161,7 @@ export const adminController = {
   listStaff,
   createStaff,
   getStaffById,
+  resetStaffPassword,
   updateStaff,
   deleteStaff,
   listRecruitmentApplications,
