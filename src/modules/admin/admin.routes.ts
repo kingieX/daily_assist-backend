@@ -1,5 +1,6 @@
 import { Role } from '@prisma/client';
 import { Router } from 'express';
+import { adminVisitsRouter } from '../visits/admin-visits.routes';
 import { authenticate } from '../../middlewares/auth.middleware';
 import { authorizeRoles } from '../../middlewares/rbac.middleware';
 import { validate } from '../../middlewares/validate.middleware';
@@ -30,6 +31,8 @@ adminRouter.use(authenticate, authorizeRoles(Role.ADMIN, Role.SUPER_ADMIN));
 adminRouter.get('/dashboard/summary', adminController.getDashboardSummary);
 adminRouter.get('/dashboard/charts', adminController.getDashboardCharts);
 adminRouter.get('/dashboard/alerts', adminController.getDashboardAlerts);
+
+adminRouter.use('/visits', adminVisitsRouter);
 
 adminRouter.get(
   '/bookings',

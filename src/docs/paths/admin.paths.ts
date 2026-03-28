@@ -248,7 +248,7 @@ export const adminPaths: OpenAPIV3.PathsObject = {
       security: adminSecurity,
       requestBody: {
         required: true,
-        content: { 'application/json': { schema: { $ref: '#/components/schemas/CreateBookingRequest' } } }
+        content: { 'application/json': { schema: { type: 'object', required: ['firstName','lastName','phone'], properties: { firstName: { type: 'string' }, lastName: { type: 'string' }, email: { type: 'string', format: 'email' }, phone: { type: 'string' }, address: { type: 'string' }, city: { type: 'string' }, zipcode: { type: 'string' }, status: { type: 'string', enum: ['ACTIVE','INACTIVE'] } } } } }
       },
       responses: { '201': { description: 'Client created' } }
     }

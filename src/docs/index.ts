@@ -7,6 +7,7 @@ import { adminPaths } from './paths/admin.paths';
 import { healthPaths } from './paths/health.paths';
 import { protectedPaths } from './paths/protected.paths';
 import { publicPaths } from './paths/public.paths';
+import { visitPaths } from './paths/visits.paths';
 
 /**
  * DailyAssist OpenAPI 3.0 specification.
@@ -21,7 +22,7 @@ import { publicPaths } from './paths/public.paths';
  *  ✅ Phase 1 — Health, Auth (login/refresh/logout/me/admin-check), Protected test route
  *  ✅ Phase 2 — Auth (forgot/reset password), Public catalog (packages, services), Public intake (booking, worker application)
  *  ✅ Phase 3 — Admin operations (dashboard, bookings, clients, staff, recruitment conversion)
- *  🚧 Phase 4 kickoff — Visits schema and migration added
+ *  🚧 Phase 4 in progress — Visits admin/staff lifecycle endpoints + schema/migration added
  */
 export const openApiSpec: OpenAPIV3.Document = {
   openapi: '3.0.0',
@@ -107,7 +108,15 @@ export const openApiSpec: OpenAPIV3.Document = {
     {
       name: 'Admin — Recruitment',
       description: 'Recruitment review pipeline and applicant-to-staff conversion'
-    }
+    },
+    {
+      name: 'Admin — Visits',
+      description: 'Admin visit lifecycle operations: create, edit, reassign, cancel'
+    },
+    {
+      name: 'Staff — Visits',
+      description: 'Staff visit lifecycle actions: acknowledge, check-in, check-out, history'
+    },
   ],
 
   components: {
@@ -121,7 +130,8 @@ export const openApiSpec: OpenAPIV3.Document = {
     ...authPaths,
     ...protectedPaths,
     ...publicPaths,
-    ...adminPaths
+    ...adminPaths,
+    ...visitPaths
     // Phase 3+: spread additional path modules here
     // e.g. ...adminBookingPaths, ...adminClientPaths, ...staffPaths
   }

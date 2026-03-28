@@ -2,7 +2,7 @@
 ## Problem Statement
 Convert the approved backend documentation into a production-ready Node.js + Express backend with predictable milestones, reduced rework, and clear delivery checkpoints.
 ## Current State
-Implementation is active. As of **March 28, 2026**, foundational security/auth (Phase 1), public intake/catalog (Phase 2), and core admin operations (Phase 3) are implemented in the repository. Remaining work before full Phase 4 execution: final Phase 3 spec alignment, pagination/sorting contract hardening, and the visits/visit_events schema kickoff migration.
+Implementation is active. As of **March 28, 2026**, foundational security/auth (Phase 1), public intake/catalog (Phase 2), and core admin operations (Phase 3) are implemented in the repository. Phase 4 has started. Visits lifecycle endpoints (admin + staff) are now in progress alongside visit-events audit logging and transition guards.
 ## Delivery Approach
 Build in sequential phases. Each phase must end with: implemented modules, API contract validation, basic tests, and a demo-ready checkpoint before moving forward.
 ## Phase 1: Foundation and Security Core
@@ -111,7 +111,7 @@ Exit criteria:
 * Maintain changelog of endpoints and migration changes per phase
 * Do not start next phase until the current phase exit criteria are met
 ## Immediate Next Action
-Finalize pre-Phase-4 checklist:
-1. Keep roadmap/documentation in sync with implemented scope and endpoint reality.
-2. Finish Phase 3 endpoint parity and admin list pagination/sorting contracts.
-3. Apply the visits + visit_events schema/migration kickoff and begin visit lifecycle service/controller implementation.
+Continue Phase 4 execution:
+1. Validate end-to-end visit lifecycle with integration tests and smoke scripts.
+2. Add reassignment/cancellation analytics dashboards and SLA alerts.
+3. Complete staff daily dashboard rollups and finalize phase sign-off.
