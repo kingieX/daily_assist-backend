@@ -1,5 +1,5 @@
-import { VisitStatus } from '@prisma/client';
 import { z } from 'zod';
+import { VISIT_STATUS } from './visit-state';
 
 export const visitIdParamSchema = z.object({
   id: z.string().uuid('Invalid visit ID')
@@ -11,9 +11,17 @@ const paginationSchema = z.object({
 });
 
 const sortOrderSchema = z.enum(['asc', 'desc']).default('desc');
+const visitStatusSchema = z.enum([
+  VISIT_STATUS.ASSIGNED,
+  VISIT_STATUS.ACKNOWLEDGED,
+  VISIT_STATUS.IN_PROGRESS,
+  VISIT_STATUS.COMPLETED,
+  VISIT_STATUS.CANCELLED,
+  VISIT_STATUS.NO_SHOW
+]);
 
 export const adminVisitListQuerySchema = paginationSchema.extend({
-  status: z.nativeEnum(VisitStatus).optional(),
+  status: visitStatusSchema.optional(),
   staffId: z.string().uuid('Invalid staff ID').optional(),
   bookingId: z.string().uuid('Invalid booking ID').optional(),
   sortBy: z.enum(['scheduledStartAt', 'createdAt', 'updatedAt']).default('scheduledStartAt'),

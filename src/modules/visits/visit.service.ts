@@ -1,7 +1,7 @@
-import { Prisma, Role, UserStatus, VisitEventType, VisitStatus } from '@prisma/client';
+import { Prisma, Role, UserStatus } from '@prisma/client';
 import { prisma } from '../../config/prisma';
 import { ApiError } from '../../utils/api-error';
-import { assertTransition } from './visit-state';
+import { assertTransition, VISIT_STATUS } from './visit-state';
 import type {
   AdminVisitListQuery,
   CancelVisitInput,
@@ -10,6 +10,18 @@ import type {
   ReassignVisitInput,
   UpdateVisitInput
 } from './visit.validation';
+
+const VISIT_EVENT = {
+  ASSIGNED: 'ASSIGNED',
+  REASSIGNED: 'REASSIGNED',
+  ACKNOWLEDGED: 'ACKNOWLEDGED',
+  CHECKED_IN: 'CHECKED_IN',
+  CHECKED_OUT: 'CHECKED_OUT',
+  CANCELLED: 'CANCELLED',
+  NOTE_UPDATED: 'NOTE_UPDATED'
+} as const;
+
+type VisitEventValue = (typeof VISIT_EVENT)[keyof typeof VISIT_EVENT];
 
 function paginatedResult<T>(items: T[], total: number, page: number, limit: number) {
   return {
@@ -60,7 +72,7 @@ async function addVisitEvent(
   tx: Prisma.TransactionClient,
   visitId: string,
   actorUserId: string,
-  eventType: VisitEventType,
+  eventType: VisitEventValue,
   payloadJson?: Prisma.InputJsonValue
 ) {
   await tx.visitEvent.create({
@@ -142,12 +154,12 @@ async function createVisit(input: CreateVisitInput, actorUserId: string) {
         scheduledStartAt: input.scheduledStartAt,
         scheduledEndAt: input.scheduledEndAt,
         adminNotes: input.adminNotes ?? null,
-        status: VisitStatus.ASSIGNED
+        status: VISIT_STATUS.ASSIGNED
       },
       include: visitInclude
     });
 
-    await addVisitEvent(tx, visit.id, actorUserId, VisitEventType.ASSIGNED, {
+    await addVisitEvent(tx, visit.id, actorUserId, VISIT_EVENT.ASSIGNED, {
       staffId: input.staffId,
       scheduledStartAt: input.scheduledStartAt.toISOString(),
       scheduledEndAt: input.scheduledEndAt.toISOString()
@@ -173,7 +185,7 @@ async function updateVisit(id: string, input: UpdateVisitInput, actorUserId: str
       include: visitInclude
     });
 
-    await addVisitEvent(tx, id, actorUserId, VisitEventType.NOTE_UPDATED, {
+    await addVisitEvent(tx, id, actorUserId, VISIT_EVENT.NOTE_UPDATED, {
       updatedFields: Object.keys(input)
     });
 
@@ -192,18 +204,18 @@ async function reassignVisit(id: string, input: ReassignVisitInput, actorUserId:
 
   if (!visit) throw new ApiError(404, 'Visit not found');
   if (!staff) throw new ApiError(404, 'Active staff user not found');
-  if (visit.status === VisitStatus.COMPLETED || visit.status === VisitStatus.CANCELLED) {
+  if (visit.status === VISIT_STATUS.COMPLETED || visit.status === VISIT_STATUS.CANCELLED) {
     throw new ApiError(400, 'Visit cannot be reassigned in current status');
   }
 
   return prisma.$transaction(async (tx) => {
     const updated = await tx.visit.update({
       where: { id },
-      data: { staffId: input.staffId, status: VisitStatus.ASSIGNED, acknowledgedAt: null },
+      data: { staffId: input.staffId, status: VISIT_STATUS.ASSIGNED, acknowledgedAt: null },
       include: visitInclude
     });
 
-    await addVisitEvent(tx, id, actorUserId, VisitEventType.REASSIGNED, {
+    await addVisitEvent(tx, id, actorUserId, VISIT_EVENT.REASSIGNED, {
       fromStaffId: visit.staffId,
       toStaffId: input.staffId
     });
@@ -216,16 +228,16 @@ async function cancelVisit(id: string, input: CancelVisitInput, actorUserId: str
   const visit = await prisma.visit.findUnique({ where: { id } });
   if (!visit) throw new ApiError(404, 'Visit not found');
 
-  assertTransition(visit.status, VisitStatus.CANCELLED);
+  assertTransition(visit.status, VISIT_STATUS.CANCELLED);
 
   return prisma.$transaction(async (tx) => {
     const updated = await tx.visit.update({
       where: { id },
-      data: { status: VisitStatus.CANCELLED },
+      data: { status: VISIT_STATUS.CANCELLED },
       include: visitInclude
     });
 
-    await addVisitEvent(tx, id, actorUserId, VisitEventType.CANCELLED, {
+    await addVisitEvent(tx, id, actorUserId, VISIT_EVENT.CANCELLED, {
       reason: input.reason
     });
 
@@ -266,7 +278,7 @@ async function listStaffVisitHistory(staffUserId: string, page: number, limit: n
   const skip = (page - 1) * limit;
   const where: Prisma.VisitWhereInput = {
     staffId: staffUserId,
-    status: { in: [VisitStatus.COMPLETED, VisitStatus.CANCELLED, VisitStatus.NO_SHOW] }
+    status: { in: [VISIT_STATUS.COMPLETED, VISIT_STATUS.CANCELLED, VISIT_STATUS.NO_SHOW] }
   };
 
   const [total, items] = await Promise.all([
@@ -287,16 +299,16 @@ async function acknowledgeVisit(visitId: string, staffUserId: string) {
   const visit = await prisma.visit.findFirst({ where: { id: visitId, staffId: staffUserId } });
   if (!visit) throw new ApiError(404, 'Visit not found for current staff user');
 
-  assertTransition(visit.status, VisitStatus.ACKNOWLEDGED);
+  assertTransition(visit.status, VISIT_STATUS.ACKNOWLEDGED);
 
   return prisma.$transaction(async (tx) => {
     const updated = await tx.visit.update({
       where: { id: visitId },
-      data: { status: VisitStatus.ACKNOWLEDGED, acknowledgedAt: new Date() },
+      data: { status: VISIT_STATUS.ACKNOWLEDGED, acknowledgedAt: new Date() },
       include: visitInclude
     });
 
-    await addVisitEvent(tx, visitId, staffUserId, VisitEventType.ACKNOWLEDGED);
+    await addVisitEvent(tx, visitId, staffUserId, VISIT_EVENT.ACKNOWLEDGED);
     return updated;
   });
 }
@@ -305,16 +317,16 @@ async function checkInVisit(visitId: string, staffUserId: string) {
   const visit = await prisma.visit.findFirst({ where: { id: visitId, staffId: staffUserId } });
   if (!visit) throw new ApiError(404, 'Visit not found for current staff user');
 
-  assertTransition(visit.status, VisitStatus.IN_PROGRESS);
+  assertTransition(visit.status, VISIT_STATUS.IN_PROGRESS);
 
   return prisma.$transaction(async (tx) => {
     const updated = await tx.visit.update({
       where: { id: visitId },
-      data: { status: VisitStatus.IN_PROGRESS, checkInAt: new Date() },
+      data: { status: VISIT_STATUS.IN_PROGRESS, checkInAt: new Date() },
       include: visitInclude
     });
 
-    await addVisitEvent(tx, visitId, staffUserId, VisitEventType.CHECKED_IN);
+    await addVisitEvent(tx, visitId, staffUserId, VISIT_EVENT.CHECKED_IN);
     return updated;
   });
 }
@@ -323,13 +335,13 @@ async function checkOutVisit(visitId: string, staffUserId: string, input: CheckO
   const visit = await prisma.visit.findFirst({ where: { id: visitId, staffId: staffUserId } });
   if (!visit) throw new ApiError(404, 'Visit not found for current staff user');
 
-  assertTransition(visit.status, VisitStatus.COMPLETED);
+  assertTransition(visit.status, VISIT_STATUS.COMPLETED);
 
   return prisma.$transaction(async (tx) => {
     const updated = await tx.visit.update({
       where: { id: visitId },
       data: {
-        status: VisitStatus.COMPLETED,
+        status: VISIT_STATUS.COMPLETED,
         checkOutAt: new Date(),
         completionSummary: input.completionSummary,
         staffNotes: input.staffNotes
@@ -337,7 +349,7 @@ async function checkOutVisit(visitId: string, staffUserId: string, input: CheckO
       include: visitInclude
     });
 
-    await addVisitEvent(tx, visitId, staffUserId, VisitEventType.CHECKED_OUT, {
+    await addVisitEvent(tx, visitId, staffUserId, VISIT_EVENT.CHECKED_OUT, {
       completionSummaryProvided: Boolean(input.completionSummary)
     });
 
