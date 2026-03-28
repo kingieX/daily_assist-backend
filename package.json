@@ -13,7 +13,8 @@
     "prisma:studio": "prisma studio",
     "prisma:seed": "node prisma/seed.js",
     "test:phase4": "npm run build && node --test tests/visit-state-machine.test.mjs",
-    "test:phase5": "npm run build && node --test tests/communications-workflows.test.mjs"
+    "test:phase5": "npm run build && node --test tests/communications-workflows.test.mjs",
+    "test:phase6": "npm run build && node --test tests/phase6-ops-validation.test.mjs"
   },
   "keywords": [
     "dailyassist",

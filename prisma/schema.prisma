@@ -90,6 +90,33 @@ enum NotificationType {
   VISIT
 }
 
+
+enum ReportStatus {
+  NEW
+  IN_REVIEW
+  APPROVED
+  REJECTED
+  BILLED
+}
+
+enum ReportType {
+  INCIDENT
+  VISIT_QUALITY
+  STAFF_PERFORMANCE
+  SYSTEM
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  STATUS_CHANGE
+  SETTINGS_UPDATE
+  REPORT_PROCESSING
+}
+
 // ─── Identity & Security ──────────────────────────────────────────────────────
 
 model User {
@@ -115,6 +142,10 @@ model User {
   announcementRecipients    AnnouncementRecipient[]
   notifications             Notification[]
   notificationPreference    NotificationPreference?
+  reportsCreated            Report[]                @relation("ReportCreator")
+  reportsUpdated            Report[]                @relation("ReportUpdater")
+  auditLogs                 AuditLog[]              @relation("AuditActor")
+  systemSettingsUpdated     SystemSetting[]
 
   @@map("users")
 }
@@ -406,6 +437,54 @@ model NotificationPreference {
   updatedAt           DateTime @updatedAt @map("updated_at")
 
   @@map("notification_preferences")
+}
+
+
+model Report {
+  id               String       @id @default(uuid())
+  title            String
+  description      String
+  type             ReportType
+  status           ReportStatus @default(NEW)
+  billingProcessed Boolean      @default(false) @map("billing_processed")
+  createdBy        String       @map("created_by")
+  createdByUser    User         @relation("ReportCreator", fields: [createdBy], references: [id])
+  updatedBy        String?      @map("updated_by")
+  updatedByUser    User?        @relation("ReportUpdater", fields: [updatedBy], references: [id])
+  createdAt        DateTime     @default(now()) @map("created_at")
+  updatedAt        DateTime     @updatedAt @map("updated_at")
+
+  @@index([status, createdAt])
+  @@index([type, createdAt])
+  @@map("reports")
+}
+
+model SystemSetting {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  valueJson Json     @map("value_json")
+  updatedBy String?  @map("updated_by")
+  updater   User?    @relation(fields: [updatedBy], references: [id])
+  updatedAt DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("system_settings")
+}
+
+model AuditLog {
+  id          String      @id @default(uuid())
+  actorUserId String?     @map("actor_user_id")
+  actorUser   User?       @relation("AuditActor", fields: [actorUserId], references: [id])
+  action      AuditAction
+  entity      String
+  entityId    String?     @map("entity_id")
+  metadataJson Json?      @map("metadata_json")
+  createdAt   DateTime    @default(now()) @map("created_at")
+
+  @@index([actorUserId, createdAt])
+  @@index([entity, createdAt])
+  @@index([action, createdAt])
+  @@map("audit_logs")
 }
 
 // ─── Recruitment ──────────────────────────────────────────────────────────────

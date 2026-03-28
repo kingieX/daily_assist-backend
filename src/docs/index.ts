@@ -9,6 +9,7 @@ import { protectedPaths } from './paths/protected.paths';
 import { publicPaths } from './paths/public.paths';
 import { visitPaths } from './paths/visits.paths';
 import { communicationsPaths } from './paths/communications.paths';
+import { operationsPaths } from './paths/operations.paths';
 
 /**
  * DailyAssist OpenAPI 3.0 specification.
@@ -24,7 +25,8 @@ import { communicationsPaths } from './paths/communications.paths';
  *  ✅ Phase 2 — Auth (forgot/reset password), Public catalog (packages, services), Public intake (booking, worker application)
  *  ✅ Phase 3 — Admin operations (dashboard, bookings, clients, staff, recruitment conversion)
  *  ✅ Phase 4 — Visits admin/staff lifecycle endpoints, event logging, and staff dashboard summary
- *  🚧 Phase 5 started — communications routes (messages, announcements, notifications)
+ *  ✅ Phase 5 — communications routes (messages, announcements, notifications + close-out controls)
+ *  🚧 Phase 6 started — reports, system settings, and audit log endpoints
  */
 export const openApiSpec: OpenAPIV3.Document = {
   openapi: '3.0.0',
@@ -127,6 +129,10 @@ export const openApiSpec: OpenAPIV3.Document = {
       name: 'Staff — Communications',
       description: 'Staff messaging, announcement reads, and notification actions'
     },
+    {
+      name: 'Admin — Phase 6 Ops',
+      description: 'Reports, system settings, and audit log operations'
+    },
   ],
 
   components: {
@@ -142,7 +148,8 @@ export const openApiSpec: OpenAPIV3.Document = {
     ...publicPaths,
     ...adminPaths,
     ...visitPaths,
-    ...communicationsPaths
+    ...communicationsPaths,
+    ...operationsPaths
     // Phase 3+: spread additional path modules here
     // e.g. ...adminBookingPaths, ...adminClientPaths, ...staffPaths
   }
