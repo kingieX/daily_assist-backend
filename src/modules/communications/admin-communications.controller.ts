@@ -10,6 +10,12 @@ function currentUser(req: Request): { id: string; role: Role } {
   return { id: req.user.id, role: req.user.role };
 }
 
+const createThread = asyncHandler(async (req: Request, res: Response) => {
+  const user = currentUser(req);
+  const result = await communicationsService.createThread(req.body, user.role, user.id);
+  return sendSuccess(res, 201, 'Thread created', result);
+});
+
 const listThreads = asyncHandler(async (req: Request, res: Response) => {
   const user = currentUser(req);
   const result = await communicationsService.listThreads(req.query as any, user.role, user.id);
@@ -68,7 +74,20 @@ const deleteNotification = asyncHandler(async (req: Request, res: Response) => {
   return sendSuccess(res, 200, 'Notification deleted', result);
 });
 
+const getNotificationPreferences = asyncHandler(async (req: Request, res: Response) => {
+  const user = currentUser(req);
+  const result = await communicationsService.getNotificationPreferences(user.id);
+  return sendSuccess(res, 200, 'Notification preferences retrieved', result);
+});
+
+const updateNotificationPreferences = asyncHandler(async (req: Request, res: Response) => {
+  const user = currentUser(req);
+  const result = await communicationsService.updateNotificationPreferences(user.id, req.body);
+  return sendSuccess(res, 200, 'Notification preferences updated', result);
+});
+
 export const adminCommunicationsController = {
+  createThread,
   listThreads,
   getThreadMessages,
   postMessage,
@@ -77,5 +96,7 @@ export const adminCommunicationsController = {
   createAnnouncement,
   deleteAnnouncement,
   listNotifications,
-  deleteNotification
+  deleteNotification,
+  getNotificationPreferences,
+  updateNotificationPreferences
 };

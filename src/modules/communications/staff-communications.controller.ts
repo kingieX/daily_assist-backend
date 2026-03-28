@@ -10,6 +10,12 @@ function currentUser(req: Request): { id: string; role: Role } {
   return { id: req.user.id, role: req.user.role };
 }
 
+const createThread = asyncHandler(async (req: Request, res: Response) => {
+  const user = currentUser(req);
+  const result = await communicationsService.createThread(req.body, user.role, user.id);
+  return sendSuccess(res, 201, 'Thread created', result);
+});
+
 const listThreads = asyncHandler(async (req: Request, res: Response) => {
   const user = currentUser(req);
   const result = await communicationsService.listThreads(req.query as any, user.role, user.id);
@@ -45,6 +51,12 @@ const listAnnouncements = asyncHandler(async (req: Request, res: Response) => {
   return sendSuccess(res, 200, 'Announcements retrieved', result);
 });
 
+const markAnnouncementRead = asyncHandler(async (req: Request, res: Response) => {
+  const user = currentUser(req);
+  const result = await communicationsService.markAnnouncementRead(req.params.id as string, user.id);
+  return sendSuccess(res, 200, 'Announcement marked as read', result);
+});
+
 const listNotifications = asyncHandler(async (req: Request, res: Response) => {
   const user = currentUser(req);
   const result = await communicationsService.listNotifications(req.query as any, user.id);
@@ -57,12 +69,28 @@ const markNotificationRead = asyncHandler(async (req: Request, res: Response) =>
   return sendSuccess(res, 200, 'Notification marked as read', result);
 });
 
+const getNotificationPreferences = asyncHandler(async (req: Request, res: Response) => {
+  const user = currentUser(req);
+  const result = await communicationsService.getNotificationPreferences(user.id);
+  return sendSuccess(res, 200, 'Notification preferences retrieved', result);
+});
+
+const updateNotificationPreferences = asyncHandler(async (req: Request, res: Response) => {
+  const user = currentUser(req);
+  const result = await communicationsService.updateNotificationPreferences(user.id, req.body);
+  return sendSuccess(res, 200, 'Notification preferences updated', result);
+});
+
 export const staffCommunicationsController = {
+  createThread,
   listThreads,
   getThreadMessages,
   postMessage,
   deleteMessage,
   listAnnouncements,
+  markAnnouncementRead,
   listNotifications,
-  markNotificationRead
+  markNotificationRead,
+  getNotificationPreferences,
+  updateNotificationPreferences
 };

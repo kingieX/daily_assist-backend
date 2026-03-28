@@ -114,6 +114,7 @@ model User {
   announcementsCreated      Announcement[]        @relation("AnnouncementCreator")
   announcementRecipients    AnnouncementRecipient[]
   notifications             Notification[]
+  notificationPreference    NotificationPreference?
 
   @@map("users")
 }
@@ -326,6 +327,7 @@ model Conversation {
   messages  Message[]
 
   @@index([staffId])
+  @@unique([type, staffId])
   @@map("conversations")
 }
 
@@ -387,6 +389,23 @@ model Notification {
 
   @@index([userId, createdAt])
   @@map("notifications")
+}
+
+
+model NotificationPreference {
+  id                  String   @id @default(uuid())
+  userId              String   @unique @map("user_id")
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emailEnabled        Boolean  @default(true) @map("email_enabled")
+  inAppEnabled        Boolean  @default(true) @map("in_app_enabled")
+  messageEnabled      Boolean  @default(true) @map("message_enabled")
+  announcementEnabled Boolean  @default(true) @map("announcement_enabled")
+  visitEnabled        Boolean  @default(true) @map("visit_enabled")
+  systemEnabled       Boolean  @default(true) @map("system_enabled")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  @@map("notification_preferences")
 }
 
 // ─── Recruitment ──────────────────────────────────────────────────────────────

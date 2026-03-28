@@ -11,6 +11,12 @@ const idParam: OpenAPIV3.ParameterObject = {
 
 export const communicationsPaths: OpenAPIV3.PathsObject = {
   '/admin/messages/threads': {
+    post: {
+      tags: ['Admin — Communications'],
+      summary: 'Create or get admin-staff thread',
+      security: secured,
+      responses: { '201': { description: 'Thread created' } }
+    },
     get: {
       tags: ['Admin — Communications'],
       summary: 'List message threads',
@@ -83,7 +89,28 @@ export const communicationsPaths: OpenAPIV3.PathsObject = {
       responses: { '200': { description: 'Notification deleted' } }
     }
   },
+
+  '/admin/notifications/preferences': {
+    get: {
+      tags: ['Admin — Communications'],
+      summary: 'Get admin notification preferences',
+      security: secured,
+      responses: { '200': { description: 'Notification preferences retrieved' } }
+    },
+    patch: {
+      tags: ['Admin — Communications'],
+      summary: 'Update admin notification preferences',
+      security: secured,
+      responses: { '200': { description: 'Notification preferences updated' } }
+    }
+  },
   '/staff/messages/threads': {
+    post: {
+      tags: ['Staff — Communications'],
+      summary: 'Create or get own staff thread',
+      security: secured,
+      responses: { '201': { description: 'Thread created' } }
+    },
     get: {
       tags: ['Staff — Communications'],
       summary: 'List staff message threads',
@@ -124,12 +151,37 @@ export const communicationsPaths: OpenAPIV3.PathsObject = {
       responses: { '200': { description: 'Announcements retrieved' } }
     }
   },
+
+  '/staff/announcements/{id}/read': {
+    patch: {
+      tags: ['Staff — Communications'],
+      summary: 'Mark staff announcement as read',
+      security: secured,
+      parameters: [idParam],
+      responses: { '200': { description: 'Announcement marked as read' } }
+    }
+  },
   '/staff/notifications': {
     get: {
       tags: ['Staff — Communications'],
       summary: 'List staff notifications',
       security: secured,
       responses: { '200': { description: 'Notifications retrieved' } }
+    }
+  },
+
+  '/staff/notifications/preferences': {
+    get: {
+      tags: ['Staff — Communications'],
+      summary: 'Get staff notification preferences',
+      security: secured,
+      responses: { '200': { description: 'Notification preferences retrieved' } }
+    },
+    patch: {
+      tags: ['Staff — Communications'],
+      summary: 'Update staff notification preferences',
+      security: secured,
+      responses: { '200': { description: 'Notification preferences updated' } }
     }
   },
   '/staff/notifications/{id}/read': {
