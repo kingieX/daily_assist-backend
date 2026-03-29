@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import {
   ApplicationStatus,
   BookingStatus,
@@ -7,9 +8,13 @@ import {
   Role,
   UserStatus
 } from '@prisma/client';
+import { sendPasswordResetEmail } from '../../config/mailer';
+import { env } from '../../config/env';
 import { prisma } from '../../config/prisma';
 import { ApiError } from '../../utils/api-error';
+import { hashValue } from '../../utils/hash';
 import { hashPassword } from '../../utils/password';
+import { recordAuditLog } from '../operations/audit-log.service';
 import type {
   AssignBookingInput,
   BookingListQuery,
@@ -30,6 +35,57 @@ import type {
 
 function normalizeEmail(email: string): string {
   return email.toLowerCase().trim();
+}
+
+
+function toEmailToken(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[^a-z0-9]+/g, '.')
+    .replace(/\.+/g, '.')
+    .replace(/^\.|\.$/g, '');
+}
+
+function generateTempPassword(length = 14): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*';
+  const bytes = crypto.randomBytes(length);
+  let password = '';
+
+  for (let i = 0; i < length; i += 1) {
+    password += chars[bytes[i] % chars.length];
+  }
+
+  if (!/[A-Z]/.test(password)) password += 'A';
+  if (!/[0-9]/.test(password)) password += '7';
+
+  return password;
+}
+
+async function generateUniqueWorkEmail(firstName: string, lastName: string, currentUserId: string): Promise<string> {
+  const localFirst = toEmailToken(firstName);
+  const localLast = toEmailToken(lastName);
+  const base = [localFirst, localLast].filter(Boolean).join('.') || localFirst || localLast || 'staff';
+
+  let counter = 0;
+  while (counter < 1000) {
+    const localPart = counter === 0 ? base : `${base}${counter + 1}`;
+    const candidate = `${localPart}@dailyassistuk.com`;
+
+    const existing = await prisma.user.findFirst({
+      where: {
+        email: candidate,
+        id: { not: currentUserId }
+      },
+      select: { id: true }
+    });
+
+    if (!existing) return candidate;
+
+    counter += 1;
+  }
+
+  throw new ApiError(500, 'Unable to generate a unique work email for staff');
 }
 
 function buildPaginatedResult<T>(items: T[], total: number, page: number, limit: number) {
@@ -522,6 +578,100 @@ async function getStaffById(id: string) {
   return staff;
 }
 
+
+async function provisionStaffCredentials(id: string, actorUserId: string) {
+  const staff = await prisma.user.findFirst({
+    where: {
+      id,
+      role: Role.STAFF
+    },
+    select: {
+      id: true,
+      email: true,
+      status: true,
+      staffProfile: {
+        select: {
+          firstName: true,
+          lastName: true
+        }
+      }
+    }
+  });
+
+  if (!staff) {
+    throw new ApiError(404, 'Staff user not found');
+  }
+
+  if (!staff.staffProfile) {
+    throw new ApiError(400, 'Staff profile is incomplete and cannot provision credentials');
+  }
+
+  const hasWorkEmail = staff.email.endsWith('@dailyassistuk.com');
+  const nextEmail = hasWorkEmail
+    ? staff.email
+    : await generateUniqueWorkEmail(staff.staffProfile.firstName, staff.staffProfile.lastName, staff.id);
+
+  const tempPassword = generateTempPassword();
+  const passwordHash = await hashPassword(tempPassword);
+
+  const rawToken = crypto.randomBytes(32).toString('hex');
+  const tokenHash = hashValue(rawToken);
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({
+      where: { id: staff.id },
+      data: {
+        email: nextEmail,
+        passwordHash,
+        status: staff.status === UserStatus.INACTIVE ? UserStatus.ACTIVE : staff.status
+      }
+    });
+
+    await tx.refreshToken.updateMany({
+      where: { userId: staff.id, revokedAt: null },
+      data: { revokedAt: new Date() }
+    });
+
+    await tx.passwordResetToken.deleteMany({
+      where: { userId: staff.id, usedAt: null }
+    });
+
+    await tx.passwordResetToken.create({
+      data: {
+        userId: staff.id,
+        tokenHash,
+        expiresAt
+      }
+    });
+  });
+
+  const resetUrl = `${env.FRONTEND_URL}/reset-password?token=${rawToken}`;
+  await sendPasswordResetEmail(nextEmail, resetUrl);
+
+  await recordAuditLog({
+    actorUserId,
+    action: 'UPDATE',
+    entity: 'staff_credentials',
+    entityId: staff.id,
+    metadataJson: {
+      email: nextEmail,
+      emailRegenerated: !hasWorkEmail,
+      onboardingEmailSent: true,
+      deliveryMode: 'reset_link_only'
+    }
+  });
+
+  return {
+    id: staff.id,
+    email: nextEmail,
+    credentialsProvisioned: true,
+    onboardingEmailSent: true,
+    passwordDelivery: 'reset_link_only' as const,
+    emailRegenerated: !hasWorkEmail
+  };
+}
+
 async function resetStaffPassword(id: string, input: ResetStaffPasswordInput) {
   const staff = await prisma.user.findFirst({
     where: {
@@ -913,6 +1063,7 @@ export const adminService = {
   listStaff,
   createStaff,
   getStaffById,
+  provisionStaffCredentials,
   resetStaffPassword,
   updateStaff,
   deleteStaff,

@@ -100,6 +100,12 @@ const getStaffById = asyncHandler(async (req: Request, res: Response) => {
   return sendSuccess(res, 200, 'Staff retrieved', staff);
 });
 
+
+const provisionStaffCredentials = asyncHandler(async (req: Request, res: Response) => {
+  const result = await adminService.provisionStaffCredentials(req.params.id as string, getActorUserId(req));
+  return sendSuccess(res, 200, 'Staff credentials provisioned successfully', result);
+});
+
 const resetStaffPassword = asyncHandler(async (req: Request, res: Response) => {
   const result = await adminService.resetStaffPassword(req.params.id as string, req.body);
   return sendSuccess(res, 200, 'Staff password reset successfully', result);
@@ -161,6 +167,7 @@ export const adminController = {
   listStaff,
   createStaff,
   getStaffById,
+  provisionStaffCredentials,
   resetStaffPassword,
   updateStaff,
   deleteStaff,

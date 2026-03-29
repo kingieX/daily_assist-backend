@@ -79,6 +79,11 @@ adminRouter.get('/staff', validate({ query: staffListQuerySchema }), adminContro
 adminRouter.post('/staff', validate({ body: createStaffSchema }), adminController.createStaff);
 adminRouter.get('/staff/:id', validate({ params: idParamSchema }), adminController.getStaffById);
 adminRouter.post(
+  '/staff/:id/provision-credentials',
+  validate({ params: idParamSchema }),
+  adminController.provisionStaffCredentials
+);
+adminRouter.post(
   '/staff/:id/reset-password',
   validate({ params: idParamSchema, body: resetStaffPasswordSchema }),
   adminController.resetStaffPassword

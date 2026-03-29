@@ -337,6 +337,15 @@ export const adminPaths: OpenAPIV3.PathsObject = {
       responses: { '200': { description: 'Staff deactivated' } }
     }
   },
+  '/admin/staff/{id}/provision-credentials': {
+    post: {
+      tags: ['Admin — Staff'],
+      summary: 'Provision staff dashboard credentials',
+      security: adminSecurity,
+      parameters: [idParam],
+      responses: { '200': { description: 'Staff credentials provisioned' } }
+    }
+  },
   '/admin/staff/{id}/reset-password': {
     post: {
       tags: ['Admin — Staff'],
