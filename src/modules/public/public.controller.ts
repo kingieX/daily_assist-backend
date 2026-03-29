@@ -29,7 +29,7 @@ const getServices = asyncHandler(async (_req: Request, res: Response) => {
 
 const createBooking = asyncHandler(async (req: Request, res: Response) => {
   const result = await publicService.submitBooking(req.body);
-  return sendSuccess(res, 201, 'Booking request submitted successfully', result);
+  return sendSuccess(res, 201, 'Booking enquiry submitted successfully', result);
 });
 
 const createWorkerApplication = asyncHandler(async (req: Request, res: Response) => {
