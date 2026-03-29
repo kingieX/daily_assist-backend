@@ -511,3 +511,12 @@ Each controller should delegate business logic to service layer classes and keep
 
 ## 15. Final Development Direction
 Implement as a modular monolith first (single deployable), with strict domain boundaries and state transition guards. This gives fast delivery now and easy split into microservices later if scale demands it.
+
+
+## 16. Staff Profile Extended Fields
+- `users.staff_code` generated operational code (e.g., `DA0010+` for staff, reserved `DA0001-DA0009` for admin).
+- `staff_profiles`: `date_of_birth`, `sex`, `zone`, `owns_car`, `photo_url`, `cv_file_url`, `staff_role_label`.
+- Dedicated credential provisioning endpoint: `POST /admin/staff/:id/provision-credentials` (reset-link delivery only, no plaintext password response).
+
+## 17. Client Profile Extended Fields
+- Added `title`, `age`, `sex`, `emergency_contact_name`, `emergency_contact_phone`, `emergency_contact_relationship`, `proof_of_address_url`, `notes`.

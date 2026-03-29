@@ -29,6 +29,9 @@ const paginationSchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20)
 });
 
+const sexSchema = z.enum(['MALE', 'FEMALE', 'OTHER', 'PREFER_NOT_TO_SAY']);
+const staffRoleLabelSchema = z.enum(['HOME_HELP_SUPPORT_ASSISTANT', 'ADMIN']);
+
 const passwordSchema = z
   .string()
   .min(8, 'Password must be at least 8 characters')
@@ -85,13 +88,21 @@ export const clientListQuerySchema = paginationSchema.extend({
 });
 
 export const createClientSchema = z.object({
+  title: optionalTrimmedString,
   firstName: z.string().trim().min(1, 'First name is required'),
   lastName: z.string().trim().min(1, 'Last name is required'),
   email: optionalEmail,
   phone: z.string().trim().min(7, 'Phone number is required'),
+  age: z.coerce.number().int().min(0).max(130).optional(),
+  sex: sexSchema.optional(),
   address: optionalTrimmedString,
   city: optionalTrimmedString,
   zipcode: optionalTrimmedString,
+  emergencyContactName: optionalTrimmedString,
+  emergencyContactPhone: optionalTrimmedString,
+  emergencyContactRelationship: optionalTrimmedString,
+  proofOfAddressUrl: z.string().url('Proof of address URL must be valid').optional(),
+  notes: z.string().trim().max(2000).optional(),
   status: z.nativeEnum(ClientStatus).optional()
 });
 
@@ -101,7 +112,7 @@ export const updateClientSchema = createClientSchema
     message: 'At least one field must be provided for update'
   });
 
-const staffSortBySchema = z.enum(['createdAt', 'updatedAt', 'lastLoginAt', 'email']).default('createdAt');
+const staffSortBySchema = z.enum(['createdAt', 'updatedAt', 'lastLoginAt', 'email', 'staffCode']).default('createdAt');
 
 export const staffListQuerySchema = paginationSchema.extend({
   status: z.nativeEnum(UserStatus).optional(),
@@ -115,6 +126,10 @@ export const createStaffSchema = z.object({
   firstName: z.string().trim().min(1, 'First name is required'),
   lastName: z.string().trim().min(1, 'Last name is required'),
   phone: z.string().trim().min(7, 'Phone number is required'),
+  dateOfBirth: z.coerce.date().optional(),
+  sex: sexSchema.optional(),
+  zone: optionalTrimmedString,
+  ownsCar: z.coerce.boolean().optional(),
   address: optionalTrimmedString,
   city: optionalTrimmedString,
   zipcode: optionalTrimmedString,
@@ -122,6 +137,8 @@ export const createStaffSchema = z.object({
   emergencyContactPhone: optionalTrimmedString,
   emergencyContactRelationship: optionalTrimmedString,
   photoUrl: z.string().url('Photo URL must be valid').optional(),
+  cvFileUrl: z.string().url('CV URL must be valid').optional(),
+  staffRoleLabel: staffRoleLabelSchema.optional(),
   summary: z.string().trim().max(2000).optional(),
   skills: z.string().trim().max(2000).optional(),
   status: z.nativeEnum(UserStatus).optional()
@@ -138,6 +155,10 @@ export const updateStaffSchema = z
     firstName: optionalTrimmedString,
     lastName: optionalTrimmedString,
     phone: optionalTrimmedString,
+    dateOfBirth: z.coerce.date().optional(),
+    sex: sexSchema.optional(),
+    zone: optionalTrimmedString,
+    ownsCar: z.coerce.boolean().optional(),
     address: optionalTrimmedString,
     city: optionalTrimmedString,
     zipcode: optionalTrimmedString,
@@ -145,6 +166,8 @@ export const updateStaffSchema = z
     emergencyContactPhone: optionalTrimmedString,
     emergencyContactRelationship: optionalTrimmedString,
     photoUrl: z.string().url('Photo URL must be valid').optional(),
+    cvFileUrl: z.string().url('CV URL must be valid').optional(),
+    staffRoleLabel: staffRoleLabelSchema.optional(),
     summary: z.string().trim().max(2000).optional(),
     skills: z.string().trim().max(2000).optional()
   })
@@ -152,11 +175,9 @@ export const updateStaffSchema = z
     message: 'At least one field must be provided for update'
   });
 
-const recruitmentSortBySchema = z.enum(['createdAt', 'updatedAt', 'status']).default('createdAt');
-
 export const recruitmentListQuerySchema = paginationSchema.extend({
   status: z.nativeEnum(ApplicationStatus).optional(),
-  sortBy: recruitmentSortBySchema,
+  sortBy: z.enum(['createdAt', 'updatedAt', 'status']).default('createdAt'),
   sortOrder: sortOrderSchema
 });
 

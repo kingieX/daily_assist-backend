@@ -244,7 +244,7 @@ export const adminPaths: OpenAPIV3.PathsObject = {
     },
     post: {
       tags: ['Admin — Clients'],
-      summary: 'Create client',
+      summary: 'Create client with demographic/emergency/proof metadata',
       security: adminSecurity,
       requestBody: {
         required: true,
@@ -295,7 +295,7 @@ export const adminPaths: OpenAPIV3.PathsObject = {
         {
           name: 'sortBy',
           in: 'query',
-          schema: { type: 'string', enum: ['createdAt', 'updatedAt', 'lastLoginAt', 'email'], default: 'createdAt' }
+          schema: { type: 'string', enum: ['createdAt', 'updatedAt', 'lastLoginAt', 'email', 'staffCode'], default: 'createdAt' }
         },
         {
           name: 'sortOrder',
@@ -307,7 +307,7 @@ export const adminPaths: OpenAPIV3.PathsObject = {
     },
     post: {
       tags: ['Admin — Staff'],
-      summary: 'Create staff',
+      summary: 'Create staff profile (with operational fields and initial credentials)',
       security: adminSecurity,
       requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
       responses: { '201': { description: 'Staff created' } }

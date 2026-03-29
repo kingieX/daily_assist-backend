@@ -73,6 +73,7 @@ Exit criteria:
 Scope:
 * Implement reports listing, detail, status updates, billing process flag
 * Implement settings modules (system/user profile preferences)
+* Extend staff/client profile records with operational fields (work staff code, demographics, zone, uploads, emergency metadata)
 * Implement comprehensive audit_logs for admin actions and auth events
 Deliverables:
 * Reporting and configuration modules operational

@@ -31,6 +31,13 @@ enum ClientSource {
   ADMIN_CREATED
 }
 
+enum Sex {
+  MALE
+  FEMALE
+  OTHER
+  PREFER_NOT_TO_SAY
+}
+
 enum BookingStatus {
   REQUESTED
   ASSIGNED
@@ -122,6 +129,7 @@ enum AuditAction {
 model User {
   id                   String               @id @default(uuid())
   email                String               @unique
+  staffCode            String?              @unique @map("staff_code")
   passwordHash         String               @map("password_hash")
   role                 Role                 @default(STAFF)
   status               UserStatus           @default(ACTIVE)
@@ -172,6 +180,10 @@ model StaffProfile {
   firstName                    String   @map("first_name")
   lastName                     String   @map("last_name")
   phone                        String
+  dateOfBirth                  DateTime? @map("date_of_birth")
+  sex                          Sex?
+  zone                         String?
+  ownsCar                      Boolean   @default(false) @map("owns_car")
   address                      String?
   city                         String?
   zipcode                      String?
@@ -179,6 +191,8 @@ model StaffProfile {
   emergencyContactPhone        String?  @map("emergency_contact_phone")
   emergencyContactRelationship String?  @map("emergency_contact_relationship")
   photoUrl                     String?  @map("photo_url")
+  cvFileUrl                    String?  @map("cv_file_url")
+  staffRoleLabel               String?  @map("staff_role_label")
   summary                      String?
   skills                       String?
   createdAt                    DateTime @default(now()) @map("created_at")
@@ -206,11 +220,19 @@ model Client {
   id        String       @id @default(uuid())
   firstName String       @map("first_name")
   lastName  String       @map("last_name")
+  title     String?
   email     String?
   phone     String
+  age       Int?
+  sex       Sex?
   address   String?
   city      String?
   zipcode   String?
+  emergencyContactName         String?  @map("emergency_contact_name")
+  emergencyContactPhone        String?  @map("emergency_contact_phone")
+  emergencyContactRelationship String?  @map("emergency_contact_relationship")
+  proofOfAddressUrl            String?  @map("proof_of_address_url")
+  notes                        String?
   status    ClientStatus @default(ACTIVE)
   source    ClientSource @default(WEB_BOOKING)
   createdAt DateTime     @default(now()) @map("created_at")

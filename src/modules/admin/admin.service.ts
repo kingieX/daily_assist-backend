@@ -15,6 +15,7 @@ import { ApiError } from '../../utils/api-error';
 import { hashValue } from '../../utils/hash';
 import { hashPassword } from '../../utils/password';
 import { recordAuditLog } from '../operations/audit-log.service';
+
 import type {
   AssignBookingInput,
   BookingListQuery,
@@ -32,6 +33,8 @@ import type {
   UpdateRecruitmentStatusInput,
   UpdateStaffInput
 } from './admin.validation';
+
+const db = prisma as any;
 
 function normalizeEmail(email: string): string {
   return email.toLowerCase().trim();
@@ -72,7 +75,7 @@ async function generateUniqueWorkEmail(firstName: string, lastName: string, curr
     const localPart = counter === 0 ? base : `${base}${counter + 1}`;
     const candidate = `${localPart}@dailyassistuk.com`;
 
-    const existing = await prisma.user.findFirst({
+    const existing = await db.user.findFirst({
       where: {
         email: candidate,
         id: { not: currentUserId }
@@ -86,6 +89,27 @@ async function generateUniqueWorkEmail(firstName: string, lastName: string, curr
   }
 
   throw new ApiError(500, 'Unable to generate a unique work email for staff');
+}
+
+
+async function generateNextStaffCode(role: Role): Promise<string> {
+  const baseNumber = role === Role.ADMIN || role === Role.SUPER_ADMIN ? 1 : 10;
+
+  const usersWithCode = await db.user.findMany({
+    where: { staffCode: { not: null } },
+    select: { staffCode: true }
+  });
+
+  const parsed = usersWithCode
+    .map((u: any) => u.staffCode)
+    .filter((code: any): code is string => Boolean(code))
+    .map((code: any) => Number(code.replace(/^DA/, '')))
+    .filter((n: any) => Number.isFinite(n));
+
+  const maxNumber = parsed.length ? Math.max(...parsed) : baseNumber - 1;
+  const next = Math.max(baseNumber, maxNumber + 1);
+
+  return `DA${String(next).padStart(4, '0')}`;
 }
 
 function buildPaginatedResult<T>(items: T[], total: number, page: number, limit: number) {
@@ -120,6 +144,7 @@ const bookingInclude = {
   assignedStaff: {
     select: {
       id: true,
+      staffCode: true,
       email: true,
       status: true,
       staffProfile: {
@@ -136,11 +161,11 @@ const bookingInclude = {
 async function getDashboardSummary() {
   const [requestedBookings, assignedBookings, activeClients, activeStaff, pendingApplications] =
     await Promise.all([
-      prisma.booking.count({ where: { status: BookingStatus.REQUESTED } }),
-      prisma.booking.count({ where: { status: BookingStatus.ASSIGNED } }),
-      prisma.client.count({ where: { status: ClientStatus.ACTIVE } }),
-      prisma.user.count({ where: { role: Role.STAFF, status: UserStatus.ACTIVE } }),
-      prisma.workerApplication.count({ where: { status: ApplicationStatus.PENDING } })
+      db.booking.count({ where: { status: BookingStatus.REQUESTED } }),
+      db.booking.count({ where: { status: BookingStatus.ASSIGNED } }),
+      db.client.count({ where: { status: ClientStatus.ACTIVE } }),
+      db.user.count({ where: { role: Role.STAFF, status: UserStatus.ACTIVE } }),
+      db.workerApplication.count({ where: { status: ApplicationStatus.PENDING } })
     ]);
 
   return {
@@ -154,16 +179,16 @@ async function getDashboardSummary() {
 
 async function getDashboardCharts() {
   const [bookingsByStatus, applicationsByStatus] = await Promise.all([
-    prisma.booking.groupBy({ by: ['status'], _count: { status: true } }),
-    prisma.workerApplication.groupBy({ by: ['status'], _count: { status: true } })
+    db.booking.groupBy({ by: ['status'], _count: { status: true } }),
+    db.workerApplication.groupBy({ by: ['status'], _count: { status: true } })
   ]);
 
   return {
-    bookingsByStatus: bookingsByStatus.map((entry) => ({
+    bookingsByStatus: bookingsByStatus.map((entry: any) => ({
       status: entry.status,
       count: entry._count.status
     })),
-    recruitmentByStatus: applicationsByStatus.map((entry) => ({
+    recruitmentByStatus: applicationsByStatus.map((entry: any) => ({
       status: entry.status,
       count: entry._count.status
     }))
@@ -172,13 +197,13 @@ async function getDashboardCharts() {
 
 async function getDashboardAlerts() {
   const [unassigned, overdueRequested] = await Promise.all([
-    prisma.booking.findMany({
+    db.booking.findMany({
       where: { status: BookingStatus.REQUESTED },
       orderBy: [{ createdAt: 'asc' }],
       take: 5,
       select: { id: true, createdAt: true, preferredDate: true }
     }),
-    prisma.booking.findMany({
+    db.booking.findMany({
       where: {
         status: BookingStatus.REQUESTED,
         preferredDate: { lt: new Date() }
@@ -206,8 +231,8 @@ async function listBookings(filters: BookingListQuery) {
   const skip = (page - 1) * limit;
 
   const [total, items] = await Promise.all([
-    prisma.booking.count({ where }),
-    prisma.booking.findMany({
+    db.booking.count({ where }),
+    db.booking.findMany({
       where,
       include: bookingInclude,
       orderBy: [{ [filters.sortBy]: filters.sortOrder }, { id: 'asc' }],
@@ -220,7 +245,7 @@ async function listBookings(filters: BookingListQuery) {
 }
 
 async function getBookingById(id: string) {
-  const booking = await prisma.booking.findUnique({
+  const booking = await db.booking.findUnique({
     where: { id },
     include: {
       ...bookingInclude,
@@ -244,7 +269,7 @@ async function getBookingById(id: string) {
 }
 
 async function assignBooking(id: string, input: AssignBookingInput, actorUserId: string) {
-  const booking = await prisma.booking.findUnique({
+  const booking = await db.booking.findUnique({
     where: { id },
     select: { id: true, status: true }
   });
@@ -257,7 +282,7 @@ async function assignBooking(id: string, input: AssignBookingInput, actorUserId:
     throw new ApiError(400, 'Booking cannot be assigned in its current status');
   }
 
-  const staffUser = await prisma.user.findFirst({
+  const staffUser = await db.user.findFirst({
     where: {
       id: input.staffId,
       role: Role.STAFF,
@@ -270,7 +295,7 @@ async function assignBooking(id: string, input: AssignBookingInput, actorUserId:
     throw new ApiError(404, 'Active staff user not found');
   }
 
-  return prisma.booking.update({
+  return db.booking.update({
     where: { id },
     data: {
       status: BookingStatus.ASSIGNED,
@@ -284,7 +309,7 @@ async function assignBooking(id: string, input: AssignBookingInput, actorUserId:
 }
 
 async function cancelBooking(id: string, input: CancelBookingInput) {
-  const booking = await prisma.booking.findUnique({
+  const booking = await db.booking.findUnique({
     where: { id },
     select: { id: true, status: true }
   });
@@ -301,7 +326,7 @@ async function cancelBooking(id: string, input: CancelBookingInput) {
     throw new ApiError(400, 'Completed booking cannot be cancelled');
   }
 
-  return prisma.booking.update({
+  return db.booking.update({
     where: { id },
     data: {
       status: BookingStatus.CANCELLED,
@@ -312,7 +337,7 @@ async function cancelBooking(id: string, input: CancelBookingInput) {
 }
 
 async function completeBooking(id: string, _input: CompleteBookingInput) {
-  const booking = await prisma.booking.findUnique({
+  const booking = await db.booking.findUnique({
     where: { id },
     select: { id: true, status: true }
   });
@@ -325,7 +350,7 @@ async function completeBooking(id: string, _input: CompleteBookingInput) {
     throw new ApiError(400, 'Cancelled booking cannot be completed');
   }
 
-  return prisma.booking.update({
+  return db.booking.update({
     where: { id },
     data: {
       status: BookingStatus.COMPLETED
@@ -335,7 +360,7 @@ async function completeBooking(id: string, _input: CompleteBookingInput) {
 }
 
 async function updateBooking(id: string, input: UpdateBookingInput) {
-  const booking = await prisma.booking.findUnique({ where: { id }, select: { id: true } });
+  const booking = await db.booking.findUnique({ where: { id }, select: { id: true } });
   if (!booking) {
     throw new ApiError(404, 'Booking not found');
   }
@@ -353,7 +378,7 @@ async function updateBooking(id: string, input: UpdateBookingInput) {
     data.emergencyContactRelationship = input.emergencyContactRelationship;
   }
 
-  return prisma.booking.update({ where: { id }, data, include: bookingInclude });
+  return db.booking.update({ where: { id }, data, include: bookingInclude });
 }
 
 async function listClients(filters: ClientListQuery) {
@@ -365,8 +390,8 @@ async function listClients(filters: ClientListQuery) {
   const skip = (page - 1) * limit;
 
   const [total, items] = await Promise.all([
-    prisma.client.count({ where }),
-    prisma.client.findMany({
+    db.client.count({ where }),
+    db.client.findMany({
       where,
       orderBy: [{ [filters.sortBy]: filters.sortOrder }, { id: 'asc' }],
       include: {
@@ -385,15 +410,23 @@ async function listClients(filters: ClientListQuery) {
 async function createClient(input: CreateClientInput) {
   const normalizedEmail = input.email ? normalizeEmail(input.email) : null;
 
-  return prisma.client.create({
+  return db.client.create({
     data: {
+      title: input.title ?? null,
       firstName: input.firstName,
       lastName: input.lastName,
       email: normalizedEmail,
       phone: input.phone,
+      age: input.age ?? null,
+      sex: input.sex ?? null,
       address: input.address ?? null,
       city: input.city ?? null,
       zipcode: input.zipcode ?? null,
+      emergencyContactName: input.emergencyContactName ?? null,
+      emergencyContactPhone: input.emergencyContactPhone ?? null,
+      emergencyContactRelationship: input.emergencyContactRelationship ?? null,
+      proofOfAddressUrl: input.proofOfAddressUrl ?? null,
+      notes: input.notes ?? null,
       status: input.status,
       source: ClientSource.ADMIN_CREATED
     }
@@ -401,7 +434,7 @@ async function createClient(input: CreateClientInput) {
 }
 
 async function getClientById(id: string) {
-  const client = await prisma.client.findUnique({
+  const client = await db.client.findUnique({
     where: { id },
     include: {
       bookings: {
@@ -424,7 +457,7 @@ async function getClientById(id: string) {
 }
 
 async function updateClient(id: string, input: UpdateClientInput) {
-  const existingClient = await prisma.client.findUnique({
+  const existingClient = await db.client.findUnique({
     where: { id },
     select: { id: true }
   });
@@ -433,28 +466,38 @@ async function updateClient(id: string, input: UpdateClientInput) {
     throw new ApiError(404, 'Client not found');
   }
 
-  const data: Prisma.ClientUpdateInput = {};
+  const data: any = {};
+  if (input.title !== undefined) data.title = input.title;
   if (input.firstName !== undefined) data.firstName = input.firstName;
   if (input.lastName !== undefined) data.lastName = input.lastName;
   if (input.email !== undefined) data.email = input.email ? normalizeEmail(input.email) : null;
   if (input.phone !== undefined) data.phone = input.phone;
+  if (input.age !== undefined) data.age = input.age;
+  if (input.sex !== undefined) data.sex = input.sex;
   if (input.address !== undefined) data.address = input.address;
   if (input.city !== undefined) data.city = input.city;
   if (input.zipcode !== undefined) data.zipcode = input.zipcode;
+  if (input.emergencyContactName !== undefined) data.emergencyContactName = input.emergencyContactName;
+  if (input.emergencyContactPhone !== undefined) data.emergencyContactPhone = input.emergencyContactPhone;
+  if (input.emergencyContactRelationship !== undefined) {
+    data.emergencyContactRelationship = input.emergencyContactRelationship;
+  }
+  if (input.proofOfAddressUrl !== undefined) data.proofOfAddressUrl = input.proofOfAddressUrl;
+  if (input.notes !== undefined) data.notes = input.notes;
   if (input.status !== undefined) data.status = input.status;
 
   if (Object.keys(data).length === 0) {
     throw new ApiError(400, 'At least one valid field must be provided for update');
   }
 
-  return prisma.client.update({
+  return db.client.update({
     where: { id },
     data
   });
 }
 
 async function deleteClient(id: string) {
-  const client = await prisma.client.findUnique({
+  const client = await db.client.findUnique({
     where: { id },
     select: {
       id: true,
@@ -470,7 +513,7 @@ async function deleteClient(id: string) {
     throw new ApiError(409, 'Client has related bookings and cannot be deleted');
   }
 
-  await prisma.client.delete({ where: { id } });
+  await db.client.delete({ where: { id } });
 }
 
 async function listStaff(filters: StaffListQuery) {
@@ -484,12 +527,13 @@ async function listStaff(filters: StaffListQuery) {
   };
 
   const [total, items] = await Promise.all([
-    prisma.user.count({ where }),
-    prisma.user.findMany({
+    db.user.count({ where }),
+    db.user.findMany({
       where,
       orderBy: [{ [filters.sortBy]: filters.sortOrder }, { id: 'asc' }],
       select: {
         id: true,
+        staffCode: true,
         email: true,
         role: true,
         status: true,
@@ -508,7 +552,7 @@ async function listStaff(filters: StaffListQuery) {
 
 async function createStaff(input: CreateStaffInput) {
   const normalizedEmail = normalizeEmail(input.email);
-  const existingUser = await prisma.user.findUnique({
+  const existingUser = await db.user.findUnique({
     where: { email: normalizedEmail },
     select: { id: true }
   });
@@ -518,10 +562,12 @@ async function createStaff(input: CreateStaffInput) {
   }
 
   const passwordHash = await hashPassword(input.password);
+  const staffCode = await generateNextStaffCode(Role.STAFF);
 
-  return prisma.user.create({
+  return db.user.create({
     data: {
       email: normalizedEmail,
+      staffCode,
       passwordHash,
       role: Role.STAFF,
       status: input.status ?? UserStatus.ACTIVE,
@@ -530,6 +576,10 @@ async function createStaff(input: CreateStaffInput) {
           firstName: input.firstName,
           lastName: input.lastName,
           phone: input.phone,
+          dateOfBirth: input.dateOfBirth ?? null,
+          sex: input.sex ?? null,
+          zone: input.zone ?? null,
+          ownsCar: input.ownsCar ?? false,
           address: input.address ?? null,
           city: input.city ?? null,
           zipcode: input.zipcode ?? null,
@@ -537,6 +587,8 @@ async function createStaff(input: CreateStaffInput) {
           emergencyContactPhone: input.emergencyContactPhone ?? null,
           emergencyContactRelationship: input.emergencyContactRelationship ?? null,
           photoUrl: input.photoUrl ?? null,
+          cvFileUrl: input.cvFileUrl ?? null,
+          staffRoleLabel: input.staffRoleLabel ?? 'HOME_HELP_SUPPORT_ASSISTANT',
           summary: input.summary ?? null,
           skills: input.skills ?? null
         }
@@ -544,6 +596,7 @@ async function createStaff(input: CreateStaffInput) {
     },
     select: {
       id: true,
+      staffCode: true,
       email: true,
       role: true,
       status: true,
@@ -554,13 +607,14 @@ async function createStaff(input: CreateStaffInput) {
 }
 
 async function getStaffById(id: string) {
-  const staff = await prisma.user.findFirst({
+  const staff = await db.user.findFirst({
     where: {
       id,
       role: Role.STAFF
     },
     select: {
       id: true,
+      staffCode: true,
       email: true,
       role: true,
       status: true,
@@ -580,13 +634,14 @@ async function getStaffById(id: string) {
 
 
 async function provisionStaffCredentials(id: string, actorUserId: string) {
-  const staff = await prisma.user.findFirst({
+  const staff = await db.user.findFirst({
     where: {
       id,
       role: Role.STAFF
     },
     select: {
       id: true,
+      staffCode: true,
       email: true,
       status: true,
       staffProfile: {
@@ -618,7 +673,7 @@ async function provisionStaffCredentials(id: string, actorUserId: string) {
   const tokenHash = hashValue(rawToken);
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-  await prisma.$transaction(async (tx) => {
+  await db.$transaction(async (tx: any) => {
     await tx.user.update({
       where: { id: staff.id },
       data: {
@@ -673,7 +728,7 @@ async function provisionStaffCredentials(id: string, actorUserId: string) {
 }
 
 async function resetStaffPassword(id: string, input: ResetStaffPasswordInput) {
-  const staff = await prisma.user.findFirst({
+  const staff = await db.user.findFirst({
     where: {
       id,
       role: Role.STAFF
@@ -687,9 +742,9 @@ async function resetStaffPassword(id: string, input: ResetStaffPasswordInput) {
 
   const passwordHash = await hashPassword(input.newPassword);
 
-  await prisma.$transaction([
-    prisma.user.update({ where: { id: staff.id }, data: { passwordHash } }),
-    prisma.refreshToken.updateMany({
+  await db.$transaction([
+    db.user.update({ where: { id: staff.id }, data: { passwordHash } }),
+    db.refreshToken.updateMany({
       where: { userId: staff.id, revokedAt: null },
       data: { revokedAt: new Date() }
     })
@@ -699,7 +754,7 @@ async function resetStaffPassword(id: string, input: ResetStaffPasswordInput) {
 }
 
 async function updateStaff(id: string, input: UpdateStaffInput) {
-  const staff = await prisma.user.findFirst({
+  const staff = await db.user.findFirst({
     where: {
       id,
       role: Role.STAFF
@@ -713,7 +768,7 @@ async function updateStaff(id: string, input: UpdateStaffInput) {
 
   const normalizedEmail = input.email ? normalizeEmail(input.email) : undefined;
   if (normalizedEmail && normalizedEmail !== staff.email) {
-    const emailExists = await prisma.user.findUnique({
+    const emailExists = await db.user.findUnique({
       where: { email: normalizedEmail },
       select: { id: true }
     });
@@ -722,7 +777,7 @@ async function updateStaff(id: string, input: UpdateStaffInput) {
     }
   }
 
-  const userData: Prisma.UserUpdateInput = {};
+  const userData: any = {};
   if (normalizedEmail !== undefined) userData.email = normalizedEmail;
   if (input.status !== undefined) userData.status = input.status;
 
@@ -730,6 +785,10 @@ async function updateStaff(id: string, input: UpdateStaffInput) {
     input.firstName !== undefined ||
     input.lastName !== undefined ||
     input.phone !== undefined ||
+    input.dateOfBirth !== undefined ||
+    input.sex !== undefined ||
+    input.zone !== undefined ||
+    input.ownsCar !== undefined ||
     input.address !== undefined ||
     input.city !== undefined ||
     input.zipcode !== undefined ||
@@ -737,15 +796,21 @@ async function updateStaff(id: string, input: UpdateStaffInput) {
     input.emergencyContactPhone !== undefined ||
     input.emergencyContactRelationship !== undefined ||
     input.photoUrl !== undefined ||
+    input.cvFileUrl !== undefined ||
+    input.staffRoleLabel !== undefined ||
     input.summary !== undefined ||
     input.skills !== undefined;
 
   if (hasProfileUpdates) {
     if (staff.staffProfile) {
-      const profileData: Prisma.StaffProfileUpdateInput = {};
+      const profileData: any = {};
       if (input.firstName !== undefined) profileData.firstName = input.firstName;
       if (input.lastName !== undefined) profileData.lastName = input.lastName;
       if (input.phone !== undefined) profileData.phone = input.phone;
+      if (input.dateOfBirth !== undefined) profileData.dateOfBirth = input.dateOfBirth;
+      if (input.sex !== undefined) profileData.sex = input.sex;
+      if (input.zone !== undefined) profileData.zone = input.zone;
+      if (input.ownsCar !== undefined) profileData.ownsCar = input.ownsCar;
       if (input.address !== undefined) profileData.address = input.address;
       if (input.city !== undefined) profileData.city = input.city;
       if (input.zipcode !== undefined) profileData.zipcode = input.zipcode;
@@ -759,6 +824,8 @@ async function updateStaff(id: string, input: UpdateStaffInput) {
         profileData.emergencyContactRelationship = input.emergencyContactRelationship;
       }
       if (input.photoUrl !== undefined) profileData.photoUrl = input.photoUrl;
+      if (input.cvFileUrl !== undefined) profileData.cvFileUrl = input.cvFileUrl;
+      if (input.staffRoleLabel !== undefined) profileData.staffRoleLabel = input.staffRoleLabel;
       if (input.summary !== undefined) profileData.summary = input.summary;
       if (input.skills !== undefined) profileData.skills = input.skills;
 
@@ -778,6 +845,10 @@ async function updateStaff(id: string, input: UpdateStaffInput) {
           firstName: input.firstName,
           lastName: input.lastName,
           phone: input.phone,
+          dateOfBirth: input.dateOfBirth ?? null,
+          sex: input.sex ?? null,
+          zone: input.zone ?? null,
+          ownsCar: input.ownsCar ?? false,
           address: input.address ?? null,
           city: input.city ?? null,
           zipcode: input.zipcode ?? null,
@@ -785,6 +856,8 @@ async function updateStaff(id: string, input: UpdateStaffInput) {
           emergencyContactPhone: input.emergencyContactPhone ?? null,
           emergencyContactRelationship: input.emergencyContactRelationship ?? null,
           photoUrl: input.photoUrl ?? null,
+          cvFileUrl: input.cvFileUrl ?? null,
+          staffRoleLabel: input.staffRoleLabel ?? 'HOME_HELP_SUPPORT_ASSISTANT',
           summary: input.summary ?? null,
           skills: input.skills ?? null
         }
@@ -796,11 +869,12 @@ async function updateStaff(id: string, input: UpdateStaffInput) {
     throw new ApiError(400, 'At least one valid field must be provided for update');
   }
 
-  return prisma.user.update({
+  return db.user.update({
     where: { id },
     data: userData,
     select: {
       id: true,
+      staffCode: true,
       email: true,
       role: true,
       status: true,
@@ -813,7 +887,7 @@ async function updateStaff(id: string, input: UpdateStaffInput) {
 }
 
 async function deleteStaff(id: string) {
-  const staff = await prisma.user.findFirst({
+  const staff = await db.user.findFirst({
     where: {
       id,
       role: Role.STAFF
@@ -835,12 +909,12 @@ async function deleteStaff(id: string) {
     };
   }
 
-  await prisma.$transaction([
-    prisma.user.update({
+  await db.$transaction([
+    db.user.update({
       where: { id: staff.id },
       data: { status: UserStatus.INACTIVE }
     }),
-    prisma.refreshToken.updateMany({
+    db.refreshToken.updateMany({
       where: { userId: staff.id, revokedAt: null },
       data: { revokedAt: new Date() }
     })
@@ -862,8 +936,8 @@ async function listRecruitmentApplications(filters: RecruitmentListQuery) {
   };
 
   const [total, items] = await Promise.all([
-    prisma.workerApplication.count({ where }),
-    prisma.workerApplication.findMany({
+    db.workerApplication.count({ where }),
+    db.workerApplication.findMany({
       where,
       orderBy: [{ [filters.sortBy]: filters.sortOrder }, { id: 'asc' }],
       select: {
@@ -894,7 +968,7 @@ async function listRecruitmentApplications(filters: RecruitmentListQuery) {
 }
 
 async function getRecruitmentApplicationById(id: string) {
-  const application = await prisma.workerApplication.findUnique({
+  const application = await db.workerApplication.findUnique({
     where: { id },
     select: {
       id: true,
@@ -929,7 +1003,7 @@ async function updateRecruitmentStatus(
   input: UpdateRecruitmentStatusInput,
   actorUserId: string
 ) {
-  const existingApplication = await prisma.workerApplication.findUnique({
+  const existingApplication = await db.workerApplication.findUnique({
     where: { id },
     select: { id: true, status: true }
   });
@@ -951,7 +1025,7 @@ async function updateRecruitmentStatus(
     updateData.reviewNotes = input.reviewNotes;
   }
 
-  return prisma.workerApplication.update({
+  return db.workerApplication.update({
     where: { id },
     data: updateData,
     select: {
@@ -972,7 +1046,7 @@ async function convertApplicationToStaff(
   input: ConvertApplicationInput,
   actorUserId: string
 ) {
-  const application = await prisma.workerApplication.findUnique({
+  const application = await db.workerApplication.findUnique({
     where: { id },
     select: {
       id: true,
@@ -997,7 +1071,7 @@ async function convertApplicationToStaff(
   }
 
   const normalizedEmail = normalizeEmail(application.email);
-  const existingUser = await prisma.user.findUnique({
+  const existingUser = await db.user.findUnique({
     where: { email: normalizedEmail },
     select: { id: true }
   });
@@ -1007,11 +1081,13 @@ async function convertApplicationToStaff(
   }
 
   const passwordHash = await hashPassword(input.password);
+  const staffCode = await generateNextStaffCode(Role.STAFF);
 
-  return prisma.$transaction(async (tx) => {
+  return db.$transaction(async (tx: any) => {
     const staffUser = await tx.user.create({
       data: {
         email: normalizedEmail,
+        staffCode,
         passwordHash,
         role: Role.STAFF,
         status: UserStatus.ACTIVE,
