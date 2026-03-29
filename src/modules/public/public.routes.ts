@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { requireCaptcha } from '../../middlewares/captcha.middleware';
 import { publicFormRateLimiter } from '../../middlewares/rate-limit.middleware';
 import { uploadWorkerCv } from '../../middlewares/upload.middleware';
 import { validate } from '../../middlewares/validate.middleware';
@@ -16,6 +17,7 @@ publicRouter.get('/services', publicController.getServices);
 publicRouter.post(
   '/bookings',
   publicFormRateLimiter,
+  requireCaptcha,
   validate({ body: createBookingSchema }),
   publicController.createBooking
 );
@@ -23,6 +25,7 @@ publicRouter.post(
 publicRouter.post(
   '/worker-applications',
   publicFormRateLimiter,
+  requireCaptcha,
   uploadWorkerCv,
   publicController.createWorkerApplication
 );

@@ -173,49 +173,27 @@ export const schemas: SchemasMap = {
     }
   },
 
-  // ── Phase 2: Booking ─────────────────────────────────────────────────────────
+  // ── Phase 2: Booking Enquiry ─────────────────────────────────────────────────
 
   CreateBookingRequest: {
     type: 'object',
-    required: ['firstName', 'lastName', 'phone', 'agreeToTerms', 'consentToDailyassist'],
+    required: ['fullName', 'email', 'phoneNumber', 'subject', 'message'],
     properties: {
-      firstName: { type: 'string', example: 'Jane' },
-      lastName: { type: 'string', example: 'Doe' },
+      fullName: { type: 'string', example: 'Jane Doe' },
       email: { type: 'string', format: 'email', example: 'jane.doe@example.com' },
-      phone: { type: 'string', example: '+1 555 000 1234' },
-      address: { type: 'string', example: '42 Maple Street' },
-      city: { type: 'string', example: 'Lagos' },
-      zipcode: { type: 'string', example: '100001' },
-      packageId: { type: 'string', format: 'uuid', description: 'ID of the selected service package (optional)' },
-      preferredDate: { type: 'string', example: '2026-04-15', description: 'ISO date string' },
-      preferredTime: { type: 'string', example: '09:00' },
-      startDate: { type: 'string', example: '2026-04-20', description: 'Expected service start date' },
-      specialMessage: { type: 'string', example: 'Client uses a walker and needs ground floor access.' },
-      emergencyContactName: { type: 'string', example: 'Michael Doe' },
-      emergencyContactPhone: { type: 'string', example: '+1 555 999 8888' },
-      emergencyContactRelationship: { type: 'string', example: 'Son' },
-      selectedServiceIds: {
-        type: 'array',
-        items: { type: 'string', format: 'uuid' },
-        description: 'IDs of standard services included in the chosen package'
-      },
-      additionalServiceIds: {
-        type: 'array',
-        items: { type: 'string', format: 'uuid' },
-        description: 'IDs of optional add-on services'
-      },
-      agreeToTerms: { type: 'boolean', enum: [true], description: 'Must be true' },
-      consentToDailyassist: { type: 'boolean', enum: [true], description: 'Must be true' }
+      phoneNumber: { type: 'string', example: '+1 555 000 1234' },
+      subject: { type: 'string', example: 'Help needed for elderly parent' },
+      message: {
+        type: 'string',
+        example: 'I would like to discuss home support options and next available dates.'
+      }
     }
   },
 
   BookingConfirmation: {
     type: 'object',
     properties: {
-      id: { type: 'string', format: 'uuid' },
-      status: { type: 'string', enum: ['REQUESTED'], example: 'REQUESTED' },
-      clientId: { type: 'string', format: 'uuid' },
-      createdAt: { type: 'string', format: 'date-time' }
+      submittedAt: { type: 'string', format: 'date-time' }
     }
   },
 

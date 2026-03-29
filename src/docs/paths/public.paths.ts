@@ -122,50 +122,47 @@ export const publicPaths: OpenAPIV3.PathsObject = {
   '/public/bookings': {
     post: {
       tags: ['Public — Intake'],
-      summary: 'Submit booking request',
+      summary: 'Submit booking enquiry',
       description: [
-        'Creates a new booking request from a prospective client. No authentication required.',
+        'Sends a booking enquiry from the public site to the DailyAssist inbox. No authentication required.',
+        '',
+        '**Captcha:**',
+        '- Provide captcha token via `x-captcha-token` header (or `captchaToken` body field)',
         '',
         '**What happens:**',
-        '1. A new `Client` record is created from the submitted contact details',
-        '2. A `Booking` is created with status `REQUESTED`',
-        '3. Any specified service IDs are snapshotted as `BookingService` records',
-        '4. Admin reviews and assigns the booking (Phase 3)',
+        '1. The enquiry details are validated',
+        '2. An email is sent to `info@dailyassistuk.com`',
+        '3. No booking/client records are created in the database',
         '',
         '**Rate limited:** 10 requests per IP per hour.'
       ].join('\n'),
+      parameters: [
+        {
+          name: 'x-captcha-token',
+          in: 'header',
+          required: false,
+          schema: { type: 'string' },
+          description: 'Captcha token from the frontend widget (required when CAPTCHA_SECRET is configured).'
+        }
+      ],
       requestBody: {
         required: true,
         content: {
           'application/json': {
             schema: { $ref: '#/components/schemas/CreateBookingRequest' },
             example: {
-              firstName: 'Jane',
-              lastName: 'Doe',
+              fullName: 'Jane Doe',
               email: 'jane.doe@example.com',
-              phone: '+1 555 000 1234',
-              address: '42 Maple Street',
-              city: 'Lagos',
-              zipcode: '100001',
-              packageId: null,
-              preferredDate: '2026-04-15',
-              preferredTime: '09:00',
-              startDate: '2026-04-20',
-              specialMessage: 'Client uses a walker.',
-              emergencyContactName: 'Michael Doe',
-              emergencyContactPhone: '+1 555 999 8888',
-              emergencyContactRelationship: 'Son',
-              selectedServiceIds: [],
-              additionalServiceIds: [],
-              agreeToTerms: true,
-              consentToDailyassist: true
+              phoneNumber: '+1 555 000 1234',
+              subject: 'Help needed for elderly parent',
+              message: 'Please contact me about available home assistance services.'
             }
           }
         }
       },
       responses: {
         '201': {
-          description: 'Booking submitted successfully',
+          description: 'Booking enquiry submitted successfully',
           content: {
             'application/json': {
               schema: {
@@ -181,19 +178,15 @@ export const publicPaths: OpenAPIV3.PathsObject = {
               },
               example: {
                 success: true,
-                message: 'Booking request submitted successfully',
+                message: 'Booking enquiry submitted successfully',
                 data: {
-                  id: 'a1b2c3d4-uuid',
-                  status: 'REQUESTED',
-                  clientId: 'e5f6-uuid',
-                  createdAt: '2026-04-10T10:00:00.000Z'
+                  submittedAt: '2026-04-10T10:00:00.000Z'
                 }
               }
             }
           }
         },
         '400': { $ref: '#/components/responses/ValidationError' },
-        '404': { $ref: '#/components/responses/NotFound' },
         '429': { $ref: '#/components/responses/TooManyRequests' }
       }
     }
@@ -206,6 +199,9 @@ export const publicPaths: OpenAPIV3.PathsObject = {
       description: [
         'Submits a job application for a domestic assistance worker position. No authentication required.',
         '',
+        '**Captcha:**',
+        '- Provide captcha token via `x-captcha-token` header (or `captchaToken` multipart field)',
+        '',
         '**CV upload requirements:**',
         '- Field name: `cv`',
         '- Allowed types: PDF, DOC, DOCX',
@@ -217,6 +213,15 @@ export const publicPaths: OpenAPIV3.PathsObject = {
         '',
         '**Rate limited:** 10 requests per IP per hour.'
       ].join('\n'),
+      parameters: [
+        {
+          name: 'x-captcha-token',
+          in: 'header',
+          required: false,
+          schema: { type: 'string' },
+          description: 'Captcha token from the frontend widget (required when CAPTCHA_SECRET is configured).'
+        }
+      ],
       requestBody: {
         required: true,
         content: {
