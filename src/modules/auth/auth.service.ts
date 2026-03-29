@@ -11,6 +11,7 @@ import {
   verifyRefreshToken
 } from '../../utils/jwt';
 import { comparePassword, hashPassword } from '../../utils/password';
+import { recordAuditLog } from '../operations/audit-log.service';
 
 interface LoginInput {
   email: string;
@@ -109,6 +110,14 @@ async function login(input: LoginInput): Promise<SessionResult> {
     data: { lastLoginAt: new Date() }
   });
 
+  await recordAuditLog({
+    actorUserId: user.id,
+    action: 'LOGIN',
+    entity: 'auth_session',
+    entityId: user.id,
+    metadataJson: { role: user.role, source: 'password_login' }
+  });
+
   return issueSession({
     id: user.id,
     email: user.email,
@@ -180,6 +189,14 @@ async function refreshSession(refreshToken: string): Promise<SessionResult> {
     }
   });
 
+  await recordAuditLog({
+    actorUserId: storedToken.user.id,
+    action: 'UPDATE',
+    entity: 'auth_session',
+    entityId: storedToken.user.id,
+    metadataJson: { source: 'refresh_token_rotation' }
+  });
+
   return nextSession;
 }
 
@@ -190,7 +207,7 @@ async function logout(refreshToken: string): Promise<void> {
     throw new ApiError(401, 'Invalid refresh token');
   }
 
-  await prisma.refreshToken.updateMany({
+  const result = await prisma.refreshToken.updateMany({
     where: {
       jti: payload.jti,
       userId: payload.sub,
@@ -199,6 +216,14 @@ async function logout(refreshToken: string): Promise<void> {
     data: {
       revokedAt: new Date()
     }
+  });
+
+  await recordAuditLog({
+    actorUserId: payload.sub,
+    action: 'LOGOUT',
+    entity: 'auth_session',
+    entityId: payload.sub,
+    metadataJson: { revokedTokenCount: result.count }
   });
 }
 

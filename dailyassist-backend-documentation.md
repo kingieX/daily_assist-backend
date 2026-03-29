@@ -1,4 +1,11 @@
 # DailyAssist Backend Documentation (Node.js + Express)
+## 0. Implementation Status Snapshot (Updated March 28, 2026)
+- ✅ Phase 1 implemented: base server, auth, RBAC, middleware stack
+- ✅ Phase 2 implemented: public packages/services, bookings, worker applications
+- ✅ Phase 3 implemented: admin dashboard, bookings/client/staff/recruitment operations
+- ✅ Phase 4 completed in code: visits lifecycle APIs, transition guards, visit-event logging, and staff dashboard summary aggregation implemented
+- 🚧 Phase 5 started: conversations/messages, announcements, and notifications endpoints are now scaffolded in backend and OpenAPI
+
 ## 1. Product Summary
 DailyAssist is a responsive web platform that connects clients (especially elderly people and families) with domestic assistance workers. The backend must support:
 - Public no-login booking requests
@@ -356,7 +363,6 @@ Each controller should delegate business logic to service layer classes and keep
 - `GET /admin/clients/:id`
 - `PATCH /admin/clients/:id`
 - `DELETE /admin/clients/:id`
-- `POST /admin/clients/:id/documents`
 
 ## 8.7 Admin Staff
 - `GET /admin/staff`
@@ -437,7 +443,7 @@ Each controller should delegate business logic to service layer classes and keep
 - Password minimum 8 characters
 - Terms and consent required for public booking
 - CV type and size validation
-- Query parameter validation (pagination/filter/sort)
+- Query parameter validation (pagination/filter/sort) with stable defaults: `page`, `limit`, `sortBy`, `sortOrder`
 - Input sanitization on all text fields
 
 ## 11. Security Requirements
