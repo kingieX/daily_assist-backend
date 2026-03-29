@@ -16,9 +16,11 @@ adminOpsRouter.post('/reports', validate({ body: createReportSchema }), adminOps
 adminOpsRouter.get('/reports', validate({ query: reportListQuerySchema }), adminOpsController.listReports);
 adminOpsRouter.get('/reports/:id', validate({ params: idParamSchema }), adminOpsController.getReportById);
 adminOpsRouter.patch('/reports/:id/status', validate({ params: idParamSchema, body: updateReportStatusSchema }), adminOpsController.updateReportStatus);
+adminOpsRouter.delete('/reports/:id', validate({ params: idParamSchema }), adminOpsController.deleteReport);
 
 adminOpsRouter.get('/settings/system', adminOpsController.listSystemSettings);
 adminOpsRouter.put('/settings/system', validate({ body: upsertSystemSettingSchema }), adminOpsController.upsertSystemSetting);
+adminOpsRouter.delete('/settings/system/:id', validate({ params: idParamSchema }), adminOpsController.deleteSystemSetting);
 
 adminOpsRouter.get('/audit-logs', validate({ query: auditLogQuerySchema }), adminOpsController.listAuditLogs);
 

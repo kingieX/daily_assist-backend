@@ -30,6 +30,12 @@ const updateReportStatus = asyncHandler(async (req: Request, res: Response) => {
   return sendSuccess(res, 200, 'Report updated', result);
 });
 
+
+const deleteReport = asyncHandler(async (req: Request, res: Response) => {
+  const result = await adminOpsService.deleteReport(req.params.id as string, currentUserId(req));
+  return sendSuccess(res, 200, 'Report deleted', result);
+});
+
 const listSystemSettings = asyncHandler(async (_req: Request, res: Response) => {
   const result = await adminOpsService.listSystemSettings();
   return sendSuccess(res, 200, 'System settings retrieved', result);
@@ -38,6 +44,12 @@ const listSystemSettings = asyncHandler(async (_req: Request, res: Response) => 
 const upsertSystemSetting = asyncHandler(async (req: Request, res: Response) => {
   const result = await adminOpsService.upsertSystemSetting(req.body, currentUserId(req));
   return sendSuccess(res, 200, 'System setting upserted', result);
+});
+
+
+const deleteSystemSetting = asyncHandler(async (req: Request, res: Response) => {
+  const result = await adminOpsService.deleteSystemSetting(req.params.id as string, currentUserId(req));
+  return sendSuccess(res, 200, 'System setting deleted', result);
 });
 
 const listAuditLogs = asyncHandler(async (req: Request, res: Response) => {
@@ -50,7 +62,9 @@ export const adminOpsController = {
   listReports,
   getReportById,
   updateReportStatus,
+  deleteReport,
   listSystemSettings,
   upsertSystemSetting,
+  deleteSystemSetting,
   listAuditLogs
 };

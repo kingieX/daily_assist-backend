@@ -1,4 +1,6 @@
 import { prisma } from '../../config/prisma';
+import { ApiError } from '../../utils/api-error';
+import { recordAuditLog } from './audit-log.service';
 import type { ReportListQuery } from './admin-ops.validation';
 
 const db = prisma as any;
@@ -15,24 +17,6 @@ function paginated<T>(items: T[], total: number, page: number, limit: number) {
   };
 }
 
-async function createAuditLog(input: {
-  actorUserId?: string;
-  action: 'CREATE' | 'UPDATE' | 'DELETE' | 'LOGIN' | 'LOGOUT' | 'STATUS_CHANGE' | 'SETTINGS_UPDATE' | 'REPORT_PROCESSING';
-  entity: string;
-  entityId?: string;
-  metadataJson?: Record<string, unknown>;
-}) {
-  return db.auditLog.create({
-    data: {
-      actorUserId: input.actorUserId ?? null,
-      action: input.action,
-      entity: input.entity,
-      entityId: input.entityId ?? null,
-      metadataJson: input.metadataJson ?? null
-    }
-  });
-}
-
 async function createReport(input: { title: string; description: string; type: string }, actorUserId: string) {
   const report = await db.report.create({
     data: {
@@ -43,7 +27,7 @@ async function createReport(input: { title: string; description: string; type: s
     }
   });
 
-  await createAuditLog({
+  await recordAuditLog({
     actorUserId,
     action: 'CREATE',
     entity: 'report',
@@ -94,7 +78,7 @@ async function updateReportStatus(
     }
   });
 
-  await createAuditLog({
+  await recordAuditLog({
     actorUserId,
     action: 'REPORT_PROCESSING',
     entity: 'report',
@@ -106,6 +90,23 @@ async function updateReportStatus(
   });
 
   return updated;
+}
+
+async function deleteReport(id: string, actorUserId: string) {
+  const existing = await db.report.findUnique({ where: { id }, select: { id: true, status: true } });
+  if (!existing) throw new ApiError(404, 'Report not found');
+
+  await db.report.delete({ where: { id } });
+
+  await recordAuditLog({
+    actorUserId,
+    action: 'DELETE',
+    entity: 'report',
+    entityId: id,
+    metadataJson: { previousStatus: existing.status }
+  });
+
+  return { id, deleted: true };
 }
 
 async function listSystemSettings() {
@@ -126,7 +127,7 @@ async function upsertSystemSetting(input: { key: string; valueJson: Record<strin
     }
   });
 
-  await createAuditLog({
+  await recordAuditLog({
     actorUserId,
     action: 'SETTINGS_UPDATE',
     entity: 'system_setting',
@@ -135,6 +136,23 @@ async function upsertSystemSetting(input: { key: string; valueJson: Record<strin
   });
 
   return setting;
+}
+
+async function deleteSystemSetting(id: string, actorUserId: string) {
+  const existing = await db.systemSetting.findUnique({ where: { id }, select: { id: true, key: true } });
+  if (!existing) throw new ApiError(404, 'System setting not found');
+
+  await db.systemSetting.delete({ where: { id } });
+
+  await recordAuditLog({
+    actorUserId,
+    action: 'DELETE',
+    entity: 'system_setting',
+    entityId: id,
+    metadataJson: { key: existing.key }
+  });
+
+  return { id, deleted: true };
 }
 
 async function listAuditLogs(query: {
@@ -178,7 +196,9 @@ export const adminOpsService = {
   listReports,
   getReportById,
   updateReportStatus,
+  deleteReport,
   listSystemSettings,
   upsertSystemSetting,
+  deleteSystemSetting,
   listAuditLogs
 };

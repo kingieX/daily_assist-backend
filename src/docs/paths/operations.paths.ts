@@ -31,6 +31,13 @@ export const operationsPaths: OpenAPIV3.PathsObject = {
       security: secured,
       parameters: [idParam],
       responses: { '200': { description: 'Report retrieved' } }
+    },
+    delete: {
+      tags: ['Admin — Phase 6 Ops'],
+      summary: 'Delete report',
+      security: secured,
+      parameters: [idParam],
+      responses: { '200': { description: 'Report deleted' } }
     }
   },
   '/admin/reports/{id}/status': {
@@ -54,6 +61,15 @@ export const operationsPaths: OpenAPIV3.PathsObject = {
       summary: 'Upsert one system setting',
       security: secured,
       responses: { '200': { description: 'System setting upserted' } }
+    }
+  },
+  '/admin/settings/system/{id}': {
+    delete: {
+      tags: ['Admin — Phase 6 Ops'],
+      summary: 'Delete system setting',
+      security: secured,
+      parameters: [idParam],
+      responses: { '200': { description: 'System setting deleted' } }
     }
   },
   '/admin/audit-logs': {
