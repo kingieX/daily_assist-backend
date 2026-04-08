@@ -93,6 +93,14 @@ CAPTCHA_TOKEN='<captcha-token-if-enabled>' \
 ./scripts/smoke/public-booking-curl.sh
 ```
 
+### Run (Windows PowerShell)
+
+```powershell
+.\scripts\smoke\public-booking.ps1 `
+  -BaseUrl "http://localhost:4000/api/v1" `
+  -CaptchaToken "<captcha-token-if-enabled>"
+```
+
 Checks:
 1. `POST /public/bookings`
 2. Validates request payload contract (`fullName`, `email`, `phoneNumber`, `subject`, `message`)
@@ -101,3 +109,4 @@ Checks:
 Notes:
 - If `CAPTCHA_SECRET` is enabled in backend env, pass a valid `CAPTCHA_TOKEN`.
 - If `CAPTCHA_SECRET` is disabled (local dev), you can omit `CAPTCHA_TOKEN`.
+- `public-booking-curl.sh` is a bash script (same style as the other smoke scripts), so on Windows use Git Bash/WSL or the PowerShell script `public-booking.ps1`.

@@ -154,3 +154,42 @@ export async function sendBookingInquiryEmail(input: BookingInquiryEmailInput): 
 
   logger.info({ recipient: BOOKING_INQUIRY_RECIPIENT, replyTo: input.email }, 'Booking enquiry email sent');
 }
+
+type BookingInquiryEmailInput = {
+  fullName: string;
+  email: string;
+  phoneNumber: string;
+  subject: string;
+  message: string;
+};
+
+export async function sendBookingInquiryEmail(input: BookingInquiryEmailInput): Promise<void> {
+  const emailSubject = `DailyAssist booking enquiry — ${input.subject}`;
+  const html = `
+    <p>A new booking enquiry was submitted via the public website.</p>
+    <p><strong>Full name:</strong> ${input.fullName}</p>
+    <p><strong>Email:</strong> ${input.email}</p>
+    <p><strong>Phone number:</strong> ${input.phoneNumber}</p>
+    <p><strong>Subject:</strong> ${input.subject}</p>
+    <p><strong>Message:</strong></p>
+    <p>${input.message.replace(/\n/g, '<br/>')}</p>
+  `;
+
+  if (!transporter) {
+    logger.info(
+      { recipient: BOOKING_INQUIRY_RECIPIENT, ...input },
+      '[DEV] Booking enquiry email not sent — Mailtrap/SMTP config not set.'
+    );
+    return;
+  }
+
+  await transporter.sendMail({
+    from: env.EMAIL_FROM,
+    to: BOOKING_INQUIRY_RECIPIENT,
+    replyTo: input.email,
+    subject: emailSubject,
+    html
+  });
+
+  logger.info({ recipient: BOOKING_INQUIRY_RECIPIENT, replyTo: input.email }, 'Booking enquiry email sent');
+}
