@@ -12,11 +12,17 @@ const envSchema = z.object({
   JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
   BCRYPT_SALT_ROUNDS: z.coerce.number().int().min(8).max(15).default(12),
   // Email config — optional in dev (reset links are logged to console when not set)
+  MAILTRAP_HOST: z.string().optional(),
+  MAILTRAP_PORT: z.coerce.number().optional(),
+  MAILTRAP_USER: z.string().optional(),
+  MAILTRAP_PASS: z.string().optional(),
   EMAIL_HOST: z.string().optional(),
   EMAIL_PORT: z.coerce.number().optional(),
   EMAIL_USER: z.string().optional(),
   EMAIL_PASS: z.string().optional(),
   EMAIL_FROM: z.string().default('noreply@dailyassist.local'),
+  CAPTCHA_SECRET: z.string().optional(),
+  CAPTCHA_VERIFY_URL: z.string().url().default('https://challenges.cloudflare.com/turnstile/v0/siteverify'),
   FRONTEND_URL: z.string().default('http://localhost:3000')
 });
 
