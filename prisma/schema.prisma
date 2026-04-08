@@ -31,6 +31,13 @@ enum ClientSource {
   ADMIN_CREATED
 }
 
+enum Sex {
+  MALE
+  FEMALE
+  OTHER
+  PREFER_NOT_TO_SAY
+}
+
 enum BookingStatus {
   REQUESTED
   ASSIGNED
@@ -53,11 +60,76 @@ enum ApplicationStatus {
   CONVERTED_TO_STAFF
 }
 
+enum VisitStatus {
+  ASSIGNED
+  ACKNOWLEDGED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum VisitEventType {
+  ASSIGNED
+  REASSIGNED
+  ACKNOWLEDGED
+  CHECKED_IN
+  CHECKED_OUT
+  CANCELLED
+  COMPLETED
+  NOTE_UPDATED
+}
+
+enum ConversationType {
+  ADMIN_STAFF
+  SYSTEM
+}
+
+enum AudienceType {
+  ALL_STAFF
+  SELECTED_STAFF
+}
+
+enum NotificationType {
+  SYSTEM
+  ANNOUNCEMENT
+  MESSAGE
+  VISIT
+}
+
+
+enum ReportStatus {
+  NEW
+  IN_REVIEW
+  APPROVED
+  REJECTED
+  BILLED
+}
+
+enum ReportType {
+  INCIDENT
+  VISIT_QUALITY
+  STAFF_PERFORMANCE
+  SYSTEM
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  STATUS_CHANGE
+  SETTINGS_UPDATE
+  REPORT_PROCESSING
+}
+
 // ─── Identity & Security ──────────────────────────────────────────────────────
 
 model User {
   id                   String               @id @default(uuid())
   email                String               @unique
+  staffCode            String?              @unique @map("staff_code")
   passwordHash         String               @map("password_hash")
   role                 Role                 @default(STAFF)
   status               UserStatus           @default(ACTIVE)
@@ -70,6 +142,18 @@ model User {
   assignedBookings     Booking[]            @relation("AssignedBookings")
   bookingsAssignedBy   Booking[]            @relation("BookingsAssignedBy")
   reviewedApplications WorkerApplication[]
+  visitsAsStaff        Visit[]             @relation("VisitsAsStaff")
+  visitEvents              VisitEvent[]
+  conversationsAsStaff      Conversation[]        @relation("ConversationStaff")
+  sentMessages              Message[]             @relation("MessageSender")
+  announcementsCreated      Announcement[]        @relation("AnnouncementCreator")
+  announcementRecipients    AnnouncementRecipient[]
+  notifications             Notification[]
+  notificationPreference    NotificationPreference?
+  reportsCreated            Report[]                @relation("ReportCreator")
+  reportsUpdated            Report[]                @relation("ReportUpdater")
+  auditLogs                 AuditLog[]              @relation("AuditActor")
+  systemSettingsUpdated     SystemSetting[]
 
   @@map("users")
 }
@@ -96,6 +180,10 @@ model StaffProfile {
   firstName                    String   @map("first_name")
   lastName                     String   @map("last_name")
   phone                        String
+  dateOfBirth                  DateTime? @map("date_of_birth")
+  sex                          Sex?
+  zone                         String?
+  ownsCar                      Boolean   @default(false) @map("owns_car")
   address                      String?
   city                         String?
   zipcode                      String?
@@ -103,6 +191,8 @@ model StaffProfile {
   emergencyContactPhone        String?  @map("emergency_contact_phone")
   emergencyContactRelationship String?  @map("emergency_contact_relationship")
   photoUrl                     String?  @map("photo_url")
+  cvFileUrl                    String?  @map("cv_file_url")
+  staffRoleLabel               String?  @map("staff_role_label")
   summary                      String?
   skills                       String?
   createdAt                    DateTime @default(now()) @map("created_at")
@@ -130,11 +220,19 @@ model Client {
   id        String       @id @default(uuid())
   firstName String       @map("first_name")
   lastName  String       @map("last_name")
+  title     String?
   email     String?
   phone     String
+  age       Int?
+  sex       Sex?
   address   String?
   city      String?
   zipcode   String?
+  emergencyContactName         String?  @map("emergency_contact_name")
+  emergencyContactPhone        String?  @map("emergency_contact_phone")
+  emergencyContactRelationship String?  @map("emergency_contact_relationship")
+  proofOfAddressUrl            String?  @map("proof_of_address_url")
+  notes                        String?
   status    ClientStatus @default(ACTIVE)
   source    ClientSource @default(WEB_BOOKING)
   createdAt DateTime     @default(now()) @map("created_at")
@@ -215,6 +313,7 @@ model Booking {
   createdAt                    DateTime        @default(now()) @map("created_at")
   updatedAt                    DateTime        @updatedAt @map("updated_at")
   bookingServices              BookingService[]
+  visits                       Visit[]
 
   @@map("bookings")
 }
@@ -230,6 +329,184 @@ model BookingService {
   createdAt           DateTime    @default(now()) @map("created_at")
 
   @@map("booking_services")
+}
+
+model Visit {
+  id                String      @id @default(uuid())
+  bookingId         String      @map("booking_id")
+  booking           Booking     @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  staffId           String      @map("staff_id")
+  staff             User        @relation("VisitsAsStaff", fields: [staffId], references: [id])
+  scheduledStartAt  DateTime    @map("scheduled_start_at")
+  scheduledEndAt    DateTime    @map("scheduled_end_at")
+  status            VisitStatus @default(ASSIGNED)
+  acknowledgedAt    DateTime?   @map("acknowledged_at")
+  checkInAt         DateTime?   @map("check_in_at")
+  checkOutAt        DateTime?   @map("check_out_at")
+  adminNotes        String?     @map("admin_notes")
+  staffNotes        String?     @map("staff_notes")
+  completionSummary String?     @map("completion_summary")
+  createdAt         DateTime    @default(now()) @map("created_at")
+  updatedAt         DateTime    @updatedAt @map("updated_at")
+  events            VisitEvent[]
+
+  @@index([bookingId])
+  @@index([staffId, status])
+  @@map("visits")
+}
+
+model VisitEvent {
+  id          String         @id @default(uuid())
+  visitId     String         @map("visit_id")
+  visit       Visit          @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  actorUserId String         @map("actor_user_id")
+  actorUser   User           @relation(fields: [actorUserId], references: [id])
+  eventType   VisitEventType @map("event_type")
+  payloadJson Json?          @map("payload_json")
+  createdAt   DateTime       @default(now()) @map("created_at")
+
+  @@index([visitId, createdAt])
+  @@index([actorUserId])
+  @@map("visit_events")
+}
+
+model Conversation {
+  id        String           @id @default(uuid())
+  type      ConversationType
+  staffId   String?          @map("staff_id")
+  staff     User?            @relation("ConversationStaff", fields: [staffId], references: [id])
+  createdAt DateTime         @default(now()) @map("created_at")
+  updatedAt DateTime         @updatedAt @map("updated_at")
+  messages  Message[]
+
+  @@index([staffId])
+  @@unique([type, staffId])
+  @@map("conversations")
+}
+
+model Message {
+  id             String       @id @default(uuid())
+  conversationId String       @map("conversation_id")
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderUserId   String       @map("sender_user_id")
+  senderUser     User         @relation("MessageSender", fields: [senderUserId], references: [id])
+  body           String
+  attachmentUrl  String?      @map("attachment_url")
+  deletedAt      DateTime?    @map("deleted_at")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  @@index([conversationId, createdAt])
+  @@index([senderUserId])
+  @@map("messages")
+}
+
+model Announcement {
+  id           String                  @id @default(uuid())
+  title        String
+  body         String
+  audienceType AudienceType            @map("audience_type")
+  createdBy    String                  @map("created_by")
+  creator      User                    @relation("AnnouncementCreator", fields: [createdBy], references: [id])
+  createdAt    DateTime                @default(now()) @map("created_at")
+  updatedAt    DateTime                @updatedAt @map("updated_at")
+  recipients   AnnouncementRecipient[]
+
+  @@index([createdBy])
+  @@map("announcements")
+}
+
+model AnnouncementRecipient {
+  id             String       @id @default(uuid())
+  announcementId String       @map("announcement_id")
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  staffId        String       @map("staff_id")
+  staff          User         @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  readAt         DateTime?    @map("read_at")
+
+  @@unique([announcementId, staffId])
+  @@index([staffId])
+  @@map("announcement_recipients")
+}
+
+model Notification {
+  id           String           @id @default(uuid())
+  userId       String           @map("user_id")
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type         NotificationType @default(SYSTEM)
+  title        String
+  body         String
+  metadataJson Json?            @map("metadata_json")
+  readAt       DateTime?        @map("read_at")
+  createdAt    DateTime         @default(now()) @map("created_at")
+
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+
+model NotificationPreference {
+  id                  String   @id @default(uuid())
+  userId              String   @unique @map("user_id")
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emailEnabled        Boolean  @default(true) @map("email_enabled")
+  inAppEnabled        Boolean  @default(true) @map("in_app_enabled")
+  messageEnabled      Boolean  @default(true) @map("message_enabled")
+  announcementEnabled Boolean  @default(true) @map("announcement_enabled")
+  visitEnabled        Boolean  @default(true) @map("visit_enabled")
+  systemEnabled       Boolean  @default(true) @map("system_enabled")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  @@map("notification_preferences")
+}
+
+
+model Report {
+  id               String       @id @default(uuid())
+  title            String
+  description      String
+  type             ReportType
+  status           ReportStatus @default(NEW)
+  billingProcessed Boolean      @default(false) @map("billing_processed")
+  createdBy        String       @map("created_by")
+  createdByUser    User         @relation("ReportCreator", fields: [createdBy], references: [id])
+  updatedBy        String?      @map("updated_by")
+  updatedByUser    User?        @relation("ReportUpdater", fields: [updatedBy], references: [id])
+  createdAt        DateTime     @default(now()) @map("created_at")
+  updatedAt        DateTime     @updatedAt @map("updated_at")
+
+  @@index([status, createdAt])
+  @@index([type, createdAt])
+  @@map("reports")
+}
+
+model SystemSetting {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  valueJson Json     @map("value_json")
+  updatedBy String?  @map("updated_by")
+  updater   User?    @relation(fields: [updatedBy], references: [id])
+  updatedAt DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("system_settings")
+}
+
+model AuditLog {
+  id          String      @id @default(uuid())
+  actorUserId String?     @map("actor_user_id")
+  actorUser   User?       @relation("AuditActor", fields: [actorUserId], references: [id])
+  action      AuditAction
+  entity      String
+  entityId    String?     @map("entity_id")
+  metadataJson Json?      @map("metadata_json")
+  createdAt   DateTime    @default(now()) @map("created_at")
+
+  @@index([actorUserId, createdAt])
+  @@index([entity, createdAt])
+  @@index([action, createdAt])
+  @@map("audit_logs")
 }
 
 // ─── Recruitment ──────────────────────────────────────────────────────────────
