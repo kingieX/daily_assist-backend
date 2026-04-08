@@ -1,6 +1,6 @@
-import nodemailer from 'nodemailer';
-import { env } from './env';
-import { logger } from './logger';
+import nodemailer from "nodemailer";
+import { env } from "./env";
+import { logger } from "./logger";
 
 /**
  * Returns a real nodemailer transport when Mailtrap or generic SMTP credentials are configured,
@@ -14,8 +14,8 @@ function createTransport(): nodemailer.Transporter | null {
       secure: (env.MAILTRAP_PORT ?? 587) === 465,
       auth: {
         user: env.MAILTRAP_USER,
-        pass: env.MAILTRAP_PASS
-      }
+        pass: env.MAILTRAP_PASS,
+      },
     });
   }
 
@@ -26,20 +26,23 @@ function createTransport(): nodemailer.Transporter | null {
       secure: (env.EMAIL_PORT ?? 587) === 465,
       auth: {
         user: env.EMAIL_USER,
-        pass: env.EMAIL_PASS
-      }
+        pass: env.EMAIL_PASS,
+      },
     });
   }
   return null;
 }
 
 const transporter = createTransport();
-const BOOKING_INQUIRY_RECIPIENT = 'info@dailyassistuk.com';
+const BOOKING_INQUIRY_RECIPIENT = "info@dailyassistuk.com";
 
 // ─── Email Senders ────────────────────────────────────────────────────────────
 
-export async function sendPasswordResetEmail(to: string, resetUrl: string): Promise<void> {
-  const subject = 'DailyAssist — Password Reset Request';
+export async function sendPasswordResetEmail(
+  to: string,
+  resetUrl: string,
+): Promise<void> {
+  const subject = "DailyAssist — Password Reset Request";
   const html = `
     <p>Hello,</p>
     <p>You requested a password reset for your DailyAssist account.</p>
@@ -54,7 +57,7 @@ export async function sendPasswordResetEmail(to: string, resetUrl: string): Prom
     // Dev fallback: print the reset URL so it can be tested without an email server
     logger.info(
       { to, resetUrl },
-      '[DEV] Password reset email not sent — Mailtrap/SMTP config not set. Use the resetUrl above to test.'
+      "[DEV] Password reset email not sent — Mailtrap/SMTP config not set. Use the resetUrl above to test.",
     );
     return;
   }
@@ -63,10 +66,10 @@ export async function sendPasswordResetEmail(to: string, resetUrl: string): Prom
     from: env.EMAIL_FROM,
     to,
     subject,
-    html
+    html,
   });
 
-  logger.info({ to }, 'Password reset email sent');
+  logger.info({ to }, "Password reset email sent");
 }
 
 type BookingInquiryEmailInput = {
@@ -77,7 +80,9 @@ type BookingInquiryEmailInput = {
   message: string;
 };
 
-export async function sendBookingInquiryEmail(input: BookingInquiryEmailInput): Promise<void> {
+export async function sendBookingInquiryEmail(
+  input: BookingInquiryEmailInput,
+): Promise<void> {
   const emailSubject = `DailyAssist booking enquiry — ${input.subject}`;
   const html = `
     <p>A new booking enquiry was submitted via the public website.</p>
@@ -86,13 +91,13 @@ export async function sendBookingInquiryEmail(input: BookingInquiryEmailInput): 
     <p><strong>Phone number:</strong> ${input.phoneNumber}</p>
     <p><strong>Subject:</strong> ${input.subject}</p>
     <p><strong>Message:</strong></p>
-    <p>${input.message.replace(/\n/g, '<br/>')}</p>
+    <p>${input.message.replace(/\n/g, "<br/>")}</p>
   `;
 
   if (!transporter) {
     logger.info(
       { recipient: BOOKING_INQUIRY_RECIPIENT, ...input },
-      '[DEV] Booking enquiry email not sent — Mailtrap/SMTP config not set.'
+      "[DEV] Booking enquiry email not sent — Mailtrap/SMTP config not set.",
     );
     return;
   }
@@ -102,8 +107,11 @@ export async function sendBookingInquiryEmail(input: BookingInquiryEmailInput): 
     to: BOOKING_INQUIRY_RECIPIENT,
     replyTo: input.email,
     subject: emailSubject,
-    html
+    html,
   });
 
-  logger.info({ recipient: BOOKING_INQUIRY_RECIPIENT, replyTo: input.email }, 'Booking enquiry email sent');
+  logger.info(
+    { recipient: BOOKING_INQUIRY_RECIPIENT, replyTo: input.email },
+    "Booking enquiry email sent",
+  );
 }
