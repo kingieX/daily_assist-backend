@@ -84,3 +84,20 @@ Checks:
 4. `GET /staff/messages/threads`
 5. `GET /staff/announcements`
 6. `GET /staff/notifications`
+
+## Script 4 — Public booking enquiry smoke (email-only flow)
+
+```bash
+BASE_URL=http://localhost:4000/api/v1 \
+CAPTCHA_TOKEN='<captcha-token-if-enabled>' \
+./scripts/smoke/public-booking-curl.sh
+```
+
+Checks:
+1. `POST /public/bookings`
+2. Validates request payload contract (`fullName`, `email`, `phoneNumber`, `subject`, `message`)
+3. Confirms API success response for email-only enquiry submission
+
+Notes:
+- If `CAPTCHA_SECRET` is enabled in backend env, pass a valid `CAPTCHA_TOKEN`.
+- If `CAPTCHA_SECRET` is disabled (local dev), you can omit `CAPTCHA_TOKEN`.
