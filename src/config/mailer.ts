@@ -1,6 +1,6 @@
-import nodemailer from 'nodemailer';
-import { env } from './env';
-import { logger } from './logger';
+import nodemailer from "nodemailer";
+import { env } from "./env";
+import { logger } from "./logger";
 
 /**
  * Returns a real nodemailer transport when Mailtrap or generic SMTP credentials are configured,
@@ -26,8 +26,8 @@ function createTransport(): nodemailer.Transporter | null {
       secure: (env.EMAIL_PORT ?? 587) === 465,
       auth: {
         user: env.EMAIL_USER,
-        pass: env.EMAIL_PASS
-      }
+        pass: env.EMAIL_PASS,
+      },
     });
   }
   return null;
@@ -38,8 +38,11 @@ const BOOKING_INQUIRY_RECIPIENT = 'info@dailyassistuk.com';
 
 // ─── Email Senders ────────────────────────────────────────────────────────────
 
-export async function sendPasswordResetEmail(to: string, resetUrl: string): Promise<void> {
-  const subject = 'DailyAssist — Password Reset Request';
+export async function sendPasswordResetEmail(
+  to: string,
+  resetUrl: string,
+): Promise<void> {
+  const subject = "DailyAssist — Password Reset Request";
   const html = `
     <p>Hello,</p>
     <p>You requested a password reset for your DailyAssist account.</p>
@@ -63,10 +66,54 @@ export async function sendPasswordResetEmail(to: string, resetUrl: string): Prom
     from: env.EMAIL_FROM,
     to,
     subject,
-    html
+    html,
   });
 
-  logger.info({ to }, 'Password reset email sent');
+  logger.info({ to }, "Password reset email sent");
+}
+
+type BookingInquiryEmailInput = {
+  fullName: string;
+  email: string;
+  phoneNumber: string;
+  subject: string;
+  message: string;
+};
+
+export async function sendBookingInquiryEmail(
+  input: BookingInquiryEmailInput,
+): Promise<void> {
+  const emailSubject = `DailyAssist booking enquiry — ${input.subject}`;
+  const html = `
+    <p>A new booking enquiry was submitted via the public website.</p>
+    <p><strong>Full name:</strong> ${input.fullName}</p>
+    <p><strong>Email:</strong> ${input.email}</p>
+    <p><strong>Phone number:</strong> ${input.phoneNumber}</p>
+    <p><strong>Subject:</strong> ${input.subject}</p>
+    <p><strong>Message:</strong></p>
+    <p>${input.message.replace(/\n/g, "<br/>")}</p>
+  `;
+
+  if (!transporter) {
+    logger.info(
+      { recipient: BOOKING_INQUIRY_RECIPIENT, ...input },
+      "[DEV] Booking enquiry email not sent — Mailtrap/SMTP config not set.",
+    );
+    return;
+  }
+
+  await transporter.sendMail({
+    from: env.EMAIL_FROM,
+    to: BOOKING_INQUIRY_RECIPIENT,
+    replyTo: input.email,
+    subject: emailSubject,
+    html,
+  });
+
+  logger.info(
+    { recipient: BOOKING_INQUIRY_RECIPIENT, replyTo: input.email },
+    "Booking enquiry email sent",
+  );
 }
 
 type BookingInquiryEmailInput = {
