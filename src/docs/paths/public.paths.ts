@@ -119,23 +119,11 @@ export const publicPaths: OpenAPIV3.PathsObject = {
     }
   },
 
-  '/public/bookings': {
+  '/public/consultations': {
     post: {
       tags: ['Public — Intake'],
-      summary: 'Submit booking enquiry',
-      description: [
-        'Sends a booking enquiry from the public site to the DailyAssist inbox. No authentication required.',
-        '',
-        '**Captcha:**',
-        '- Provide captcha token via `x-captcha-token` header (or `captchaToken` body field)',
-        '',
-        '**What happens:**',
-        '1. The enquiry details are validated',
-        '2. An email is sent to `info@dailyassistuk.com`',
-        '3. No booking/client records are created in the database',
-        '',
-        '**Rate limited:** 10 requests per IP per hour.'
-      ].join('\n'),
+      summary: 'Submit consultation/contact request',
+      description: 'Submits the public contact form and sends a consultation enquiry email. No booking record is created.',
       parameters: [
         {
           name: 'x-captcha-token',
@@ -149,39 +137,62 @@ export const publicPaths: OpenAPIV3.PathsObject = {
         required: true,
         content: {
           'application/json': {
-            schema: { $ref: '#/components/schemas/CreateBookingRequest' },
-            example: {
-              fullName: 'Jane Doe',
-              email: 'jane.doe@example.com',
-              phoneNumber: '+1 555 000 1234',
-              subject: 'Help needed for elderly parent',
-              message: 'Please contact me about available home assistance services.'
-            }
+            schema: { $ref: '#/components/schemas/ConsultationRequest' }
           }
         }
       },
       responses: {
         '201': {
-          description: 'Booking enquiry submitted successfully',
+          description: 'Consultation request submitted successfully',
           content: {
             'application/json': {
               schema: {
                 allOf: [
                   { $ref: '#/components/schemas/SuccessResponse' },
-                  {
-                    type: 'object',
-                    properties: {
-                      data: { $ref: '#/components/schemas/BookingConfirmation' }
-                    }
-                  }
+                  { type: 'object', properties: { data: { $ref: '#/components/schemas/ConsultationConfirmation' } } }
                 ]
-              },
-              example: {
-                success: true,
-                message: 'Booking enquiry submitted successfully',
-                data: {
-                  submittedAt: '2026-04-10T10:00:00.000Z'
-                }
+              }
+            }
+          }
+        },
+        '400': { $ref: '#/components/responses/ValidationError' },
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+      }
+    }
+  },
+
+  '/public/bookings': {
+    post: {
+      tags: ['Public — Intake'],
+      summary: 'Submit package booking request',
+      description: 'Submits the package booking form and creates client + booking + booking services records.',
+      parameters: [
+        {
+          name: 'x-captcha-token',
+          in: 'header',
+          required: false,
+          schema: { type: 'string' },
+          description: 'Captcha token from the frontend widget (required when CAPTCHA_SECRET is configured).'
+        }
+      ],
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: { $ref: '#/components/schemas/PublicBookingRequest' }
+          }
+        }
+      },
+      responses: {
+        '201': {
+          description: 'Booking submitted successfully',
+          content: {
+            'application/json': {
+              schema: {
+                allOf: [
+                  { $ref: '#/components/schemas/SuccessResponse' },
+                  { type: 'object', properties: { data: { $ref: '#/components/schemas/PublicBookingConfirmation' } } }
+                ]
               }
             }
           }

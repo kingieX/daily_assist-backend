@@ -2,7 +2,7 @@ import { ApplicationStatus, Prisma } from '@prisma/client';
 import { sendBookingInquiryEmail } from '../../config/mailer';
 import { prisma } from '../../config/prisma';
 import { ApiError } from '../../utils/api-error';
-import type { CreateBookingInput, WorkerApplicationInput } from './public.validation';
+import type { CreateConsultationInput, CreatePublicBookingInput, WorkerApplicationInput } from './public.validation';
 
 // ─── Packages ─────────────────────────────────────────────────────────────────
 
@@ -73,7 +73,7 @@ async function listServices() {
   });
 }
 
-async function submitBooking(input: CreateBookingInput) {
+async function submitConsultation(input: CreateConsultationInput) {
   await sendBookingInquiryEmail({
     fullName: input.fullName,
     email: input.email,
@@ -88,6 +88,63 @@ async function submitBooking(input: CreateBookingInput) {
 }
 
 // ─── Worker Applications ──────────────────────────────────────────────────────
+
+async function submitBooking(input: CreatePublicBookingInput) {
+  const serviceIds = Array.from(new Set([...(input.selectedServiceIds ?? []), ...(input.additionalServiceIds ?? [])]));
+
+  return prisma.$transaction(async (tx) => {
+    const client = await tx.client.create({
+      data: {
+        firstName: input.firstName,
+        lastName: input.lastName,
+        email: input.email.toLowerCase().trim(),
+        phone: input.phoneNumber,
+        address: input.address,
+        city: input.city,
+        zipcode: input.zipcode,
+        emergencyContactName: input.emergencyContactName,
+        emergencyContactPhone: input.emergencyContactPhone,
+        emergencyContactRelationship: input.emergencyContactRelationship
+      }
+    });
+
+    const booking = await tx.booking.create({
+      data: {
+        clientId: client.id,
+        packageId: input.packageId,
+        selectedPlanSnapshot: { preferredDays: input.preferredDays },
+        preferredTime: input.preferredTime,
+        startDate: input.startDate,
+        specialMessage: input.specialMessage,
+        emergencyContactName: input.emergencyContactName,
+        emergencyContactPhone: input.emergencyContactPhone,
+        emergencyContactRelationship: input.emergencyContactRelationship,
+        agreeToTerms: input.agreeToTerms,
+        consentToDailyassist: input.consentToDailyassist
+      },
+      select: { id: true, status: true, createdAt: true }
+    });
+
+    if (serviceIds.length > 0) {
+      const services = await tx.service.findMany({ where: { id: { in: serviceIds } }, select: { id: true, name: true } });
+      if (services.length !== serviceIds.length) {
+        throw new ApiError(400, "One or more selected services are invalid");
+      }
+
+      const selectedSet = new Set(input.selectedServiceIds ?? []);
+      await tx.bookingService.createMany({
+        data: services.map((s) => ({
+          bookingId: booking.id,
+          serviceId: s.id,
+          serviceNameSnapshot: s.name,
+          serviceType: selectedSet.has(s.id) ? "SELECTED" : "ADDITIONAL"
+        }))
+      });
+    }
+
+    return booking;
+  });
+}
 
 async function submitWorkerApplication(input: WorkerApplicationInput & { cvFileUrl: string }) {
   const normalizedEmail = input.email.toLowerCase().trim();
@@ -144,6 +201,7 @@ export const publicService = {
   listPackages,
   getPackageBySlug,
   listServices,
+  submitConsultation,
   submitBooking,
   submitWorkerApplication
 };

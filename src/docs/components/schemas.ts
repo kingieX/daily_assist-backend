@@ -173,9 +173,9 @@ export const schemas: SchemasMap = {
     }
   },
 
-  // ── Phase 2: Booking Enquiry ─────────────────────────────────────────────────
+  // ── Phase 2: Consultation + Public Booking ─────────────────────────────────────
 
-  CreateBookingRequest: {
+  ConsultationRequest: {
     type: 'object',
     required: ['fullName', 'email', 'phoneNumber', 'subject', 'message'],
     properties: {
@@ -190,10 +190,62 @@ export const schemas: SchemasMap = {
     }
   },
 
-  BookingConfirmation: {
+  ConsultationConfirmation: {
     type: 'object',
     properties: {
       submittedAt: { type: 'string', format: 'date-time' }
+    }
+  },
+
+  PublicBookingRequest: {
+    type: "object",
+    required: [
+      "firstName",
+      "lastName",
+      "email",
+      "phoneNumber",
+      "address",
+      "city",
+      "zipcode",
+      "packageId",
+      "preferredDays",
+      "preferredTime",
+      "startDate",
+      "agreeToTerms",
+      "consentToDailyassist"
+    ],
+    properties: {
+      firstName: { type: "string", example: "Jane" },
+      lastName: { type: "string", example: "Doe" },
+      email: { type: "string", format: "email", example: "jane.doe@example.com" },
+      phoneNumber: { type: "string", example: "+44 1268 904 508" },
+      address: { type: "string", example: "123 Church Street" },
+      city: { type: "string", example: "Canvey Island" },
+      zipcode: { type: "string", example: "SS8 0XY" },
+      packageId: { type: "string", format: "uuid" },
+      preferredDays: {
+        type: "array",
+        items: { type: "string", enum: ["MONDAY","TUESDAY","WEDNESDAY","THURSDAY","FRIDAY","SATURDAY","SUNDAY"] }
+      },
+      preferredTime: { type: "string", example: "Morning" },
+      startDate: { type: "string", format: "date-time" },
+      specialMessage: { type: "string" },
+      selectedServiceIds: { type: "array", items: { type: "string", format: "uuid" } },
+      additionalServiceIds: { type: "array", items: { type: "string", format: "uuid" } },
+      emergencyContactName: { type: "string" },
+      emergencyContactPhone: { type: "string" },
+      emergencyContactRelationship: { type: "string" },
+      agreeToTerms: { type: "boolean", enum: [true] },
+      consentToDailyassist: { type: "boolean", enum: [true] }
+    }
+  },
+
+  PublicBookingConfirmation: {
+    type: "object",
+    properties: {
+      id: { type: "string", format: "uuid" },
+      status: { type: "string", enum: ["REQUESTED","ASSIGNED","IN_PROGRESS","COMPLETED","CANCELLED"] },
+      createdAt: { type: "string", format: "date-time" }
     }
   },
 
