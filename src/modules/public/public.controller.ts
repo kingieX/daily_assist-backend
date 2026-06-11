@@ -27,9 +27,14 @@ const getServices = asyncHandler(async (_req: Request, res: Response) => {
   return sendSuccess(res, 200, 'Services retrieved', services);
 });
 
+const createConsultation = asyncHandler(async (req: Request, res: Response) => {
+  const result = await publicService.submitConsultation(req.body);
+  return sendSuccess(res, 201, "Consultation request submitted successfully", result);
+});
+
 const createBooking = asyncHandler(async (req: Request, res: Response) => {
   const result = await publicService.submitBooking(req.body);
-  return sendSuccess(res, 201, 'Booking enquiry submitted successfully', result);
+  return sendSuccess(res, 201, "Booking submitted successfully", result);
 });
 
 const createWorkerApplication = asyncHandler(async (req: Request, res: Response) => {
@@ -61,6 +66,7 @@ export const publicController = {
   getPackages,
   getPackageBySlug,
   getServices,
+  createConsultation,
   createBooking,
   createWorkerApplication
 };
