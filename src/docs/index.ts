@@ -10,6 +10,7 @@ import { publicPaths } from './paths/public.paths';
 import { visitPaths } from './paths/visits.paths';
 import { communicationsPaths } from './paths/communications.paths';
 import { operationsPaths } from './paths/operations.paths';
+import { withEndpointGuides } from './utils';
 
 /**
  * DailyAssist OpenAPI 3.0 specification.
@@ -141,7 +142,7 @@ export const openApiSpec: OpenAPIV3.Document = {
     responses
   },
 
-  paths: {
+  paths: withEndpointGuides({
     ...healthPaths,
     ...authPaths,
     ...protectedPaths,
@@ -152,5 +153,5 @@ export const openApiSpec: OpenAPIV3.Document = {
     ...operationsPaths
     // Phase 3+: spread additional path modules here
     // e.g. ...adminBookingPaths, ...adminClientPaths, ...staffPaths
-  }
+  })
 };
