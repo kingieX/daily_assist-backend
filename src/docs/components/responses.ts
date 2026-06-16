@@ -15,7 +15,9 @@ export const responses: ResponsesMap = {
         success: false,
         message: 'Validation failed',
         code: 'VALIDATION_ERROR',
-        errors: {}
+        errors: [
+          { path: 'limit', message: 'Too big: expected number to be <=100', code: 'too_big' }
+        ]
       })
     }
   },
