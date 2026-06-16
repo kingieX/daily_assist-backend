@@ -3,6 +3,7 @@ import { Request, Response } from 'express';
 import { ApiError } from '../../utils/api-error';
 import { sendSuccess } from '../../utils/api-response';
 import { asyncHandler } from '../../utils/async-handler';
+import { formatValidationError } from '../../utils/validation-error';
 import { publicService } from './public.service';
 import { workerApplicationSchema } from './public.validation';
 
@@ -41,7 +42,7 @@ const createWorkerApplication = asyncHandler(async (req: Request, res: Response)
   const parsedBody = workerApplicationSchema.safeParse(req.body);
   if (!parsedBody.success) {
     await removeUploadedFile(req.file?.path);
-    throw new ApiError(400, 'Validation failed', 'VALIDATION_ERROR', parsedBody.error);
+    throw new ApiError(400, 'Validation failed', 'VALIDATION_ERROR', formatValidationError(parsedBody.error));
   }
 
   if (!req.file) {

@@ -1,6 +1,7 @@
 import { NextFunction, Request, RequestHandler, Response } from 'express';
 import { ZodTypeAny } from 'zod';
 import { ApiError } from '../utils/api-error';
+import { formatValidationError } from '../utils/validation-error';
 
 interface ValidationSchema {
   body?: ZodTypeAny;
@@ -22,7 +23,7 @@ export function validate(schema: ValidationSchema): RequestHandler {
       }
       next();
     } catch (error) {
-      next(new ApiError(400, 'Validation failed', 'VALIDATION_ERROR', error));
+      next(new ApiError(400, 'Validation failed', 'VALIDATION_ERROR', formatValidationError(error)));
     }
   };
 }

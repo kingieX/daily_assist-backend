@@ -25,10 +25,12 @@ export const visitPaths: OpenAPIV3.PathsObject = {
     get: {
       tags: ['Admin — Visits'],
       summary: 'List visits',
+      description:
+        'Example request: `GET /api/v1/admin/visits?page=1&limit=20`. Query values are accepted as URL strings and coerced to integers during validation.',
       security: adminSecurity,
       parameters: [
-        { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
-        { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 } },
+        { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 }, example: 1 },
+        { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 }, example: 20 },
         {
           name: 'status',
           in: 'query',
@@ -46,7 +48,21 @@ export const visitPaths: OpenAPIV3.PathsObject = {
         },
         { name: 'sortOrder', in: 'query', schema: { type: 'string', enum: ['asc', 'desc'], default: 'desc' } }
       ],
-      responses: { '200': { description: 'Visits retrieved' } }
+      responses: {
+        '200': {
+          description: 'Visits retrieved',
+          content: {
+            'application/json': {
+              example: {
+                success: true,
+                message: 'Visits retrieved',
+                data: { items: [], meta: { page: 1, limit: 20, total: 0, totalPages: 1 } }
+              }
+            }
+          }
+        },
+        '400': { $ref: '#/components/responses/ValidationError' }
+      }
     },
     post: {
       tags: ['Admin — Visits'],
