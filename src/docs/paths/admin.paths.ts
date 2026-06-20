@@ -118,6 +118,80 @@ export const adminPaths: OpenAPIV3.PathsObject = {
       }
     }
   },
+
+  '/admin/packages': {
+    get: {
+      tags: ['Admin — Packages'],
+      summary: 'List packages',
+      description: 'Returns paginated packages for the admin packages page. Requires an ADMIN or SUPER_ADMIN bearer token.',
+      security: adminSecurity,
+      parameters: [
+        ...paginationParameters,
+        { name: 'isActive', in: 'query', schema: { type: 'boolean' }, description: 'Filter active/inactive packages.' },
+        { name: 'sortBy', in: 'query', schema: { type: 'string', enum: ['createdAt', 'updatedAt', 'displayOrder', 'name'], default: 'displayOrder' } },
+        { name: 'sortOrder', in: 'query', schema: { type: 'string', enum: ['asc', 'desc'], default: 'desc' } }
+      ],
+      responses: { '200': { description: 'Packages retrieved' } }
+    },
+    post: {
+      tags: ['Admin — Packages'],
+      summary: 'Create package',
+      description: 'Creates a package from the admin modal form. The backend generates the slug from the package name.',
+      security: adminSecurity,
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: { $ref: '#/components/schemas/AdminPackageRequest' },
+            example: {
+              icon: 'Heart',
+              name: 'Welfare Check-In Account',
+              price: '£25',
+              duration: 'per hour',
+              tagline: 'Friendly check-ins and practical support for independent living.',
+              features: ['Daily welfare check-in', 'Medication reminders'],
+              additionalCharge: 'Transport mileage: 45p/mile'
+            }
+          }
+        }
+      },
+      responses: { '201': { description: 'Package created' }, '400': { $ref: '#/components/responses/ValidationError' } }
+    }
+  },
+  '/admin/packages/{id}': {
+    get: {
+      tags: ['Admin — Packages'],
+      summary: 'Get package by id',
+      security: adminSecurity,
+      parameters: [idParam],
+      responses: { '200': { description: 'Package retrieved' }, '404': { $ref: '#/components/responses/NotFound' } }
+    },
+    patch: {
+      tags: ['Admin — Packages'],
+      summary: 'Update package',
+      description: 'Updates package fields from the edit modal. If `name` changes, the backend regenerates a unique slug.',
+      security: adminSecurity,
+      parameters: [idParam],
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: { $ref: '#/components/schemas/AdminPackageRequest' },
+            example: { price: '£30', duration: 'per visit', features: ['Welfare check-in', 'Family update'] }
+          }
+        }
+      },
+      responses: { '200': { description: 'Package updated' }, '400': { $ref: '#/components/responses/ValidationError' }, '404': { $ref: '#/components/responses/NotFound' } }
+    },
+    delete: {
+      tags: ['Admin — Packages'],
+      summary: 'Delete package',
+      description: 'Permanently deletes a package. Use from the delete confirmation modal.',
+      security: adminSecurity,
+      parameters: [idParam],
+      responses: { '200': { description: 'Package deleted' }, '404': { $ref: '#/components/responses/NotFound' }, '409': { description: 'Package is referenced by existing bookings' } }
+    }
+  },
   '/admin/bookings': {
     get: {
       tags: ['Admin — Bookings'],

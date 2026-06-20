@@ -42,8 +42,39 @@ export const idParamSchema = z.object({
   id: z.string().uuid('Invalid ID')
 });
 
-const bookingSortBySchema = z.enum(['createdAt', 'preferredDate', 'updatedAt']).default('createdAt');
 const sortOrderSchema = z.enum(['asc', 'desc']).default('desc');
+
+const packageIconSchema = z.preprocess(
+  (value) => (typeof value === 'string' ? value.trim().toLowerCase() : value),
+  z.enum(['clock', 'home', 'heart', 'star', 'shield', 'users', 'zap'])
+);
+const packageDurationSchema = z.enum(['per hour', 'per week', 'per month', 'per visit']);
+const packageFeatureSchema = z.array(z.string().trim().min(1).max(160)).max(10, 'A package can have at most 10 features').default([]);
+
+export const packageListQuerySchema = paginationSchema.extend({
+  isActive: z.coerce.boolean().optional(),
+  sortBy: z.enum(['createdAt', 'updatedAt', 'displayOrder', 'name']).default('displayOrder'),
+  sortOrder: sortOrderSchema
+});
+
+export const createPackageSchema = z.object({
+  icon: packageIconSchema,
+  name: z.string().trim().min(1, 'Package name is required').max(120),
+  price: z.string().trim().min(1, 'Package price is required').max(80),
+  duration: packageDurationSchema,
+  tagline: z.string().trim().min(1, 'Tagline is required').max(300),
+  features: packageFeatureSchema,
+  additionalCharge: optionalTrimmedString,
+  highlighted: z.coerce.boolean().default(false),
+  isActive: z.coerce.boolean().default(true),
+  displayOrder: z.coerce.number().int().min(0).default(0)
+});
+
+export const updatePackageSchema = createPackageSchema.partial().refine((data) => Object.keys(data).length > 0, {
+  message: 'At least one field must be provided for update'
+});
+
+const bookingSortBySchema = z.enum(['createdAt', 'preferredDate', 'updatedAt']).default('createdAt');
 
 export const bookingListQuerySchema = paginationSchema.extend({
   status: z.nativeEnum(BookingStatus).optional(),
@@ -194,6 +225,9 @@ export const convertApplicationSchema = z.object({
   password: passwordSchema
 });
 
+export type PackageListQuery = z.infer<typeof packageListQuerySchema>;
+export type CreatePackageInput = z.infer<typeof createPackageSchema>;
+export type UpdatePackageInput = z.infer<typeof updatePackageSchema>;
 export type BookingListQuery = z.infer<typeof bookingListQuerySchema>;
 export type AssignBookingInput = z.infer<typeof assignBookingSchema>;
 export type CancelBookingInput = z.infer<typeof cancelBookingSchema>;

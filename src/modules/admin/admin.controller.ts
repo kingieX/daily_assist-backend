@@ -26,6 +26,31 @@ const getDashboardAlerts = asyncHandler(async (_req: Request, res: Response) => 
   return sendSuccess(res, 200, 'Dashboard alerts retrieved', alerts);
 });
 
+const listPackages = asyncHandler(async (req: Request, res: Response) => {
+  const packages = await adminService.listPackages(req.query as any);
+  return sendSuccess(res, 200, 'Packages retrieved', packages);
+});
+
+const createPackage = asyncHandler(async (req: Request, res: Response) => {
+  const pkg = await adminService.createPackage(req.body);
+  return sendSuccess(res, 201, 'Package created successfully', pkg);
+});
+
+const getPackageById = asyncHandler(async (req: Request, res: Response) => {
+  const pkg = await adminService.getPackageById(req.params.id as string);
+  return sendSuccess(res, 200, 'Package retrieved', pkg);
+});
+
+const updatePackage = asyncHandler(async (req: Request, res: Response) => {
+  const pkg = await adminService.updatePackage(req.params.id as string, req.body);
+  return sendSuccess(res, 200, 'Package updated successfully', pkg);
+});
+
+const deletePackage = asyncHandler(async (req: Request, res: Response) => {
+  await adminService.deletePackage(req.params.id as string);
+  return sendSuccess(res, 200, 'Package deleted successfully');
+});
+
 const listBookings = asyncHandler(async (req: Request, res: Response) => {
   const bookings = await adminService.listBookings(req.query as any);
   return sendSuccess(res, 200, 'Bookings retrieved', bookings);
@@ -153,6 +178,11 @@ export const adminController = {
   getDashboardSummary,
   getDashboardCharts,
   getDashboardAlerts,
+  listPackages,
+  createPackage,
+  getPackageById,
+  updatePackage,
+  deletePackage,
   listBookings,
   getBookingById,
   assignBooking,

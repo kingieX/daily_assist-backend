@@ -99,6 +99,10 @@ export const openApiSpec: OpenAPIV3.Document = {
       description: 'Admin dashboard summary, charts, and alert widgets'
     },
     {
+      name: 'Admin — Packages',
+      description: 'Admin package management: create, list, detail, update, and delete'
+    },
+    {
       name: 'Admin — Bookings',
       description: 'Admin booking operations: list, detail, assign, and cancel'
     },

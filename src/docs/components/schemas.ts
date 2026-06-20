@@ -160,6 +160,14 @@ export const schemas: SchemasMap = {
       description: { type: 'string' },
       priceMin: { type: 'number', example: 90 },
       priceMax: { type: 'number', example: 130 },
+      price: { type: 'string', example: '£25' },
+      duration: { type: 'string', example: 'per hour' },
+      icon: { type: 'string', enum: ['clock', 'home', 'heart', 'star', 'shield', 'users', 'zap'], example: 'heart' },
+      tagline: { type: 'string', example: 'Flexible support for everyday needs.' },
+      features: { type: 'array', items: { type: 'string' }, maxItems: 10, example: ['Daily welfare check-in', 'Medication reminders'] },
+      additionalCharge: { type: 'string', example: 'Transport mileage: 45p/mile' },
+      highlighted: { type: 'boolean', example: false },
+      isActive: { type: 'boolean', example: true },
       displayOrder: { type: 'integer', example: 2 },
       packageServices: {
         type: 'array',
@@ -170,6 +178,25 @@ export const schemas: SchemasMap = {
           }
         }
       }
+    }
+  },
+
+
+
+  AdminPackageRequest: {
+    type: 'object',
+    required: ['icon', 'name', 'price', 'duration', 'tagline'],
+    properties: {
+      icon: { type: 'string', enum: ['Clock', 'Home', 'Heart', 'Star', 'Shield', 'Users', 'Zap', 'clock', 'home', 'heart', 'star', 'shield', 'users', 'zap'], example: 'Heart' },
+      name: { type: 'string', example: 'Welfare Check-In Account' },
+      price: { type: 'string', example: '£25' },
+      duration: { type: 'string', enum: ['per hour', 'per week', 'per month', 'per visit'], example: 'per hour' },
+      tagline: { type: 'string', example: 'Friendly check-ins and practical support for independent living.' },
+      features: { type: 'array', items: { type: 'string' }, maxItems: 10, example: ['Daily welfare check-in', 'Medication reminders'] },
+      additionalCharge: { type: 'string', example: 'Transport mileage: 45p/mile' },
+      highlighted: { type: 'boolean', example: false },
+      isActive: { type: 'boolean', example: true },
+      displayOrder: { type: 'integer', minimum: 0, example: 1 }
     }
   },
 

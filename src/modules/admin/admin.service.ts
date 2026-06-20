@@ -24,12 +24,15 @@ import type {
   CompleteBookingInput,
   ConvertApplicationInput,
   CreateClientInput,
+  CreatePackageInput,
   CreateStaffInput,
+  PackageListQuery,
   RecruitmentListQuery,
   ResetStaffPasswordInput,
   StaffListQuery,
   UpdateBookingInput,
   UpdateClientInput,
+  UpdatePackageInput,
   UpdateRecruitmentStatusInput,
   UpdateStaffInput
 } from './admin.validation';
@@ -112,6 +115,47 @@ async function generateNextStaffCode(role: Role): Promise<string> {
   return `DA${String(next).padStart(4, '0')}`;
 }
 
+function slugifyPackageName(name: string): string {
+  const slug = name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+  return slug || `package-${Date.now()}`;
+}
+
+async function createUniquePackageSlug(name: string, excludeId?: string): Promise<string> {
+  const baseSlug = slugifyPackageName(name);
+  let slug = baseSlug;
+  let suffix = 2;
+
+  while (await db.package.findFirst({ where: { slug, ...(excludeId ? { id: { not: excludeId } } : {}) }, select: { id: true } })) {
+    slug = `${baseSlug}-${suffix}`;
+    suffix += 1;
+  }
+
+  return slug;
+}
+
+function packageDataFromInput(input: CreatePackageInput | UpdatePackageInput): Prisma.PackageUncheckedCreateInput | Prisma.PackageUncheckedUpdateInput {
+  const data: Prisma.PackageUncheckedCreateInput | Prisma.PackageUncheckedUpdateInput = {};
+
+  if (input.name !== undefined) data.name = input.name;
+  if (input.price !== undefined) data.price = input.price;
+  if (input.duration !== undefined) data.duration = input.duration;
+  if (input.icon !== undefined) data.icon = input.icon;
+  if (input.tagline !== undefined) data.tagline = input.tagline;
+  if (input.tagline !== undefined) data.description = input.tagline;
+  if (input.features !== undefined) data.features = input.features;
+  if (input.additionalCharge !== undefined) data.additionalCharge = input.additionalCharge ?? null;
+  if (input.highlighted !== undefined) data.highlighted = input.highlighted;
+  if (input.isActive !== undefined) data.isActive = input.isActive;
+  if (input.displayOrder !== undefined) data.displayOrder = input.displayOrder;
+
+  return data;
+}
+
 function buildPaginatedResult<T>(items: T[], total: number, page: number, limit: number) {
   return {
     items,
@@ -122,6 +166,62 @@ function buildPaginatedResult<T>(items: T[], total: number, page: number, limit:
       totalPages: Math.max(1, Math.ceil(total / limit))
     }
   };
+}
+
+async function listPackages(filters: PackageListQuery) {
+  const page = filters.page;
+  const limit = filters.limit;
+  const skip = (page - 1) * limit;
+  const where: Prisma.PackageWhereInput = {};
+
+  if (filters.isActive !== undefined) where.isActive = filters.isActive;
+
+  const [total, items] = await Promise.all([
+    db.package.count({ where }),
+    db.package.findMany({
+      where,
+      orderBy: [{ [filters.sortBy]: filters.sortOrder }, { id: 'asc' }],
+      skip,
+      take: limit
+    })
+  ]);
+
+  return buildPaginatedResult(items, total, page, limit);
+}
+
+async function createPackage(input: CreatePackageInput) {
+  const slug = await createUniquePackageSlug(input.name);
+
+  return db.package.create({
+    data: {
+      ...packageDataFromInput(input),
+      slug,
+      priceMin: null,
+      priceMax: null
+    }
+  });
+}
+
+async function getPackageById(id: string) {
+  const pkg = await db.package.findUnique({ where: { id } });
+  if (!pkg) throw new ApiError(404, 'Package not found');
+  return pkg;
+}
+
+async function updatePackage(id: string, input: UpdatePackageInput) {
+  await getPackageById(id);
+  const data = packageDataFromInput(input);
+
+  if (input.name !== undefined) {
+    data.slug = await createUniquePackageSlug(input.name, id);
+  }
+
+  return db.package.update({ where: { id }, data });
+}
+
+async function deletePackage(id: string) {
+  await getPackageById(id);
+  await db.package.delete({ where: { id } });
 }
 
 const bookingInclude = {
@@ -1125,6 +1225,11 @@ export const adminService = {
   getDashboardSummary,
   getDashboardCharts,
   getDashboardAlerts,
+  listPackages,
+  createPackage,
+  getPackageById,
+  updatePackage,
+  deletePackage,
   listBookings,
   getBookingById,
   assignBooking,
