@@ -15,13 +15,16 @@ import {
   completeBookingSchema,
   convertApplicationSchema,
   createClientSchema,
+  createPackageSchema,
   createStaffSchema,
   idParamSchema,
+  packageListQuerySchema,
   recruitmentListQuerySchema,
   resetStaffPasswordSchema,
   staffListQuerySchema,
   updateBookingSchema,
   updateClientSchema,
+  updatePackageSchema,
   updateRecruitmentStatusSchema,
   updateStaffSchema
 } from './admin.validation';
@@ -37,6 +40,16 @@ adminRouter.get('/dashboard/alerts', adminController.getDashboardAlerts);
 adminRouter.use('/visits', adminVisitsRouter);
 adminRouter.use('/', adminCommunicationsRouter);
 adminRouter.use('/', adminOpsRouter);
+
+adminRouter.get('/packages', validate({ query: packageListQuerySchema }), adminController.listPackages);
+adminRouter.post('/packages', validate({ body: createPackageSchema }), adminController.createPackage);
+adminRouter.get('/packages/:id', validate({ params: idParamSchema }), adminController.getPackageById);
+adminRouter.patch(
+  '/packages/:id',
+  validate({ params: idParamSchema, body: updatePackageSchema }),
+  adminController.updatePackage
+);
+adminRouter.delete('/packages/:id', validate({ params: idParamSchema }), adminController.deletePackage);
 
 adminRouter.get(
   '/bookings',

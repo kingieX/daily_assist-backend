@@ -165,7 +165,7 @@ export const publicPaths: OpenAPIV3.PathsObject = {
     post: {
       tags: ['Public — Intake'],
       summary: 'Submit package booking request',
-      description: 'Submits the package booking form and creates client + booking + booking services records.',
+      description: 'Submits the public booking form and creates client + booking + booking services records. Supports the frontend form shape with postcode, service labels, package slug/name, and data-processing consent alias.',
       parameters: [
         {
           name: 'x-captcha-token',
@@ -179,7 +179,29 @@ export const publicPaths: OpenAPIV3.PathsObject = {
         required: true,
         content: {
           'application/json': {
-            schema: { $ref: '#/components/schemas/PublicBookingRequest' }
+            schema: { $ref: '#/components/schemas/PublicBookingRequest' },
+            example: {
+              firstName: 'Jane',
+              lastName: 'Doe',
+              email: 'jane.doe@example.com',
+              phoneNumber: '+44 1268 904 508',
+              address: '123 Church Street',
+              city: 'Essex',
+              postcode: 'SS8 0XY',
+              packageSlug: 'welfare-check-in-account',
+              packageName: 'Welfare Check-In Account',
+              preferredDays: ['Monday', 'Wednesday'],
+              preferredTime: 'morning',
+              startDate: '2026-07-01',
+              specialMessage: 'Please let us know about any specific needs.',
+              selectedServices: ['Companionship', 'Medication reminders'],
+              additionalServices: ['Shopping support'],
+              emergencyContactName: 'Mary Doe',
+              emergencyContactPhone: '+44 7000 000000',
+              emergencyContactRelationship: 'Daughter',
+              agreeToTerms: true,
+              consentToDataProcessing: true
+            }
           }
         }
       },

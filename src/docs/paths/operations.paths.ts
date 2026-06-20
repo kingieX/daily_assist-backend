@@ -11,8 +11,8 @@ const idParam: OpenAPIV3.ParameterObject = {
 };
 
 const paginationParameters: OpenAPIV3.ParameterObject[] = [
-  { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 }, description: 'Page number.' },
-  { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 }, description: 'Page size.' }
+  { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 }, description: 'Page number.', example: 1 },
+  { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 }, description: 'Page size.', example: 10 }
 ];
 
 const jsonBody = (schema: OpenAPIV3.SchemaObject, example?: Record<string, unknown>): OpenAPIV3.RequestBodyObject => ({
@@ -25,14 +25,29 @@ export const operationsPaths: OpenAPIV3.PathsObject = {
     get: {
       tags: ['Admin — Phase 6 Ops'],
       summary: 'List reports',
-      description: 'Returns paginated operational reports. Filter by status or type for admin queues.',
+      description:
+        'Returns paginated operational reports. Example request: `GET /api/v1/admin/reports?page=1&limit=10`. Query values are accepted as URL strings and coerced to integers during validation.',
       security: secured,
       parameters: [
         ...paginationParameters,
         { name: 'status', in: 'query', schema: { type: 'string', enum: ['NEW', 'IN_REVIEW', 'APPROVED', 'REJECTED', 'BILLED'] } },
         { name: 'type', in: 'query', schema: { type: 'string', enum: ['INCIDENT', 'VISIT_QUALITY', 'STAFF_PERFORMANCE', 'SYSTEM'] } }
       ],
-      responses: { '200': { description: 'Reports retrieved' } }
+      responses: {
+        '200': {
+          description: 'Reports retrieved',
+          content: {
+            'application/json': {
+              example: {
+                success: true,
+                message: 'Reports retrieved',
+                data: { items: [], meta: { page: 1, limit: 10, total: 0, totalPages: 1 } }
+              }
+            }
+          }
+        },
+        '400': { $ref: '#/components/responses/ValidationError' }
+      }
     },
     post: {
       tags: ['Admin — Phase 6 Ops'],

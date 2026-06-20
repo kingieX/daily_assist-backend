@@ -160,6 +160,14 @@ export const schemas: SchemasMap = {
       description: { type: 'string' },
       priceMin: { type: 'number', example: 90 },
       priceMax: { type: 'number', example: 130 },
+      price: { type: 'string', example: '£25' },
+      duration: { type: 'string', example: 'per hour' },
+      icon: { type: 'string', enum: ['clock', 'home', 'heart', 'star', 'shield', 'users', 'zap'], example: 'heart' },
+      tagline: { type: 'string', example: 'Flexible support for everyday needs.' },
+      features: { type: 'array', items: { type: 'string' }, maxItems: 10, example: ['Daily welfare check-in', 'Medication reminders'] },
+      additionalCharge: { type: 'string', example: 'Transport mileage: 45p/mile' },
+      highlighted: { type: 'boolean', example: false },
+      isActive: { type: 'boolean', example: true },
       displayOrder: { type: 'integer', example: 2 },
       packageServices: {
         type: 'array',
@@ -170,6 +178,25 @@ export const schemas: SchemasMap = {
           }
         }
       }
+    }
+  },
+
+
+
+  AdminPackageRequest: {
+    type: 'object',
+    required: ['icon', 'name', 'price', 'duration', 'tagline'],
+    properties: {
+      icon: { type: 'string', enum: ['Clock', 'Home', 'Heart', 'Star', 'Shield', 'Users', 'Zap', 'clock', 'home', 'heart', 'star', 'shield', 'users', 'zap'], example: 'Heart' },
+      name: { type: 'string', example: 'Welfare Check-In Account' },
+      price: { type: 'string', example: '£25' },
+      duration: { type: 'string', enum: ['per hour', 'per week', 'per month', 'per visit'], example: 'per hour' },
+      tagline: { type: 'string', example: 'Friendly check-ins and practical support for independent living.' },
+      features: { type: 'array', items: { type: 'string' }, maxItems: 10, example: ['Daily welfare check-in', 'Medication reminders'] },
+      additionalCharge: { type: 'string', example: 'Transport mileage: 45p/mile' },
+      highlighted: { type: 'boolean', example: false },
+      isActive: { type: 'boolean', example: true },
+      displayOrder: { type: 'integer', minimum: 0, example: 1 }
     }
   },
 
@@ -206,13 +233,11 @@ export const schemas: SchemasMap = {
       "phoneNumber",
       "address",
       "city",
-      "zipcode",
-      "packageId",
+      "postcode",
       "preferredDays",
       "preferredTime",
       "startDate",
-      "agreeToTerms",
-      "consentToDailyassist"
+      "agreeToTerms"
     ],
     properties: {
       firstName: { type: "string", example: "Jane" },
@@ -221,22 +246,29 @@ export const schemas: SchemasMap = {
       phoneNumber: { type: "string", example: "+44 1268 904 508" },
       address: { type: "string", example: "123 Church Street" },
       city: { type: "string", example: "Canvey Island" },
-      zipcode: { type: "string", example: "SS8 0XY" },
-      packageId: { type: "string", format: "uuid" },
+      zipcode: { type: "string", example: "SS8 0XY", description: "Accepted for backward compatibility. `postcode` is preferred for the public booking form." },
+      postcode: { type: "string", example: "SS8 0XY" },
+      packageId: { type: "string", format: "uuid", description: "Optional package UUID when the frontend has one." },
+      packageSlug: { type: "string", example: "welfare-check-in-account", description: "Optional package/page slug when no package UUID is available." },
+      packageName: { type: "string", example: "Welfare Check-In Account", description: "Optional package display name for snapshotting the page/form selected." },
       preferredDays: {
         type: "array",
+        description: "Accepts uppercase enum values or frontend labels such as `Monday`.",
         items: { type: "string", enum: ["MONDAY","TUESDAY","WEDNESDAY","THURSDAY","FRIDAY","SATURDAY","SUNDAY"] }
       },
-      preferredTime: { type: "string", example: "Morning" },
-      startDate: { type: "string", format: "date-time" },
-      specialMessage: { type: "string" },
-      selectedServiceIds: { type: "array", items: { type: "string", format: "uuid" } },
-      additionalServiceIds: { type: "array", items: { type: "string", format: "uuid" } },
+      preferredTime: { type: "string", example: "morning", description: "Accepts the frontend values such as `morning`, `afternoon`, or `evening`." },
+      startDate: { type: "string", format: "date", example: "2026-07-01" },
+      specialMessage: { type: "string", example: "Please let us know about any specific needs." },
+      selectedServiceIds: { type: "array", items: { type: "string", format: "uuid" }, description: "Optional service UUIDs when loaded from the API catalog." },
+      additionalServiceIds: { type: "array", items: { type: "string", format: "uuid" }, description: "Optional additional-service UUIDs when loaded from the API catalog." },
+      selectedServices: { type: "array", items: { type: "string" }, example: ["Companionship", "Medication reminders"], description: "Frontend service labels are accepted when IDs are not available." },
+      additionalServices: { type: "array", items: { type: "string" }, example: ["Shopping support"], description: "Frontend additional-service labels are accepted when IDs are not available." },
       emergencyContactName: { type: "string" },
       emergencyContactPhone: { type: "string" },
       emergencyContactRelationship: { type: "string" },
       agreeToTerms: { type: "boolean", enum: [true] },
-      consentToDailyassist: { type: "boolean", enum: [true] }
+      consentToDailyassist: { type: "boolean", enum: [true], description: "Required unless `consentToDataProcessing` is sent as true." },
+      consentToDataProcessing: { type: "boolean", enum: [true], description: "Alias matching the frontend data-processing consent checkbox." }
     }
   },
 
