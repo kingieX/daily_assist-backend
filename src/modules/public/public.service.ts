@@ -90,7 +90,11 @@ async function submitConsultation(input: CreateConsultationInput) {
 // ─── Worker Applications ──────────────────────────────────────────────────────
 
 async function submitBooking(input: CreatePublicBookingInput) {
-  const serviceIds = Array.from(new Set([...(input.selectedServiceIds ?? []), ...(input.additionalServiceIds ?? [])]));
+  const selectedServiceIds = Array.from(new Set(input.selectedServiceIds ?? []));
+  const additionalServiceIds = Array.from(new Set(input.additionalServiceIds ?? []));
+  const serviceIds = Array.from(new Set([...selectedServiceIds, ...additionalServiceIds]));
+  const selectedServiceNames = Array.from(new Set(input.selectedServices ?? []));
+  const additionalServiceNames = Array.from(new Set(input.additionalServices ?? []));
 
   return prisma.$transaction(async (tx) => {
     const client = await tx.client.create({
@@ -111,8 +115,14 @@ async function submitBooking(input: CreatePublicBookingInput) {
     const booking = await tx.booking.create({
       data: {
         clientId: client.id,
-        packageId: input.packageId,
-        selectedPlanSnapshot: { preferredDays: input.preferredDays },
+        packageId: input.packageId ?? null,
+        selectedPlanSnapshot: {
+          preferredDays: input.preferredDays,
+          packageSlug: input.packageSlug ?? null,
+          packageName: input.packageName ?? null,
+          selectedServices: selectedServiceNames,
+          additionalServices: additionalServiceNames
+        },
         preferredTime: input.preferredTime,
         startDate: input.startDate,
         specialMessage: input.specialMessage,
@@ -125,21 +135,42 @@ async function submitBooking(input: CreatePublicBookingInput) {
       select: { id: true, status: true, createdAt: true }
     });
 
+    const bookingServicesData: Prisma.BookingServiceCreateManyInput[] = [];
+
     if (serviceIds.length > 0) {
       const services = await tx.service.findMany({ where: { id: { in: serviceIds } }, select: { id: true, name: true } });
       if (services.length !== serviceIds.length) {
         throw new ApiError(400, "One or more selected services are invalid");
       }
 
-      const selectedSet = new Set(input.selectedServiceIds ?? []);
-      await tx.bookingService.createMany({
-        data: services.map((s) => ({
+      const selectedSet = new Set(selectedServiceIds);
+      bookingServicesData.push(
+        ...services.map((s) => ({
           bookingId: booking.id,
           serviceId: s.id,
           serviceNameSnapshot: s.name,
-          serviceType: selectedSet.has(s.id) ? "SELECTED" : "ADDITIONAL"
+          serviceType: selectedSet.has(s.id) ? "SELECTED" as const : "ADDITIONAL" as const
         }))
-      });
+      );
+    }
+
+    bookingServicesData.push(
+      ...selectedServiceNames.map((name) => ({
+        bookingId: booking.id,
+        serviceId: null,
+        serviceNameSnapshot: name,
+        serviceType: "SELECTED" as const
+      })),
+      ...additionalServiceNames.map((name) => ({
+        bookingId: booking.id,
+        serviceId: null,
+        serviceNameSnapshot: name,
+        serviceType: "ADDITIONAL" as const
+      }))
+    );
+
+    if (bookingServicesData.length > 0) {
+      await tx.bookingService.createMany({ data: bookingServicesData });
     }
 
     return booking;
