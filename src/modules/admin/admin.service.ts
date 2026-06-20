@@ -138,8 +138,8 @@ async function createUniquePackageSlug(name: string, excludeId?: string): Promis
   return slug;
 }
 
-function packageDataFromInput(input: CreatePackageInput | UpdatePackageInput): Prisma.PackageUncheckedCreateInput | Prisma.PackageUncheckedUpdateInput {
-  const data: Prisma.PackageUncheckedCreateInput | Prisma.PackageUncheckedUpdateInput = {};
+function packageDataFromInput(input: CreatePackageInput | UpdatePackageInput): Record<string, unknown> {
+  const data: Record<string, unknown> = {};
 
   if (input.name !== undefined) data.name = input.name;
   if (input.price !== undefined) data.price = input.price;
