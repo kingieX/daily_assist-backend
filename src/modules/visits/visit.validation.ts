@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { emptyStringToUndefined, optionalQueryUuid, queryLimit, queryPage } from '../../utils/query-validation';
 import { VISIT_STATUS } from './visit-state';
 
 export const visitIdParamSchema = z.object({
@@ -6,11 +7,11 @@ export const visitIdParamSchema = z.object({
 });
 
 const paginationSchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(100).default(20)
+  page: queryPage(),
+  limit: queryLimit()
 });
 
-const sortOrderSchema = z.enum(['asc', 'desc']).default('desc');
+const sortOrderSchema = z.preprocess(emptyStringToUndefined, z.enum(['asc', 'desc']).default('desc'));
 const visitStatusSchema = z.enum([
   VISIT_STATUS.ASSIGNED,
   VISIT_STATUS.ACKNOWLEDGED,
@@ -21,10 +22,13 @@ const visitStatusSchema = z.enum([
 ]);
 
 export const adminVisitListQuerySchema = paginationSchema.extend({
-  status: visitStatusSchema.optional(),
-  staffId: z.string().uuid('Invalid staff ID').optional(),
-  bookingId: z.string().uuid('Invalid booking ID').optional(),
-  sortBy: z.enum(['scheduledStartAt', 'createdAt', 'updatedAt']).default('scheduledStartAt'),
+  status: z.preprocess(emptyStringToUndefined, visitStatusSchema.optional()),
+  staffId: optionalQueryUuid('Invalid staff ID'),
+  bookingId: optionalQueryUuid('Invalid booking ID'),
+  sortBy: z.preprocess(
+    emptyStringToUndefined,
+    z.enum(['scheduledStartAt', 'createdAt', 'updatedAt']).default('scheduledStartAt')
+  ),
   sortOrder: sortOrderSchema
 });
 
