@@ -1,13 +1,14 @@
 import { Role } from '@prisma/client';
 import { z } from 'zod';
+import { emptyStringToUndefined, optionalQueryBoolean, optionalQueryUuid, queryLimit, queryPage } from '../../utils/query-validation';
 
 export const idParamSchema = z.object({
   id: z.string().uuid('Invalid ID')
 });
 
 const paginationSchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(100).default(20)
+  page: queryPage(),
+  limit: queryLimit()
 });
 
 const COMM_AUDIENCE = {
@@ -22,11 +23,11 @@ const COMM_NOTIFICATION_TYPE = {
 } as const;
 
 export const listThreadsQuerySchema = paginationSchema.extend({
-  staffId: z.string().uuid().optional()
+  staffId: optionalQueryUuid()
 });
 
 export const createThreadSchema = z.object({
-  staffId: z.string().uuid().optional()
+  staffId: optionalQueryUuid()
 });
 
 export const postMessageSchema = z
@@ -70,14 +71,17 @@ export const createAnnouncementSchema = z
   });
 
 export const listNotificationsQuerySchema = paginationSchema.extend({
-  type: z
-    .enum([
-      COMM_NOTIFICATION_TYPE.MESSAGE,
-      COMM_NOTIFICATION_TYPE.ANNOUNCEMENT,
-      COMM_NOTIFICATION_TYPE.SYSTEM
-    ])
-    .optional(),
-  unreadOnly: z.coerce.boolean().optional()
+  type: z.preprocess(
+    emptyStringToUndefined,
+    z
+      .enum([
+        COMM_NOTIFICATION_TYPE.MESSAGE,
+        COMM_NOTIFICATION_TYPE.ANNOUNCEMENT,
+        COMM_NOTIFICATION_TYPE.SYSTEM
+      ])
+      .optional()
+  ),
+  unreadOnly: optionalQueryBoolean()
 });
 
 export const markNotificationReadSchema = z.object({
