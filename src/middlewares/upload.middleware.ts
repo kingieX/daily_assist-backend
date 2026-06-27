@@ -19,6 +19,8 @@ const allowedExtensions = new Set(['.pdf', '.doc', '.docx']);
 fs.mkdirSync(CV_UPLOAD_DIRECTORY, { recursive: true });
 
 const STAFF_UPLOAD_DIRECTORY = path.resolve(process.cwd(), 'uploads', 'staff');
+const CLIENT_UPLOAD_DIRECTORY = path.resolve(process.cwd(), 'uploads', 'clients');
+const CLIENT_PROOF_DIRECTORY = path.join(CLIENT_UPLOAD_DIRECTORY, 'proof-of-address');
 const STAFF_PHOTO_DIRECTORY = path.join(STAFF_UPLOAD_DIRECTORY, 'photos');
 const STAFF_CV_DIRECTORY = path.join(STAFF_UPLOAD_DIRECTORY, 'cv');
 const MAX_STAFF_FILE_SIZE_BYTES = 5 * 1024 * 1024;
@@ -34,9 +36,12 @@ const allowedStaffCvMimeTypes = new Set([
 ]);
 const allowedStaffPhotoExtensions = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif']);
 const allowedStaffCvExtensions = new Set(['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png', '.webp', '.gif']);
+const allowedClientProofMimeTypes = new Set(['image/svg+xml', 'image/png', 'image/jpeg', 'image/gif']);
+const allowedClientProofExtensions = new Set(['.svg', '.png', '.jpg', '.jpeg', '.gif']);
 
 fs.mkdirSync(STAFF_PHOTO_DIRECTORY, { recursive: true });
 fs.mkdirSync(STAFF_CV_DIRECTORY, { recursive: true });
+fs.mkdirSync(CLIENT_PROOF_DIRECTORY, { recursive: true });
 
 
 function sanitizeBaseFilename(originalName: string): string {
@@ -147,6 +152,48 @@ export const uploadStaffFiles: RequestHandler = (req, res, next) => {
         return;
       }
       next(new ApiError(400, `Invalid staff upload request: ${error.message}`));
+      return;
+    }
+    next(error);
+  });
+};
+
+
+const clientProofStorage = multer.diskStorage({
+  destination: (_req, _file, callback) => {
+    callback(null, CLIENT_PROOF_DIRECTORY);
+  },
+  filename: (_req, file, callback) => {
+    const extension = path.extname(file.originalname).toLowerCase();
+    const safeBaseName = sanitizeBaseFilename(file.originalname);
+    callback(null, `${safeBaseName}-${crypto.randomUUID()}${extension}`);
+  }
+});
+
+const clientProofUpload = multer({
+  storage: clientProofStorage,
+  limits: {
+    files: 1,
+    fileSize: MAX_STAFF_FILE_SIZE_BYTES
+  },
+  fileFilter: (_req, file, callback) => {
+    const extension = path.extname(file.originalname).toLowerCase();
+    if (!allowedClientProofExtensions.has(extension) || !allowedClientProofMimeTypes.has(file.mimetype)) {
+      callback(new ApiError(400, 'Invalid proof of address format. Allowed formats: SVG, PNG, JPG, GIF.'));
+      return;
+    }
+    callback(null, true);
+  }
+});
+
+export const uploadClientProofOfAddress: RequestHandler = (req, res, next) => {
+  clientProofUpload.single('proofOfAddress')(req, res, (error: unknown) => {
+    if (error instanceof multer.MulterError) {
+      if (error.code === 'LIMIT_FILE_SIZE') {
+        next(new ApiError(400, 'Proof of address file is too large. Maximum size is 5MB.'));
+        return;
+      }
+      next(new ApiError(400, `Invalid proof of address upload request: ${error.message}`));
       return;
     }
     next(error);

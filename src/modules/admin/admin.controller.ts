@@ -6,6 +6,12 @@ import { asyncHandler } from '../../utils/async-handler';
 import { adminService } from './admin.service';
 
 
+
+function clientProofUrl(req: Request): { proofOfAddressUrl?: string } {
+  const file = req.file as Express.Multer.File | undefined;
+  return file ? { proofOfAddressUrl: `/uploads/clients/proof-of-address/${path.basename(file.path)}` } : {};
+}
+
 function staffUploadUrls(req: Request): { photoUrl?: string; cvFileUrl?: string } {
   const files = req.files as Record<string, Express.Multer.File[]> | undefined;
   const photo = files?.photo?.[0];
@@ -103,7 +109,7 @@ const listClients = asyncHandler(async (req: Request, res: Response) => {
 });
 
 const createClient = asyncHandler(async (req: Request, res: Response) => {
-  const client = await adminService.createClient(req.body);
+  const client = await adminService.createClient({ ...req.body, ...clientProofUrl(req) });
   return sendSuccess(res, 201, 'Client created successfully', client);
 });
 
@@ -113,13 +119,24 @@ const getClientById = asyncHandler(async (req: Request, res: Response) => {
 });
 
 const updateClient = asyncHandler(async (req: Request, res: Response) => {
-  const client = await adminService.updateClient(req.params.id as string, req.body);
+  const client = await adminService.updateClient(req.params.id as string, { ...req.body, ...clientProofUrl(req) });
   return sendSuccess(res, 200, 'Client updated successfully', client);
 });
 
 const deleteClient = asyncHandler(async (req: Request, res: Response) => {
   await adminService.deleteClient(req.params.id as string);
   return sendSuccess(res, 200, 'Client deleted successfully');
+});
+
+
+const listClientHistory = asyncHandler(async (req: Request, res: Response) => {
+  const history = await adminService.listClientHistory(req.params.id as string);
+  return sendSuccess(res, 200, 'Client history retrieved', history);
+});
+
+const listStaffVisits = asyncHandler(async (req: Request, res: Response) => {
+  const visits = await adminService.listStaffVisits(req.params.id as string);
+  return sendSuccess(res, 200, 'Staff visits retrieved', visits);
 });
 
 const listStaff = asyncHandler(async (req: Request, res: Response) => {
@@ -206,6 +223,8 @@ export const adminController = {
   getClientById,
   updateClient,
   deleteClient,
+  listClientHistory,
+  listStaffVisits,
   listStaff,
   createStaff,
   getStaffById,

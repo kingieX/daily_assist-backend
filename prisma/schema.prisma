@@ -219,6 +219,7 @@ model PasswordResetToken {
 
 model Client {
   id        String       @id @default(uuid())
+  clientCode String?     @unique @map("client_code")
   firstName String       @map("first_name")
   lastName  String       @map("last_name")
   title     String?

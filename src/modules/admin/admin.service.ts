@@ -6,7 +6,8 @@ import {
   ClientStatus,
   Prisma,
   Role,
-  UserStatus
+  UserStatus,
+  VisitStatus
 } from '@prisma/client';
 import { sendPasswordResetEmail } from '../../config/mailer';
 import { env } from '../../config/env';
@@ -481,84 +482,202 @@ async function updateBooking(id: string, input: UpdateBookingInput) {
   return db.booking.update({ where: { id }, data, include: bookingInclude });
 }
 
-async function listClients(filters: ClientListQuery) {
+function frontendClientSexToDbSex(sex?: string): string | null | undefined {
+  if (sex === undefined) return undefined;
+  if (sex === 'Male') return 'MALE';
+  if (sex === 'Female') return 'FEMALE';
+  if (sex === 'Prefer not to say') return 'PREFER_NOT_TO_SAY';
+  return sex;
+}
+
+function dbClientSexToFrontendSex(sex?: string | null): string {
+  if (sex === 'MALE') return 'Male';
+  if (sex === 'FEMALE') return 'Female';
+  return 'Prefer not to say';
+}
+
+function clientLookupWhere(id: string): any {
+  return {
+    OR: [{ id }, { clientCode: id }]
+  };
+}
+
+async function generateNextClientCode(): Promise<string> {
+  const clientsWithCode = await db.client.findMany({
+    where: { clientCode: { not: null } },
+    select: { clientCode: true }
+  });
+
+  const maxNumber = clientsWithCode
+    .map((client: any) => client.clientCode)
+    .filter((code: any): code is string => Boolean(code))
+    .map((code: string) => Number(code.replace(/^CLT-?/, '')))
+    .filter((n: number) => Number.isFinite(n))
+    .reduce((max: number, current: number) => Math.max(max, current), 0);
+
+  return `CLT-${String(maxNumber + 1).padStart(4, '0')}`;
+}
+
+function serializeClient(client: any) {
+  const fullName = [client.firstName, client.lastName].filter(Boolean).join(' ').trim();
+  const documents = client.proofOfAddressUrl
+    ? [
+        {
+          type: 'doc',
+          title: 'Proof of address',
+          date: client.updatedAt
+            ? new Intl.DateTimeFormat('en-GB', { month: 'long', day: 'numeric', year: 'numeric' }).format(new Date(client.updatedAt))
+            : '',
+          size: '',
+          url: client.proofOfAddressUrl
+        }
+      ]
+    : [];
+
+  return {
+    id: client.clientCode ?? client.id,
+    clientId: client.id,
+    title: client.title ?? '',
+    firstName: client.firstName,
+    lastName: client.lastName,
+    fullName,
+    email: client.email ?? '',
+    phone: client.phone,
+    age: client.age ?? null,
+    sex: dbClientSexToFrontendSex(client.sex),
+    address: client.address ?? '',
+    emergencyContactName: client.emergencyContactName ?? '',
+    emergencyContactPhone: client.emergencyContactPhone ?? '',
+    emergencyContactRelationship: client.emergencyContactRelationship ?? '',
+    note: client.notes ?? '',
+    joinDate: client.createdAt ? new Date(client.createdAt).toISOString().slice(0, 10) : '',
+    proofOfAddress: client.proofOfAddressUrl ?? null,
+    documents
+  };
+}
+
+function buildClientData(input: CreateClientInput | UpdateClientInput): Record<string, unknown> {
+  const data: Record<string, unknown> = {};
+  if (input.title !== undefined) data.title = input.title ?? null;
+  if (input.firstName !== undefined) data.firstName = input.firstName;
+  if (input.lastName !== undefined) data.lastName = input.lastName;
+  if (input.email !== undefined) data.email = input.email ? normalizeEmail(input.email) : null;
+  if (input.phone !== undefined) data.phone = input.phone;
+  if (input.age !== undefined) data.age = input.age;
+  if (input.sex !== undefined) data.sex = frontendClientSexToDbSex(input.sex);
+  if (input.address !== undefined) data.address = input.address;
+  if (input.emergencyContactName !== undefined) data.emergencyContactName = input.emergencyContactName ?? null;
+  if (input.emergencyContactPhone !== undefined) data.emergencyContactPhone = input.emergencyContactPhone ?? null;
+  if (input.emergencyContactRelationship !== undefined) {
+    data.emergencyContactRelationship = input.emergencyContactRelationship ?? null;
+  }
+  if (input.proofOfAddressUrl !== undefined) data.proofOfAddressUrl = input.proofOfAddressUrl;
+  if (input.note !== undefined) data.notes = input.note ?? null;
+  return data;
+}
+
+function visitStatusToFrontend(status: VisitStatus | string): 'completed' | 'pending' | 'cancelled' {
+  if (status === VisitStatus.COMPLETED) return 'completed';
+  if (status === VisitStatus.CANCELLED || status === VisitStatus.NO_SHOW) return 'cancelled';
+  return 'pending';
+}
+
+function formatVisitTime(value?: Date | string | null): string {
+  if (!value) return '';
+  return new Intl.DateTimeFormat('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(value)).toLowerCase();
+}
+
+function serializeVisit(visit: any) {
+  const client = visit.booking?.client;
+  const staffProfile = visit.staff?.staffProfile;
+  const clientName = client ? [client.firstName, client.lastName].filter(Boolean).join(' ').trim() : '';
+  const staffName = staffProfile ? [staffProfile.firstName, staffProfile.lastName].filter(Boolean).join(' ').trim() : '';
+
+  return {
+    id: visit.id,
+    clientId: client?.clientCode ?? client?.id ?? visit.booking?.clientId ?? '',
+    clientUserId: client?.id ?? visit.booking?.clientId ?? '',
+    clientName,
+    staffId: visit.staff?.staffCode ?? visit.staffId,
+    staffUserId: visit.staffId,
+    staffName,
+    date: visit.scheduledStartAt ? new Date(visit.scheduledStartAt).toISOString().slice(0, 10) : '',
+    status: visitStatusToFrontend(visit.status),
+    timeStart: formatVisitTime(visit.scheduledStartAt),
+    timeEnd: formatVisitTime(visit.scheduledEndAt),
+    address: client?.address ?? ''
+  };
+}
+
+const visitHistoryInclude = {
+  booking: {
+    select: {
+      clientId: true,
+      client: {
+        select: {
+          id: true,
+          clientCode: true,
+          firstName: true,
+          lastName: true,
+          address: true
+        }
+      }
+    }
+  },
+  staff: {
+    select: {
+      id: true,
+      staffCode: true,
+      staffProfile: {
+        select: {
+          firstName: true,
+          lastName: true
+        }
+      }
+    }
+  }
+};
+
+async function listClients(filters: ClientListQuery = {}) {
   const where: Prisma.ClientWhereInput = {};
   if (filters.status) where.status = filters.status;
 
-  const page = filters.page;
-  const limit = filters.limit;
-  const skip = (page - 1) * limit;
+  const items = await db.client.findMany({
+    where,
+    orderBy: [{ [filters.sortBy ?? 'createdAt']: filters.sortOrder ?? 'desc' }, { id: 'asc' }]
+  });
 
-  const [total, items] = await Promise.all([
-    db.client.count({ where }),
-    db.client.findMany({
-      where,
-      orderBy: [{ [filters.sortBy]: filters.sortOrder }, { id: 'asc' }],
-      include: {
-        _count: {
-          select: { bookings: true }
-        }
-      },
-      skip,
-      take: limit
-    })
-  ]);
-
-  return buildPaginatedResult(items, total, page, limit);
+  return items.map(serializeClient);
 }
 
 async function createClient(input: CreateClientInput) {
-  const normalizedEmail = input.email ? normalizeEmail(input.email) : null;
-
-  return db.client.create({
+  const clientCode = await generateNextClientCode();
+  const client = await db.client.create({
     data: {
-      title: input.title ?? null,
-      firstName: input.firstName,
-      lastName: input.lastName,
-      email: normalizedEmail,
-      phone: input.phone,
-      age: input.age ?? null,
-      sex: input.sex ?? null,
-      address: input.address ?? null,
-      city: input.city ?? null,
-      zipcode: input.zipcode ?? null,
-      emergencyContactName: input.emergencyContactName ?? null,
-      emergencyContactPhone: input.emergencyContactPhone ?? null,
-      emergencyContactRelationship: input.emergencyContactRelationship ?? null,
-      proofOfAddressUrl: input.proofOfAddressUrl ?? null,
-      notes: input.notes ?? null,
-      status: input.status,
+      clientCode,
+      ...buildClientData(input),
       source: ClientSource.ADMIN_CREATED
     }
   });
+
+  return serializeClient(client);
 }
 
 async function getClientById(id: string) {
-  const client = await db.client.findUnique({
-    where: { id },
-    include: {
-      bookings: {
-        select: {
-          id: true,
-          status: true,
-          createdAt: true,
-          assignedStaffId: true
-        },
-        orderBy: { createdAt: 'desc' }
-      }
-    }
+  const client = await db.client.findFirst({
+    where: clientLookupWhere(id)
   });
 
   if (!client) {
     throw new ApiError(404, 'Client not found');
   }
 
-  return client;
+  return serializeClient(client);
 }
 
 async function updateClient(id: string, input: UpdateClientInput) {
-  const existingClient = await db.client.findUnique({
-    where: { id },
+  const existingClient = await db.client.findFirst({
+    where: clientLookupWhere(id),
     select: { id: true }
   });
 
@@ -566,42 +685,26 @@ async function updateClient(id: string, input: UpdateClientInput) {
     throw new ApiError(404, 'Client not found');
   }
 
-  const data: any = {};
-  if (input.title !== undefined) data.title = input.title;
-  if (input.firstName !== undefined) data.firstName = input.firstName;
-  if (input.lastName !== undefined) data.lastName = input.lastName;
-  if (input.email !== undefined) data.email = input.email ? normalizeEmail(input.email) : null;
-  if (input.phone !== undefined) data.phone = input.phone;
-  if (input.age !== undefined) data.age = input.age;
-  if (input.sex !== undefined) data.sex = input.sex;
-  if (input.address !== undefined) data.address = input.address;
-  if (input.city !== undefined) data.city = input.city;
-  if (input.zipcode !== undefined) data.zipcode = input.zipcode;
-  if (input.emergencyContactName !== undefined) data.emergencyContactName = input.emergencyContactName;
-  if (input.emergencyContactPhone !== undefined) data.emergencyContactPhone = input.emergencyContactPhone;
-  if (input.emergencyContactRelationship !== undefined) {
-    data.emergencyContactRelationship = input.emergencyContactRelationship;
-  }
-  if (input.proofOfAddressUrl !== undefined) data.proofOfAddressUrl = input.proofOfAddressUrl;
-  if (input.notes !== undefined) data.notes = input.notes;
-  if (input.status !== undefined) data.status = input.status;
+  const data = buildClientData(input);
 
   if (Object.keys(data).length === 0) {
     throw new ApiError(400, 'At least one valid field must be provided for update');
   }
 
-  return db.client.update({
-    where: { id },
+  const client = await db.client.update({
+    where: { id: existingClient.id },
     data
   });
+
+  return serializeClient(client);
 }
 
 async function deleteClient(id: string) {
-  const client = await db.client.findUnique({
-    where: { id },
+  const client = await db.client.findFirst({
+    where: clientLookupWhere(id),
     select: {
       id: true,
-      _count: { select: { bookings: true } }
+      bookings: { select: { id: true } }
     }
   });
 
@@ -609,11 +712,44 @@ async function deleteClient(id: string) {
     throw new ApiError(404, 'Client not found');
   }
 
-  if (client._count.bookings > 0) {
-    throw new ApiError(409, 'Client has related bookings and cannot be deleted');
+  const bookingIds = client.bookings.map((booking: any) => booking.id);
+  await db.$transaction(async (tx: any) => {
+    if (bookingIds.length > 0) {
+      await tx.visit.deleteMany({ where: { bookingId: { in: bookingIds } } });
+      await tx.booking.deleteMany({ where: { id: { in: bookingIds } } });
+    }
+    await tx.client.delete({ where: { id: client.id } });
+  });
+}
+
+async function listClientHistory(id: string) {
+  const client = await db.client.findFirst({ where: clientLookupWhere(id), select: { id: true } });
+  if (!client) {
+    throw new ApiError(404, 'Client not found');
   }
 
-  await db.client.delete({ where: { id } });
+  const visits = await db.visit.findMany({
+    where: { booking: { clientId: client.id } },
+    orderBy: { scheduledStartAt: 'desc' },
+    include: visitHistoryInclude
+  });
+
+  return visits.map(serializeVisit);
+}
+
+async function listStaffVisits(id: string) {
+  const staff = await db.user.findFirst({ where: staffLookupWhere(id), select: { id: true } });
+  if (!staff) {
+    throw new ApiError(404, 'Staff user not found');
+  }
+
+  const visits = await db.visit.findMany({
+    where: { staffId: staff.id },
+    orderBy: { scheduledStartAt: 'desc' },
+    include: visitHistoryInclude
+  });
+
+  return visits.map(serializeVisit);
 }
 
 type StaffInputWithUploads = CreateStaffInput | UpdateStaffInput;
@@ -1244,6 +1380,8 @@ export const adminService = {
   getClientById,
   updateClient,
   deleteClient,
+  listClientHistory,
+  listStaffVisits,
   listStaff,
   createStaff,
   getStaffById,

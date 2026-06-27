@@ -6,12 +6,13 @@ import { adminOpsRouter } from '../operations/admin-ops.routes';
 import { authenticate } from '../../middlewares/auth.middleware';
 import { authorizeRoles } from '../../middlewares/rbac.middleware';
 import { validate } from '../../middlewares/validate.middleware';
-import { uploadStaffFiles } from '../../middlewares/upload.middleware';
+import { uploadClientProofOfAddress, uploadStaffFiles } from '../../middlewares/upload.middleware';
 import { adminController } from './admin.controller';
 import {
   assignBookingSchema,
   bookingListQuerySchema,
   cancelBookingSchema,
+  clientIdParamSchema,
   clientListQuerySchema,
   completeBookingSchema,
   convertApplicationSchema,
@@ -81,19 +82,21 @@ adminRouter.patch(
 );
 
 adminRouter.get('/clients', validate({ query: clientListQuerySchema }), adminController.listClients);
-adminRouter.post('/clients', validate({ body: createClientSchema }), adminController.createClient);
-adminRouter.get('/clients/:id', validate({ params: idParamSchema }), adminController.getClientById);
+adminRouter.post('/clients', uploadClientProofOfAddress, validate({ body: createClientSchema }), adminController.createClient);
+adminRouter.get('/clients/:id', validate({ params: clientIdParamSchema }), adminController.getClientById);
 adminRouter.patch(
   '/clients/:id',
-  validate({ params: idParamSchema, body: updateClientSchema }),
+  uploadClientProofOfAddress,
+  validate({ params: clientIdParamSchema, body: updateClientSchema }),
   adminController.updateClient
 );
-adminRouter.delete('/clients/:id', validate({ params: idParamSchema }), adminController.deleteClient);
+adminRouter.delete('/clients/:id', validate({ params: clientIdParamSchema }), adminController.deleteClient);
+adminRouter.get('/clients/:id/history', validate({ params: clientIdParamSchema }), adminController.listClientHistory);
 
 adminRouter.get('/staff', validate({ query: staffListQuerySchema }), adminController.listStaff);
 adminRouter.post('/staff', uploadStaffFiles, validate({ body: createStaffSchema }), adminController.createStaff);
 adminRouter.get('/staff/:id', validate({ params: staffIdParamSchema }), adminController.getStaffById);
-adminRouter.post('/staff/:id', validate({ params: staffIdParamSchema }), adminController.provisionStaffCredentials);
+adminRouter.get('/staff/:id/visits', validate({ params: staffIdParamSchema }), adminController.listStaffVisits);
 adminRouter.post(
   '/staff/:id/provision-credentials',
   validate({ params: staffIdParamSchema }),
