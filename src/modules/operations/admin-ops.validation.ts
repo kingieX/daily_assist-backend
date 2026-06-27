@@ -1,17 +1,24 @@
 import { z } from 'zod';
+import { emptyStringToUndefined, queryLimit, queryPage } from '../../utils/query-validation';
 
 export const idParamSchema = z.object({
   id: z.string().uuid('Invalid ID')
 });
 
 const paginationSchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(100).default(20)
+  page: queryPage(),
+  limit: queryLimit()
 });
 
 export const reportListQuerySchema = paginationSchema.extend({
-  status: z.enum(['NEW', 'IN_REVIEW', 'APPROVED', 'REJECTED', 'BILLED']).optional(),
-  type: z.enum(['INCIDENT', 'VISIT_QUALITY', 'STAFF_PERFORMANCE', 'SYSTEM']).optional()
+  status: z.preprocess(
+    emptyStringToUndefined,
+    z.enum(['NEW', 'IN_REVIEW', 'APPROVED', 'REJECTED', 'BILLED']).optional()
+  ),
+  type: z.preprocess(
+    emptyStringToUndefined,
+    z.enum(['INCIDENT', 'VISIT_QUALITY', 'STAFF_PERFORMANCE', 'SYSTEM']).optional()
+  )
 });
 
 export const createReportSchema = z.object({
@@ -31,10 +38,13 @@ export const upsertSystemSettingSchema = z.object({
 });
 
 export const auditLogQuerySchema = paginationSchema.extend({
-  action: z
-    .enum(['CREATE', 'UPDATE', 'DELETE', 'LOGIN', 'LOGOUT', 'STATUS_CHANGE', 'SETTINGS_UPDATE', 'REPORT_PROCESSING'])
-    .optional(),
-  entity: z.string().trim().min(1).max(100).optional()
+  action: z.preprocess(
+    emptyStringToUndefined,
+    z
+      .enum(['CREATE', 'UPDATE', 'DELETE', 'LOGIN', 'LOGOUT', 'STATUS_CHANGE', 'SETTINGS_UPDATE', 'REPORT_PROCESSING'])
+    .optional()
+  ),
+  entity: z.preprocess(emptyStringToUndefined, z.string().trim().min(1).max(100).optional())
 });
 
 export type ReportListQuery = z.infer<typeof reportListQuerySchema>;
