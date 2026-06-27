@@ -181,6 +181,7 @@ model StaffProfile {
   lastName                     String   @map("last_name")
   phone                        String
   dateOfBirth                  DateTime? @map("date_of_birth")
+  dobText                      String?  @map("dob_text")
   sex                          Sex?
   zone                         String?
   ownsCar                      Boolean   @default(false) @map("owns_car")

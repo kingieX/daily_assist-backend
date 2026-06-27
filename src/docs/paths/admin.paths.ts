@@ -49,36 +49,71 @@ const createClientSchema: OpenAPIV3.SchemaObject = {
   required: ['firstName', 'lastName', 'phone']
 };
 
-const staffProfileSchema: OpenAPIV3.SchemaObject = {
+const staffRoleValues = [
+  'Home-Help & Support Assistant',
+  'Senior Carer',
+  'Support Worker',
+  'Community Access Support',
+  'Care Assistant'
+];
+const staffZoneValues = ['Canvey Island', 'Basildon', 'Southend-on-Sea', 'Chelmsford', 'Rayleigh'];
+const staffVehicleValues = ['Yes, owns a vehicle', 'No vehicle'];
+const staffSexValues = ['Male', 'Female', 'Prefer not to say'];
+const staffStatusValues = ['available', 'unavailable'];
+
+const staffSchema: OpenAPIV3.SchemaObject = {
   type: 'object',
+  required: ['id', 'firstName', 'lastName', 'name', 'email', 'phone', 'status', 'role', 'dob', 'sex', 'zone', 'vehicle', 'address'],
   properties: {
-    email: { type: 'string', format: 'email' },
-    password: { type: 'string', minLength: 8, description: 'Must include at least one uppercase letter and one number.' },
-    status: { type: 'string', enum: ['ACTIVE', 'INACTIVE', 'SUSPENDED'] },
+    id: { type: 'string', example: 'STF-0001' },
+    userId: { type: 'string', format: 'uuid', description: 'Internal user UUID, returned for integrations that need it.' },
     firstName: { type: 'string' },
     lastName: { type: 'string' },
+    name: { type: 'string', description: 'Display name composed from firstName and lastName.' },
+    email: { type: 'string', format: 'email' },
     phone: { type: 'string' },
-    dateOfBirth: { type: 'string', format: 'date-time' },
-    sex: { type: 'string', enum: ['MALE', 'FEMALE', 'OTHER', 'PREFER_NOT_TO_SAY'] },
-    zone: { type: 'string' },
-    ownsCar: { type: 'boolean' },
+    status: { type: 'string', enum: staffStatusValues },
+    photo: { type: 'string', nullable: true, description: 'Uploaded staff photo URL.' },
+    role: { type: 'string', enum: staffRoleValues },
+    dob: { type: 'string', description: 'Free-text date of birth value supplied by the frontend.' },
+    sex: { type: 'string', enum: staffSexValues },
+    zone: { type: 'string', enum: staffZoneValues },
+    vehicle: { type: 'string', enum: staffVehicleValues },
     address: { type: 'string' },
-    city: { type: 'string' },
-    zipcode: { type: 'string' },
-    emergencyContactName: { type: 'string' },
-    emergencyContactPhone: { type: 'string' },
-    emergencyContactRelationship: { type: 'string' },
-    photoUrl: { type: 'string', format: 'uri' },
-    cvFileUrl: { type: 'string', format: 'uri' },
-    staffRoleLabel: { type: 'string', enum: ['HOME_HELP_SUPPORT_ASSISTANT', 'ADMIN'] },
-    summary: { type: 'string', maxLength: 2000 },
-    skills: { type: 'string', maxLength: 2000 }
+    documents: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          type: { type: 'string', enum: ['image', 'doc'] },
+          title: { type: 'string' },
+          date: { type: 'string' },
+          size: { type: 'string' },
+          url: { type: 'string' }
+        }
+      }
+    }
   }
 };
 
-const createStaffSchema: OpenAPIV3.SchemaObject = {
-  ...staffProfileSchema,
-  required: ['email', 'password', 'firstName', 'lastName', 'phone']
+const staffFormSchema: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  required: ['firstName', 'lastName', 'email', 'phone', 'role', 'dob', 'sex', 'zone', 'vehicle'],
+  properties: {
+    firstName: { type: 'string' },
+    lastName: { type: 'string' },
+    email: { type: 'string', format: 'email' },
+    phone: { type: 'string' },
+    role: { type: 'string', enum: staffRoleValues },
+    dob: { type: 'string' },
+    sex: { type: 'string', enum: staffSexValues },
+    zone: { type: 'string', enum: staffZoneValues },
+    vehicle: { type: 'string', enum: staffVehicleValues },
+    address: { type: 'string' },
+    status: { type: 'string', enum: staffStatusValues, description: 'Optional; defaults to available on create.' },
+    photo: { type: 'string', format: 'binary' },
+    cv: { type: 'string', format: 'binary' }
+  }
 };
 
 export const adminPaths: OpenAPIV3.PathsObject = {
@@ -417,56 +452,73 @@ export const adminPaths: OpenAPIV3.PathsObject = {
     get: {
       tags: ['Admin — Staff'],
       summary: 'List staff',
+      description: 'Returns all staff in the frontend-friendly shape. The staff management UI performs search and available/unavailable filtering client-side.',
       security: adminSecurity,
-      parameters: [
-        ...paginationParameters,
-        {
-          name: 'status',
-          in: 'query',
-          schema: { type: 'string', enum: ['ACTIVE', 'INACTIVE', 'SUSPENDED'] }
+      responses: {
+        '200': {
+          description: 'Staff retrieved',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  success: { type: 'boolean' },
+                  message: { type: 'string' },
+                  data: { type: 'array', items: staffSchema }
+                }
+              }
+            }
+          }
         },
-        {
-          name: 'sortBy',
-          in: 'query',
-          schema: { type: 'string', enum: ['createdAt', 'updatedAt', 'lastLoginAt', 'email', 'staffCode'], default: 'createdAt' }
-        },
-        {
-          name: 'sortOrder',
-          in: 'query',
-          schema: { type: 'string', enum: ['asc', 'desc'], default: 'desc' }
-        }
-      ],
-      responses: { '200': { description: 'Staff retrieved' } }
+        '401': { $ref: '#/components/responses/UnauthorizedError' },
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+      }
     },
     post: {
       tags: ['Admin — Staff'],
-      summary: 'Create staff profile (with operational fields and initial credentials)',
+      summary: 'Create staff profile',
+      description: 'Creates a staff account from multipart/form-data. The server generates the staff code and temporary password; status defaults to available if omitted.',
       security: adminSecurity,
-      requestBody: { required: true, content: { 'application/json': { schema: createStaffSchema, example: { email: 'staff@example.com', password: 'StaffPass1', firstName: 'Alice', lastName: 'Smith', phone: '+44 1268 904 508', staffRoleLabel: 'HOME_HELP_SUPPORT_ASSISTANT' } } } },
-      responses: { '201': { description: 'Staff created' } }
+      requestBody: { required: true, content: { 'multipart/form-data': { schema: staffFormSchema } } },
+      responses: {
+        '201': { description: 'Staff created', content: { 'application/json': { schema: { type: 'object', properties: { success: { type: 'boolean' }, message: { type: 'string' }, data: staffSchema } } } } },
+        '400': { description: 'Validation failed. Response includes a top-level message string.' },
+        '409': { description: 'Email address is already in use. Response includes a top-level message string.' }
+      }
     }
   },
   '/admin/staff/{id}': {
     get: {
       tags: ['Admin — Staff'],
       summary: 'Get staff by ID',
+      description: 'Accepts either the public staff code (for example STF-0001/DA0010) or the internal user UUID.',
       security: adminSecurity,
-      parameters: [idParam],
-      responses: { '200': { description: 'Staff retrieved' } }
+      parameters: [{ ...idParam, schema: { type: 'string' } }],
+      responses: { '200': { description: 'Staff retrieved', content: { 'application/json': { schema: { type: 'object', properties: { success: { type: 'boolean' }, message: { type: 'string' }, data: staffSchema } } } } } }
+    },
+    post: {
+      tags: ['Admin — Staff'],
+      summary: 'Provision staff credentials',
+      description: 'Compatibility endpoint for the requested POST /admin/staff/{id}. It provisions dashboard credentials and sends the onboarding reset-link email. DELETE /admin/staff/{id} also exists to support the frontend delete action, though it was not in the requested endpoint list.',
+      security: adminSecurity,
+      parameters: [{ ...idParam, schema: { type: 'string' } }],
+      responses: { '200': { description: 'Staff credentials provisioned' } }
     },
     patch: {
       tags: ['Admin — Staff'],
       summary: 'Update staff',
+      description: 'Accepts the same multipart/form-data fields as create. Omitted fields remain unchanged, so the frontend can submit either a full prefilled form or only changed fields.',
       security: adminSecurity,
-      parameters: [idParam],
-      requestBody: { required: true, content: { 'application/json': { schema: staffProfileSchema, example: { phone: '+44 1268 904 508', zone: 'Canvey Island', ownsCar: true } } } },
-      responses: { '200': { description: 'Staff updated' } }
+      parameters: [{ ...idParam, schema: { type: 'string' } }],
+      requestBody: { required: true, content: { 'multipart/form-data': { schema: staffFormSchema } } },
+      responses: { '200': { description: 'Staff updated', content: { 'application/json': { schema: { type: 'object', properties: { success: { type: 'boolean' }, message: { type: 'string' }, data: staffSchema } } } } } }
     },
     delete: {
       tags: ['Admin — Staff'],
       summary: 'Deactivate staff',
+      description: 'Soft-deactivates a staff account. This endpoint is documented because the frontend delete buttons need a backend action.',
       security: adminSecurity,
-      parameters: [idParam],
+      parameters: [{ ...idParam, schema: { type: 'string' } }],
       responses: { '200': { description: 'Staff deactivated' } }
     }
   },
