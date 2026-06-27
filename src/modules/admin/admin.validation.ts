@@ -30,6 +30,19 @@ const paginationSchema = z.object({
 });
 
 const sexSchema = z.enum(['MALE', 'FEMALE', 'OTHER', 'PREFER_NOT_TO_SAY']);
+const frontendStaffRoleSchema = z.enum([
+  'Home-Help & Support Assistant',
+  'Senior Carer',
+  'Support Worker',
+  'Community Access Support',
+  'Care Assistant'
+]);
+const frontendStaffSexSchema = z.enum(['Male', 'Female', 'Prefer not to say']);
+const frontendStaffZoneSchema = z.enum(['Canvey Island', 'Basildon', 'Southend-on-Sea', 'Chelmsford', 'Rayleigh']);
+const frontendStaffVehicleSchema = z.enum(['Yes, owns a vehicle', 'No vehicle']);
+const frontendStaffStatusSchema = z.enum(['available', 'unavailable']);
+const frontendClientTitleSchema = z.enum(['Mr.', 'Mrs.', 'Ms.', 'Dr.', 'Prof.']);
+const frontendClientSexSchema = z.enum(['Male', 'Female', 'Prefer not to say']);
 const staffRoleLabelSchema = z.enum(['HOME_HELP_SUPPORT_ASSISTANT', 'ADMIN']);
 
 const passwordSchema = z
@@ -40,6 +53,14 @@ const passwordSchema = z
 
 export const idParamSchema = z.object({
   id: z.string().uuid('Invalid ID')
+});
+
+export const staffIdParamSchema = z.object({
+  id: z.string().trim().min(1, 'Invalid staff ID')
+});
+
+export const clientIdParamSchema = z.object({
+  id: z.string().trim().min(1, 'Invalid client ID')
 });
 
 const sortOrderSchema = z.enum(['asc', 'desc']).default('desc');
@@ -112,99 +133,73 @@ export const updateBookingSchema = z
 
 const clientSortBySchema = z.enum(['createdAt', 'updatedAt', 'firstName']).default('createdAt');
 
-export const clientListQuerySchema = paginationSchema.extend({
-  status: z.nativeEnum(ClientStatus).optional(),
-  sortBy: clientSortBySchema,
-  sortOrder: sortOrderSchema
-});
+export const clientListQuerySchema = z
+  .object({
+    status: z.nativeEnum(ClientStatus).optional(),
+    sortBy: clientSortBySchema.optional(),
+    sortOrder: sortOrderSchema.optional()
+  })
+  .partial()
+  .default({});
 
-export const createClientSchema = z.object({
-  title: optionalTrimmedString,
+const clientFormSchema = z.object({
+  title: frontendClientTitleSchema.optional(),
   firstName: z.string().trim().min(1, 'First name is required'),
   lastName: z.string().trim().min(1, 'Last name is required'),
-  email: optionalEmail,
+  email: z.string().trim().email('Invalid email format'),
   phone: z.string().trim().min(7, 'Phone number is required'),
-  age: z.coerce.number().int().min(0).max(130).optional(),
-  sex: sexSchema.optional(),
-  address: optionalTrimmedString,
-  city: optionalTrimmedString,
-  zipcode: optionalTrimmedString,
+  age: z.coerce.number().int().min(0).max(130),
+  sex: frontendClientSexSchema,
+  address: z.string().trim().min(1, 'Address is required'),
   emergencyContactName: optionalTrimmedString,
   emergencyContactPhone: optionalTrimmedString,
   emergencyContactRelationship: optionalTrimmedString,
-  proofOfAddressUrl: z.string().url('Proof of address URL must be valid').optional(),
-  notes: z.string().trim().max(2000).optional(),
-  status: z.nativeEnum(ClientStatus).optional()
+  note: z.string().trim().max(2000).optional(),
+  proofOfAddressUrl: z.string().url('Proof of address URL must be valid').optional()
 });
 
-export const updateClientSchema = createClientSchema
-  .partial()
-  .refine((data) => Object.keys(data).length > 0, {
-    message: 'At least one field must be provided for update'
-  });
+export const createClientSchema = clientFormSchema;
+
+export const updateClientSchema = clientFormSchema.partial().refine((data) => Object.keys(data).length > 0, {
+  message: 'At least one field must be provided for update'
+});
 
 const staffSortBySchema = z.enum(['createdAt', 'updatedAt', 'lastLoginAt', 'email', 'staffCode']).default('createdAt');
 
-export const staffListQuerySchema = paginationSchema.extend({
-  status: z.nativeEnum(UserStatus).optional(),
-  sortBy: staffSortBySchema,
-  sortOrder: sortOrderSchema
-});
+export const staffListQuerySchema = z
+  .object({
+    status: z.union([z.nativeEnum(UserStatus), frontendStaffStatusSchema]).optional(),
+    sortBy: staffSortBySchema.optional(),
+    sortOrder: sortOrderSchema.optional()
+  })
+  .partial()
+  .default({});
 
-export const createStaffSchema = z.object({
-  email: z.string().trim().email('Invalid email format'),
-  password: passwordSchema,
+const staffFormSchema = z.object({
   firstName: z.string().trim().min(1, 'First name is required'),
   lastName: z.string().trim().min(1, 'Last name is required'),
+  email: z.string().trim().email('Invalid email format'),
   phone: z.string().trim().min(7, 'Phone number is required'),
-  dateOfBirth: z.coerce.date().optional(),
-  sex: sexSchema.optional(),
-  zone: optionalTrimmedString,
-  ownsCar: z.coerce.boolean().optional(),
+  role: frontendStaffRoleSchema,
+  dob: z.string().trim().min(1, 'Date of birth is required'),
+  sex: frontendStaffSexSchema,
+  zone: frontendStaffZoneSchema,
+  vehicle: frontendStaffVehicleSchema,
   address: optionalTrimmedString,
-  city: optionalTrimmedString,
-  zipcode: optionalTrimmedString,
-  emergencyContactName: optionalTrimmedString,
-  emergencyContactPhone: optionalTrimmedString,
-  emergencyContactRelationship: optionalTrimmedString,
+  status: frontendStaffStatusSchema.optional(),
   photoUrl: z.string().url('Photo URL must be valid').optional(),
-  cvFileUrl: z.string().url('CV URL must be valid').optional(),
-  staffRoleLabel: staffRoleLabelSchema.optional(),
-  summary: z.string().trim().max(2000).optional(),
-  skills: z.string().trim().max(2000).optional(),
-  status: z.nativeEnum(UserStatus).optional()
+  cvFileUrl: z.string().url('CV URL must be valid').optional()
 });
+
+export const createStaffSchema = staffFormSchema;
 
 export const resetStaffPasswordSchema = z.object({
   newPassword: passwordSchema
 });
 
-export const updateStaffSchema = z
-  .object({
-    email: optionalEmail,
-    status: z.nativeEnum(UserStatus).optional(),
-    firstName: optionalTrimmedString,
-    lastName: optionalTrimmedString,
-    phone: optionalTrimmedString,
-    dateOfBirth: z.coerce.date().optional(),
-    sex: sexSchema.optional(),
-    zone: optionalTrimmedString,
-    ownsCar: z.coerce.boolean().optional(),
-    address: optionalTrimmedString,
-    city: optionalTrimmedString,
-    zipcode: optionalTrimmedString,
-    emergencyContactName: optionalTrimmedString,
-    emergencyContactPhone: optionalTrimmedString,
-    emergencyContactRelationship: optionalTrimmedString,
-    photoUrl: z.string().url('Photo URL must be valid').optional(),
-    cvFileUrl: z.string().url('CV URL must be valid').optional(),
-    staffRoleLabel: staffRoleLabelSchema.optional(),
-    summary: z.string().trim().max(2000).optional(),
-    skills: z.string().trim().max(2000).optional()
-  })
-  .refine((data) => Object.keys(data).length > 0, {
-    message: 'At least one field must be provided for update'
-  });
+export const updateStaffSchema = staffFormSchema.partial().refine((data) => Object.keys(data).length > 0, {
+  message: 'At least one field must be provided for update'
+});
 
 export const recruitmentListQuerySchema = paginationSchema.extend({
   status: z.nativeEnum(ApplicationStatus).optional(),

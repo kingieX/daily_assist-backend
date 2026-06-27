@@ -22,63 +22,151 @@ const paginationParameters: OpenAPIV3.ParameterObject[] = [
   }
 ];
 
-const clientProfileSchema: OpenAPIV3.SchemaObject = {
+const clientTitleValues = ['Mr.', 'Mrs.', 'Ms.', 'Dr.', 'Prof.'];
+const clientSexValues = ['Male', 'Female', 'Prefer not to say'];
+const visitStatusValues = ['completed', 'pending', 'cancelled'];
+
+const clientSchema: OpenAPIV3.SchemaObject = {
   type: 'object',
+  required: ['id', 'firstName', 'lastName', 'fullName', 'email', 'phone', 'age', 'sex', 'address', 'joinDate'],
   properties: {
-    title: { type: 'string' },
+    id: { type: 'string', example: 'CLT-0001' },
+    clientId: { type: 'string', format: 'uuid', description: 'Internal client UUID, returned for integrations that need it.' },
+    title: { type: 'string', enum: clientTitleValues },
+    firstName: { type: 'string' },
+    lastName: { type: 'string' },
+    fullName: { type: 'string' },
+    email: { type: 'string', format: 'email' },
+    phone: { type: 'string' },
+    age: { type: 'integer', minimum: 0, maximum: 130, nullable: true },
+    sex: { type: 'string', enum: clientSexValues },
+    address: { type: 'string' },
+    emergencyContactName: { type: 'string' },
+    emergencyContactPhone: { type: 'string' },
+    emergencyContactRelationship: { type: 'string' },
+    note: { type: 'string' },
+    joinDate: { type: 'string', format: 'date', description: 'Parseable date used by the frontend Newest/Oldest sort.' },
+    proofOfAddress: { type: 'string', nullable: true },
+    documents: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          type: { type: 'string', enum: ['doc'] },
+          title: { type: 'string' },
+          date: { type: 'string' },
+          size: { type: 'string' },
+          url: { type: 'string' }
+        }
+      }
+    }
+  }
+};
+
+const clientFormSchema: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  required: ['firstName', 'lastName', 'email', 'phone', 'age', 'sex', 'address'],
+  properties: {
+    title: { type: 'string', enum: clientTitleValues },
     firstName: { type: 'string' },
     lastName: { type: 'string' },
     email: { type: 'string', format: 'email' },
     phone: { type: 'string' },
     age: { type: 'integer', minimum: 0, maximum: 130 },
-    sex: { type: 'string', enum: ['MALE', 'FEMALE', 'OTHER', 'PREFER_NOT_TO_SAY'] },
+    sex: { type: 'string', enum: clientSexValues },
     address: { type: 'string' },
-    city: { type: 'string' },
-    zipcode: { type: 'string' },
     emergencyContactName: { type: 'string' },
     emergencyContactPhone: { type: 'string' },
     emergencyContactRelationship: { type: 'string' },
-    proofOfAddressUrl: { type: 'string', format: 'uri' },
-    notes: { type: 'string', maxLength: 2000 },
-    status: { type: 'string', enum: ['ACTIVE', 'INACTIVE'] }
+    note: { type: 'string', maxLength: 2000 },
+    proofOfAddress: { type: 'string', format: 'binary' }
   }
 };
 
-const createClientSchema: OpenAPIV3.SchemaObject = {
-  ...clientProfileSchema,
-  required: ['firstName', 'lastName', 'phone']
+const visitSchema: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  required: ['id', 'clientId', 'clientName', 'staffId', 'staffName', 'date', 'status', 'timeStart', 'timeEnd', 'address'],
+  properties: {
+    id: { type: 'string', format: 'uuid' },
+    clientId: { type: 'string', description: 'Public client ID returned by /admin/clients/{id}.' },
+    clientUserId: { type: 'string', format: 'uuid', description: 'Internal client UUID.' },
+    clientName: { type: 'string' },
+    staffId: { type: 'string', description: 'Public staff ID resolvable via GET /admin/staff/{id}.' },
+    staffUserId: { type: 'string', format: 'uuid', description: 'Internal staff user UUID.' },
+    staffName: { type: 'string' },
+    date: { type: 'string', format: 'date' },
+    status: { type: 'string', enum: visitStatusValues },
+    timeStart: { type: 'string' },
+    timeEnd: { type: 'string' },
+    address: { type: 'string' }
+  }
 };
 
-const staffProfileSchema: OpenAPIV3.SchemaObject = {
+const staffRoleValues = [
+  'Home-Help & Support Assistant',
+  'Senior Carer',
+  'Support Worker',
+  'Community Access Support',
+  'Care Assistant'
+];
+const staffZoneValues = ['Canvey Island', 'Basildon', 'Southend-on-Sea', 'Chelmsford', 'Rayleigh'];
+const staffVehicleValues = ['Yes, owns a vehicle', 'No vehicle'];
+const staffSexValues = ['Male', 'Female', 'Prefer not to say'];
+const staffStatusValues = ['available', 'unavailable'];
+
+const staffSchema: OpenAPIV3.SchemaObject = {
   type: 'object',
+  required: ['id', 'firstName', 'lastName', 'name', 'email', 'phone', 'status', 'role', 'dob', 'sex', 'zone', 'vehicle', 'address'],
   properties: {
-    email: { type: 'string', format: 'email' },
-    password: { type: 'string', minLength: 8, description: 'Must include at least one uppercase letter and one number.' },
-    status: { type: 'string', enum: ['ACTIVE', 'INACTIVE', 'SUSPENDED'] },
+    id: { type: 'string', example: 'STF-0001' },
+    userId: { type: 'string', format: 'uuid', description: 'Internal user UUID, returned for integrations that need it.' },
     firstName: { type: 'string' },
     lastName: { type: 'string' },
+    name: { type: 'string', description: 'Display name composed from firstName and lastName.' },
+    email: { type: 'string', format: 'email' },
     phone: { type: 'string' },
-    dateOfBirth: { type: 'string', format: 'date-time' },
-    sex: { type: 'string', enum: ['MALE', 'FEMALE', 'OTHER', 'PREFER_NOT_TO_SAY'] },
-    zone: { type: 'string' },
-    ownsCar: { type: 'boolean' },
+    status: { type: 'string', enum: staffStatusValues },
+    photo: { type: 'string', nullable: true, description: 'Uploaded staff photo URL.' },
+    role: { type: 'string', enum: staffRoleValues },
+    dob: { type: 'string', description: 'Free-text date of birth value supplied by the frontend.' },
+    sex: { type: 'string', enum: staffSexValues },
+    zone: { type: 'string', enum: staffZoneValues },
+    vehicle: { type: 'string', enum: staffVehicleValues },
     address: { type: 'string' },
-    city: { type: 'string' },
-    zipcode: { type: 'string' },
-    emergencyContactName: { type: 'string' },
-    emergencyContactPhone: { type: 'string' },
-    emergencyContactRelationship: { type: 'string' },
-    photoUrl: { type: 'string', format: 'uri' },
-    cvFileUrl: { type: 'string', format: 'uri' },
-    staffRoleLabel: { type: 'string', enum: ['HOME_HELP_SUPPORT_ASSISTANT', 'ADMIN'] },
-    summary: { type: 'string', maxLength: 2000 },
-    skills: { type: 'string', maxLength: 2000 }
+    documents: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          type: { type: 'string', enum: ['image', 'doc'] },
+          title: { type: 'string' },
+          date: { type: 'string' },
+          size: { type: 'string' },
+          url: { type: 'string' }
+        }
+      }
+    }
   }
 };
 
-const createStaffSchema: OpenAPIV3.SchemaObject = {
-  ...staffProfileSchema,
-  required: ['email', 'password', 'firstName', 'lastName', 'phone']
+const staffFormSchema: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  required: ['firstName', 'lastName', 'email', 'phone', 'role', 'dob', 'sex', 'zone', 'vehicle'],
+  properties: {
+    firstName: { type: 'string' },
+    lastName: { type: 'string' },
+    email: { type: 'string', format: 'email' },
+    phone: { type: 'string' },
+    role: { type: 'string', enum: staffRoleValues },
+    dob: { type: 'string' },
+    sex: { type: 'string', enum: staffSexValues },
+    zone: { type: 'string', enum: staffZoneValues },
+    vehicle: { type: 'string', enum: staffVehicleValues },
+    address: { type: 'string' },
+    status: { type: 'string', enum: staffStatusValues, description: 'Optional; defaults to available on create.' },
+    photo: { type: 'string', format: 'binary' },
+    cv: { type: 'string', format: 'binary' }
+  }
 };
 
 export const adminPaths: OpenAPIV3.PathsObject = {
@@ -354,120 +442,138 @@ export const adminPaths: OpenAPIV3.PathsObject = {
     get: {
       tags: ['Admin — Clients'],
       summary: 'List clients',
+      description: 'Returns all clients in the frontend-friendly shape. The clients page performs search and sorting client-side.',
       security: adminSecurity,
-      parameters: [
-        ...paginationParameters,
-        {
-          name: 'status',
-          in: 'query',
-          schema: { type: 'string', enum: ['ACTIVE', 'INACTIVE'] }
-        },
-        {
-          name: 'sortBy',
-          in: 'query',
-          schema: { type: 'string', enum: ['createdAt', 'updatedAt', 'firstName'], default: 'createdAt' }
-        },
-        {
-          name: 'sortOrder',
-          in: 'query',
-          schema: { type: 'string', enum: ['asc', 'desc'], default: 'desc' }
+      responses: {
+        '200': {
+          description: 'Clients retrieved',
+          content: { 'application/json': { schema: { type: 'object', properties: { success: { type: 'boolean' }, message: { type: 'string' }, data: { type: 'array', items: clientSchema } } } } }
         }
-      ],
-      responses: { '200': { description: 'Clients retrieved' } }
+      }
     },
     post: {
       tags: ['Admin — Clients'],
-      summary: 'Create client with demographic/emergency/proof metadata',
+      summary: 'Create client',
+      description: 'Creates a client from multipart/form-data. The server generates the public CLT client ID. The frontend currently submits age, so age is stored directly; there is no DOB field on this endpoint.',
       security: adminSecurity,
-      requestBody: {
-        required: true,
-        content: { 'application/json': { schema: createClientSchema, example: { firstName: 'Jane', lastName: 'Doe', email: 'jane@example.com', phone: '+44 1268 904 508', city: 'Canvey Island', status: 'ACTIVE' } } }
-      },
-      responses: { '201': { description: 'Client created' } }
+      requestBody: { required: true, content: { 'multipart/form-data': { schema: clientFormSchema } } },
+      responses: {
+        '201': { description: 'Client created', content: { 'application/json': { schema: { type: 'object', properties: { success: { type: 'boolean' }, message: { type: 'string' }, data: clientSchema } } } } },
+        '400': { description: 'Validation failed. Response includes a top-level message string.' }
+      }
     }
   },
   '/admin/clients/{id}': {
     get: {
       tags: ['Admin — Clients'],
       summary: 'Get client by ID',
+      description: 'Accepts either the public client code (for example CLT-0001) or the internal client UUID.',
       security: adminSecurity,
-      parameters: [idParam],
-      responses: { '200': { description: 'Client retrieved' }, '404': { $ref: '#/components/responses/NotFound' } }
+      parameters: [{ ...idParam, schema: { type: 'string' } }],
+      responses: { '200': { description: 'Client retrieved', content: { 'application/json': { schema: { type: 'object', properties: { success: { type: 'boolean' }, message: { type: 'string' }, data: clientSchema } } } } }, '404': { $ref: '#/components/responses/NotFound' } }
     },
     patch: {
       tags: ['Admin — Clients'],
       summary: 'Update client',
+      description: 'Accepts the same multipart/form-data fields as create, including emergency-contact fields, note, and optional proof-of-address replacement.',
       security: adminSecurity,
-      parameters: [idParam],
-      requestBody: {
-        required: true,
-        content: { 'application/json': { schema: clientProfileSchema, example: { phone: '+44 1268 904 508', notes: 'Prefers morning visits.' } } }
-      },
-      responses: { '200': { description: 'Client updated' } }
+      parameters: [{ ...idParam, schema: { type: 'string' } }],
+      requestBody: { required: true, content: { 'multipart/form-data': { schema: clientFormSchema } } },
+      responses: { '200': { description: 'Client updated', content: { 'application/json': { schema: { type: 'object', properties: { success: { type: 'boolean' }, message: { type: 'string' }, data: clientSchema } } } } } }
     },
     delete: {
       tags: ['Admin — Clients'],
       summary: 'Delete client',
+      description: 'Permanently deletes the client after deleting associated bookings and their visit records to avoid orphaned history.',
       security: adminSecurity,
-      parameters: [idParam],
-      responses: { '200': { description: 'Client deleted' }, '409': { description: 'Client has related bookings' } }
+      parameters: [{ ...idParam, schema: { type: 'string' } }],
+      responses: { '200': { description: 'Client deleted' }, '404': { $ref: '#/components/responses/NotFound' } }
+    }
+  },
+  '/admin/clients/{id}/history': {
+    get: {
+      tags: ['Admin — Clients'],
+      summary: 'List client visit history',
+      description: 'Returns visit records for one client using the shared Visit shape. Each row includes staffId so the staff can be resolved via GET /admin/staff/{id}.',
+      security: adminSecurity,
+      parameters: [{ ...idParam, schema: { type: 'string' } }],
+      responses: { '200': { description: 'Client history retrieved', content: { 'application/json': { schema: { type: 'object', properties: { success: { type: 'boolean' }, message: { type: 'string' }, data: { type: 'array', items: visitSchema } } } } } } }
     }
   },
   '/admin/staff': {
     get: {
       tags: ['Admin — Staff'],
       summary: 'List staff',
+      description: 'Returns all staff in the frontend-friendly shape. The staff management UI performs search and available/unavailable filtering client-side.',
       security: adminSecurity,
-      parameters: [
-        ...paginationParameters,
-        {
-          name: 'status',
-          in: 'query',
-          schema: { type: 'string', enum: ['ACTIVE', 'INACTIVE', 'SUSPENDED'] }
+      responses: {
+        '200': {
+          description: 'Staff retrieved',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  success: { type: 'boolean' },
+                  message: { type: 'string' },
+                  data: { type: 'array', items: staffSchema }
+                }
+              }
+            }
+          }
         },
-        {
-          name: 'sortBy',
-          in: 'query',
-          schema: { type: 'string', enum: ['createdAt', 'updatedAt', 'lastLoginAt', 'email', 'staffCode'], default: 'createdAt' }
-        },
-        {
-          name: 'sortOrder',
-          in: 'query',
-          schema: { type: 'string', enum: ['asc', 'desc'], default: 'desc' }
-        }
-      ],
-      responses: { '200': { description: 'Staff retrieved' } }
+        '401': { $ref: '#/components/responses/UnauthorizedError' },
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+      }
     },
     post: {
       tags: ['Admin — Staff'],
-      summary: 'Create staff profile (with operational fields and initial credentials)',
+      summary: 'Create staff profile',
+      description: 'Creates a staff account from multipart/form-data. The server generates the staff code and temporary password; status defaults to available if omitted.',
       security: adminSecurity,
-      requestBody: { required: true, content: { 'application/json': { schema: createStaffSchema, example: { email: 'staff@example.com', password: 'StaffPass1', firstName: 'Alice', lastName: 'Smith', phone: '+44 1268 904 508', staffRoleLabel: 'HOME_HELP_SUPPORT_ASSISTANT' } } } },
-      responses: { '201': { description: 'Staff created' } }
+      requestBody: { required: true, content: { 'multipart/form-data': { schema: staffFormSchema } } },
+      responses: {
+        '201': { description: 'Staff created', content: { 'application/json': { schema: { type: 'object', properties: { success: { type: 'boolean' }, message: { type: 'string' }, data: staffSchema } } } } },
+        '400': { description: 'Validation failed. Response includes a top-level message string.' },
+        '409': { description: 'Email address is already in use. Response includes a top-level message string.' }
+      }
     }
   },
   '/admin/staff/{id}': {
     get: {
       tags: ['Admin — Staff'],
       summary: 'Get staff by ID',
+      description: 'Accepts either the public staff code (for example STF-0001/DA0010) or the internal user UUID.',
       security: adminSecurity,
-      parameters: [idParam],
-      responses: { '200': { description: 'Staff retrieved' } }
+      parameters: [{ ...idParam, schema: { type: 'string' } }],
+      responses: { '200': { description: 'Staff retrieved', content: { 'application/json': { schema: { type: 'object', properties: { success: { type: 'boolean' }, message: { type: 'string' }, data: staffSchema } } } } } }
     },
     patch: {
       tags: ['Admin — Staff'],
       summary: 'Update staff',
+      description: 'Accepts the same multipart/form-data fields as create. Omitted fields remain unchanged, so the frontend can submit either a full prefilled form or only changed fields.',
       security: adminSecurity,
-      parameters: [idParam],
-      requestBody: { required: true, content: { 'application/json': { schema: staffProfileSchema, example: { phone: '+44 1268 904 508', zone: 'Canvey Island', ownsCar: true } } } },
-      responses: { '200': { description: 'Staff updated' } }
+      parameters: [{ ...idParam, schema: { type: 'string' } }],
+      requestBody: { required: true, content: { 'multipart/form-data': { schema: staffFormSchema } } },
+      responses: { '200': { description: 'Staff updated', content: { 'application/json': { schema: { type: 'object', properties: { success: { type: 'boolean' }, message: { type: 'string' }, data: staffSchema } } } } } }
     },
     delete: {
       tags: ['Admin — Staff'],
       summary: 'Deactivate staff',
+      description: 'Soft-deactivates a staff account. This endpoint is documented because the frontend delete buttons need a backend action.',
       security: adminSecurity,
-      parameters: [idParam],
+      parameters: [{ ...idParam, schema: { type: 'string' } }],
       responses: { '200': { description: 'Staff deactivated' } }
+    }
+  },
+  '/admin/staff/{id}/visits': {
+    get: {
+      tags: ['Admin — Staff'],
+      summary: 'List staff visit history',
+      description: 'Returns the same shared Visit records as client history, filtered by staff instead of client.',
+      security: adminSecurity,
+      parameters: [{ ...idParam, schema: { type: 'string' } }],
+      responses: { '200': { description: 'Staff visits retrieved', content: { 'application/json': { schema: { type: 'object', properties: { success: { type: 'boolean' }, message: { type: 'string' }, data: { type: 'array', items: visitSchema } } } } } } }
     }
   },
   '/admin/staff/{id}/provision-credentials': {
