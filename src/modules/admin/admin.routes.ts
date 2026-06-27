@@ -6,6 +6,7 @@ import { adminOpsRouter } from '../operations/admin-ops.routes';
 import { authenticate } from '../../middlewares/auth.middleware';
 import { authorizeRoles } from '../../middlewares/rbac.middleware';
 import { validate } from '../../middlewares/validate.middleware';
+import { uploadStaffFiles } from '../../middlewares/upload.middleware';
 import { adminController } from './admin.controller';
 import {
   assignBookingSchema,
@@ -21,6 +22,7 @@ import {
   packageListQuerySchema,
   recruitmentListQuerySchema,
   resetStaffPasswordSchema,
+  staffIdParamSchema,
   staffListQuerySchema,
   updateBookingSchema,
   updateClientSchema,
@@ -89,24 +91,26 @@ adminRouter.patch(
 adminRouter.delete('/clients/:id', validate({ params: idParamSchema }), adminController.deleteClient);
 
 adminRouter.get('/staff', validate({ query: staffListQuerySchema }), adminController.listStaff);
-adminRouter.post('/staff', validate({ body: createStaffSchema }), adminController.createStaff);
-adminRouter.get('/staff/:id', validate({ params: idParamSchema }), adminController.getStaffById);
+adminRouter.post('/staff', uploadStaffFiles, validate({ body: createStaffSchema }), adminController.createStaff);
+adminRouter.get('/staff/:id', validate({ params: staffIdParamSchema }), adminController.getStaffById);
+adminRouter.post('/staff/:id', validate({ params: staffIdParamSchema }), adminController.provisionStaffCredentials);
 adminRouter.post(
   '/staff/:id/provision-credentials',
-  validate({ params: idParamSchema }),
+  validate({ params: staffIdParamSchema }),
   adminController.provisionStaffCredentials
 );
 adminRouter.post(
   '/staff/:id/reset-password',
-  validate({ params: idParamSchema, body: resetStaffPasswordSchema }),
+  validate({ params: staffIdParamSchema, body: resetStaffPasswordSchema }),
   adminController.resetStaffPassword
 );
 adminRouter.patch(
   '/staff/:id',
-  validate({ params: idParamSchema, body: updateStaffSchema }),
+  uploadStaffFiles,
+  validate({ params: staffIdParamSchema, body: updateStaffSchema }),
   adminController.updateStaff
 );
-adminRouter.delete('/staff/:id', validate({ params: idParamSchema }), adminController.deleteStaff);
+adminRouter.delete('/staff/:id', validate({ params: staffIdParamSchema }), adminController.deleteStaff);
 
 adminRouter.get(
   '/recruitment/applications',

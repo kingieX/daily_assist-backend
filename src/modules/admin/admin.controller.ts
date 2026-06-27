@@ -1,8 +1,20 @@
 import { Request, Response } from 'express';
+import path from 'path';
 import { ApiError } from '../../utils/api-error';
 import { sendSuccess } from '../../utils/api-response';
 import { asyncHandler } from '../../utils/async-handler';
 import { adminService } from './admin.service';
+
+
+function staffUploadUrls(req: Request): { photoUrl?: string; cvFileUrl?: string } {
+  const files = req.files as Record<string, Express.Multer.File[]> | undefined;
+  const photo = files?.photo?.[0];
+  const cv = files?.cv?.[0];
+  return {
+    ...(photo ? { photoUrl: `/uploads/staff/photos/${path.basename(photo.path)}` } : {}),
+    ...(cv ? { cvFileUrl: `/uploads/staff/cv/${path.basename(cv.path)}` } : {})
+  };
+}
 
 function getActorUserId(req: Request): string {
   if (!req.user) {
@@ -116,7 +128,7 @@ const listStaff = asyncHandler(async (req: Request, res: Response) => {
 });
 
 const createStaff = asyncHandler(async (req: Request, res: Response) => {
-  const staff = await adminService.createStaff(req.body);
+  const staff = await adminService.createStaff({ ...req.body, ...staffUploadUrls(req) });
   return sendSuccess(res, 201, 'Staff account created successfully', staff);
 });
 
@@ -137,7 +149,7 @@ const resetStaffPassword = asyncHandler(async (req: Request, res: Response) => {
 });
 
 const updateStaff = asyncHandler(async (req: Request, res: Response) => {
-  const staff = await adminService.updateStaff(req.params.id as string, req.body);
+  const staff = await adminService.updateStaff(req.params.id as string, { ...req.body, ...staffUploadUrls(req) });
   return sendSuccess(res, 200, 'Staff updated successfully', staff);
 });
 

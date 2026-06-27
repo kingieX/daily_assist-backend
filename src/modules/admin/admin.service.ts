@@ -138,8 +138,8 @@ async function createUniquePackageSlug(name: string, excludeId?: string): Promis
   return slug;
 }
 
-function packageDataFromInput(input: CreatePackageInput | UpdatePackageInput): Prisma.PackageUncheckedCreateInput | Prisma.PackageUncheckedUpdateInput {
-  const data: Prisma.PackageUncheckedCreateInput | Prisma.PackageUncheckedUpdateInput = {};
+function packageDataFromInput(input: CreatePackageInput | UpdatePackageInput): Record<string, unknown> {
+  const data: Record<string, unknown> = {};
 
   if (input.name !== undefined) data.name = input.name;
   if (input.price !== undefined) data.price = input.price;
@@ -616,38 +616,139 @@ async function deleteClient(id: string) {
   await db.client.delete({ where: { id } });
 }
 
-async function listStaff(filters: StaffListQuery) {
-  const page = filters.page;
-  const limit = filters.limit;
-  const skip = (page - 1) * limit;
+type StaffInputWithUploads = CreateStaffInput | UpdateStaffInput;
 
+function frontendStatusToUserStatus(status?: string): UserStatus | undefined {
+  if (status === 'available') return UserStatus.ACTIVE;
+  if (status === 'unavailable') return UserStatus.INACTIVE;
+  if (status && Object.values(UserStatus).includes(status as UserStatus)) return status as UserStatus;
+  return undefined;
+}
+
+function userStatusToFrontendStatus(status: UserStatus): 'available' | 'unavailable' {
+  return status === UserStatus.INACTIVE ? 'unavailable' : 'available';
+}
+
+function frontendSexToDbSex(sex?: string): string | null | undefined {
+  if (sex === undefined) return undefined;
+  if (sex === 'Male') return 'MALE';
+  if (sex === 'Female') return 'FEMALE';
+  if (sex === 'Prefer not to say') return 'PREFER_NOT_TO_SAY';
+  return sex;
+}
+
+function dbSexToFrontendSex(sex?: string | null): string {
+  if (sex === 'MALE') return 'Male';
+  if (sex === 'FEMALE') return 'Female';
+  return 'Prefer not to say';
+}
+
+function vehicleToOwnsCar(vehicle?: string): boolean | undefined {
+  if (vehicle === undefined) return undefined;
+  return vehicle === 'Yes, owns a vehicle';
+}
+
+function ownsCarToVehicle(ownsCar?: boolean | null): string {
+  return ownsCar ? 'Yes, owns a vehicle' : 'No vehicle';
+}
+
+function parseDob(value?: string): Date | null | undefined {
+  if (value === undefined) return undefined;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function formatDob(profile: any): string {
+  if (profile?.dobText) return profile.dobText;
+  if (!profile?.dateOfBirth) return '';
+  return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(profile.dateOfBirth));
+}
+
+function staffLookupWhere(id: string): Prisma.UserWhereInput {
+  return {
+    role: Role.STAFF,
+    OR: [{ id }, { staffCode: id }]
+  };
+}
+
+function serializeStaff(user: any) {
+  const profile = user.staffProfile ?? {};
+  const firstName = profile.firstName ?? '';
+  const lastName = profile.lastName ?? '';
+  const name = [firstName, lastName].filter(Boolean).join(' ').trim();
+
+  return {
+    id: user.staffCode ?? user.id,
+    userId: user.id,
+    firstName,
+    lastName,
+    name,
+    email: user.email,
+    phone: profile.phone ?? '',
+    status: userStatusToFrontendStatus(user.status),
+    photo: profile.photoUrl ?? null,
+    role: profile.staffRoleLabel ?? 'Home-Help & Support Assistant',
+    dob: formatDob(profile),
+    sex: dbSexToFrontendSex(profile.sex),
+    zone: profile.zone ?? '',
+    vehicle: ownsCarToVehicle(profile.ownsCar),
+    address: profile.address ?? '',
+    documents: profile.cvFileUrl
+      ? [
+          {
+            type: 'doc',
+            title: 'CV',
+            date: profile.updatedAt
+              ? new Intl.DateTimeFormat('en-GB', { month: 'long', day: 'numeric', year: 'numeric' }).format(new Date(profile.updatedAt))
+              : '',
+            size: '',
+            url: profile.cvFileUrl
+          }
+        ]
+      : []
+  };
+}
+
+function buildStaffProfileData(input: StaffInputWithUploads): Record<string, unknown> {
+  const data: Record<string, unknown> = {};
+  if (input.firstName !== undefined) data.firstName = input.firstName;
+  if (input.lastName !== undefined) data.lastName = input.lastName;
+  if (input.phone !== undefined) data.phone = input.phone;
+  if (input.dob !== undefined) {
+    data.dobText = input.dob;
+    data.dateOfBirth = parseDob(input.dob);
+  }
+  if (input.sex !== undefined) data.sex = frontendSexToDbSex(input.sex);
+  if (input.zone !== undefined) data.zone = input.zone;
+  if (input.vehicle !== undefined) data.ownsCar = vehicleToOwnsCar(input.vehicle);
+  if (input.address !== undefined) data.address = input.address ?? null;
+  if (input.photoUrl !== undefined) data.photoUrl = input.photoUrl;
+  if (input.cvFileUrl !== undefined) data.cvFileUrl = input.cvFileUrl;
+  if (input.role !== undefined) data.staffRoleLabel = input.role;
+  return data;
+}
+
+async function listStaff(filters: StaffListQuery = {}) {
   const where: Prisma.UserWhereInput = {
     role: Role.STAFF,
-    status: filters.status
+    status: frontendStatusToUserStatus(filters.status as string | undefined)
   };
 
-  const [total, items] = await Promise.all([
-    db.user.count({ where }),
-    db.user.findMany({
-      where,
-      orderBy: [{ [filters.sortBy]: filters.sortOrder }, { id: 'asc' }],
-      select: {
-        id: true,
-        staffCode: true,
-        email: true,
-        role: true,
-        status: true,
-        lastLoginAt: true,
-        createdAt: true,
-        updatedAt: true,
-        staffProfile: true
-      },
-      skip,
-      take: limit
-    })
-  ]);
+  const items = await db.user.findMany({
+    where,
+    orderBy: [{ [filters.sortBy ?? 'createdAt']: filters.sortOrder ?? 'desc' }, { id: 'asc' }],
+    select: {
+      id: true,
+      staffCode: true,
+      email: true,
+      status: true,
+      createdAt: true,
+      updatedAt: true,
+      staffProfile: true
+    }
+  });
 
-  return buildPaginatedResult(items, total, page, limit);
+  return items.map(serializeStaff);
 }
 
 async function createStaff(input: CreateStaffInput) {
@@ -658,65 +759,44 @@ async function createStaff(input: CreateStaffInput) {
   });
 
   if (existingUser) {
-    throw new ApiError(409, 'A user with this email already exists');
+    throw new ApiError(409, 'Email address is already in use');
   }
 
-  const passwordHash = await hashPassword(input.password);
+  const passwordHash = await hashPassword(generateTempPassword());
   const staffCode = await generateNextStaffCode(Role.STAFF);
 
-  return db.user.create({
+  const staff = await db.user.create({
     data: {
       email: normalizedEmail,
       staffCode,
       passwordHash,
       role: Role.STAFF,
-      status: input.status ?? UserStatus.ACTIVE,
+      status: frontendStatusToUserStatus(input.status) ?? UserStatus.ACTIVE,
       staffProfile: {
-        create: {
-          firstName: input.firstName,
-          lastName: input.lastName,
-          phone: input.phone,
-          dateOfBirth: input.dateOfBirth ?? null,
-          sex: input.sex ?? null,
-          zone: input.zone ?? null,
-          ownsCar: input.ownsCar ?? false,
-          address: input.address ?? null,
-          city: input.city ?? null,
-          zipcode: input.zipcode ?? null,
-          emergencyContactName: input.emergencyContactName ?? null,
-          emergencyContactPhone: input.emergencyContactPhone ?? null,
-          emergencyContactRelationship: input.emergencyContactRelationship ?? null,
-          photoUrl: input.photoUrl ?? null,
-          cvFileUrl: input.cvFileUrl ?? null,
-          staffRoleLabel: input.staffRoleLabel ?? 'HOME_HELP_SUPPORT_ASSISTANT',
-          summary: input.summary ?? null,
-          skills: input.skills ?? null
-        }
+        create: buildStaffProfileData(input)
       }
     },
     select: {
       id: true,
       staffCode: true,
       email: true,
-      role: true,
       status: true,
       createdAt: true,
+      updatedAt: true,
       staffProfile: true
     }
   });
+
+  return serializeStaff(staff);
 }
 
 async function getStaffById(id: string) {
   const staff = await db.user.findFirst({
-    where: {
-      id,
-      role: Role.STAFF
-    },
+    where: staffLookupWhere(id),
     select: {
       id: true,
       staffCode: true,
       email: true,
-      role: true,
       status: true,
       lastLoginAt: true,
       createdAt: true,
@@ -729,16 +809,12 @@ async function getStaffById(id: string) {
     throw new ApiError(404, 'Staff user not found');
   }
 
-  return staff;
+  return serializeStaff(staff);
 }
-
 
 async function provisionStaffCredentials(id: string, actorUserId: string) {
   const staff = await db.user.findFirst({
-    where: {
-      id,
-      role: Role.STAFF
-    },
+    where: staffLookupWhere(id),
     select: {
       id: true,
       staffCode: true,
@@ -818,7 +894,8 @@ async function provisionStaffCredentials(id: string, actorUserId: string) {
   });
 
   return {
-    id: staff.id,
+    id: staff.staffCode ?? staff.id,
+    userId: staff.id,
     email: nextEmail,
     credentialsProvisioned: true,
     onboardingEmailSent: true,
@@ -829,10 +906,7 @@ async function provisionStaffCredentials(id: string, actorUserId: string) {
 
 async function resetStaffPassword(id: string, input: ResetStaffPasswordInput) {
   const staff = await db.user.findFirst({
-    where: {
-      id,
-      role: Role.STAFF
-    },
+    where: staffLookupWhere(id),
     select: { id: true }
   });
 
@@ -855,10 +929,7 @@ async function resetStaffPassword(id: string, input: ResetStaffPasswordInput) {
 
 async function updateStaff(id: string, input: UpdateStaffInput) {
   const staff = await db.user.findFirst({
-    where: {
-      id,
-      role: Role.STAFF
-    },
+    where: staffLookupWhere(id),
     include: { staffProfile: true }
   });
 
@@ -873,110 +944,40 @@ async function updateStaff(id: string, input: UpdateStaffInput) {
       select: { id: true }
     });
     if (emailExists) {
-      throw new ApiError(409, 'A user with this email already exists');
+      throw new ApiError(409, 'Email address is already in use');
     }
   }
 
   const userData: any = {};
   if (normalizedEmail !== undefined) userData.email = normalizedEmail;
-  if (input.status !== undefined) userData.status = input.status;
+  const nextStatus = frontendStatusToUserStatus(input.status);
+  if (nextStatus !== undefined) userData.status = nextStatus;
 
-  const hasProfileUpdates =
-    input.firstName !== undefined ||
-    input.lastName !== undefined ||
-    input.phone !== undefined ||
-    input.dateOfBirth !== undefined ||
-    input.sex !== undefined ||
-    input.zone !== undefined ||
-    input.ownsCar !== undefined ||
-    input.address !== undefined ||
-    input.city !== undefined ||
-    input.zipcode !== undefined ||
-    input.emergencyContactName !== undefined ||
-    input.emergencyContactPhone !== undefined ||
-    input.emergencyContactRelationship !== undefined ||
-    input.photoUrl !== undefined ||
-    input.cvFileUrl !== undefined ||
-    input.staffRoleLabel !== undefined ||
-    input.summary !== undefined ||
-    input.skills !== undefined;
-
-  if (hasProfileUpdates) {
-    if (staff.staffProfile) {
-      const profileData: any = {};
-      if (input.firstName !== undefined) profileData.firstName = input.firstName;
-      if (input.lastName !== undefined) profileData.lastName = input.lastName;
-      if (input.phone !== undefined) profileData.phone = input.phone;
-      if (input.dateOfBirth !== undefined) profileData.dateOfBirth = input.dateOfBirth;
-      if (input.sex !== undefined) profileData.sex = input.sex;
-      if (input.zone !== undefined) profileData.zone = input.zone;
-      if (input.ownsCar !== undefined) profileData.ownsCar = input.ownsCar;
-      if (input.address !== undefined) profileData.address = input.address;
-      if (input.city !== undefined) profileData.city = input.city;
-      if (input.zipcode !== undefined) profileData.zipcode = input.zipcode;
-      if (input.emergencyContactName !== undefined) {
-        profileData.emergencyContactName = input.emergencyContactName;
-      }
-      if (input.emergencyContactPhone !== undefined) {
-        profileData.emergencyContactPhone = input.emergencyContactPhone;
-      }
-      if (input.emergencyContactRelationship !== undefined) {
-        profileData.emergencyContactRelationship = input.emergencyContactRelationship;
-      }
-      if (input.photoUrl !== undefined) profileData.photoUrl = input.photoUrl;
-      if (input.cvFileUrl !== undefined) profileData.cvFileUrl = input.cvFileUrl;
-      if (input.staffRoleLabel !== undefined) profileData.staffRoleLabel = input.staffRoleLabel;
-      if (input.summary !== undefined) profileData.summary = input.summary;
-      if (input.skills !== undefined) profileData.skills = input.skills;
-
-      userData.staffProfile = {
-        update: profileData
-      };
-    } else {
-      if (!input.firstName || !input.lastName || !input.phone) {
-        throw new ApiError(
-          400,
-          'firstName, lastName, and phone are required to create a missing staff profile'
-        );
-      }
-
-      userData.staffProfile = {
-        create: {
-          firstName: input.firstName,
-          lastName: input.lastName,
-          phone: input.phone,
-          dateOfBirth: input.dateOfBirth ?? null,
-          sex: input.sex ?? null,
-          zone: input.zone ?? null,
-          ownsCar: input.ownsCar ?? false,
-          address: input.address ?? null,
-          city: input.city ?? null,
-          zipcode: input.zipcode ?? null,
-          emergencyContactName: input.emergencyContactName ?? null,
-          emergencyContactPhone: input.emergencyContactPhone ?? null,
-          emergencyContactRelationship: input.emergencyContactRelationship ?? null,
-          photoUrl: input.photoUrl ?? null,
-          cvFileUrl: input.cvFileUrl ?? null,
-          staffRoleLabel: input.staffRoleLabel ?? 'HOME_HELP_SUPPORT_ASSISTANT',
-          summary: input.summary ?? null,
-          skills: input.skills ?? null
-        }
-      };
-    }
+  const profileData = buildStaffProfileData(input);
+  if (Object.keys(profileData).length > 0) {
+    userData.staffProfile = staff.staffProfile
+      ? { update: profileData }
+      : {
+          create: {
+            firstName: input.firstName,
+            lastName: input.lastName,
+            phone: input.phone,
+            ...profileData
+          }
+        };
   }
 
   if (Object.keys(userData).length === 0) {
     throw new ApiError(400, 'At least one valid field must be provided for update');
   }
 
-  return db.user.update({
-    where: { id },
+  const updated = await db.user.update({
+    where: { id: staff.id },
     data: userData,
     select: {
       id: true,
       staffCode: true,
       email: true,
-      role: true,
       status: true,
       lastLoginAt: true,
       createdAt: true,
@@ -984,16 +985,16 @@ async function updateStaff(id: string, input: UpdateStaffInput) {
       staffProfile: true
     }
   });
+
+  return serializeStaff(updated);
 }
 
 async function deleteStaff(id: string) {
   const staff = await db.user.findFirst({
-    where: {
-      id,
-      role: Role.STAFF
-    },
+    where: staffLookupWhere(id),
     select: {
       id: true,
+      staffCode: true,
       status: true
     }
   });
@@ -1004,8 +1005,9 @@ async function deleteStaff(id: string) {
 
   if (staff.status === UserStatus.INACTIVE) {
     return {
-      id: staff.id,
-      status: staff.status
+      id: staff.staffCode ?? staff.id,
+      userId: staff.id,
+      status: userStatusToFrontendStatus(staff.status)
     };
   }
 
@@ -1021,8 +1023,9 @@ async function deleteStaff(id: string) {
   ]);
 
   return {
-    id: staff.id,
-    status: UserStatus.INACTIVE
+    id: staff.staffCode ?? staff.id,
+    userId: staff.id,
+    status: 'unavailable' as const
   };
 }
 

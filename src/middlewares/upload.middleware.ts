@@ -18,6 +18,27 @@ const allowedExtensions = new Set(['.pdf', '.doc', '.docx']);
 
 fs.mkdirSync(CV_UPLOAD_DIRECTORY, { recursive: true });
 
+const STAFF_UPLOAD_DIRECTORY = path.resolve(process.cwd(), 'uploads', 'staff');
+const STAFF_PHOTO_DIRECTORY = path.join(STAFF_UPLOAD_DIRECTORY, 'photos');
+const STAFF_CV_DIRECTORY = path.join(STAFF_UPLOAD_DIRECTORY, 'cv');
+const MAX_STAFF_FILE_SIZE_BYTES = 5 * 1024 * 1024;
+const allowedStaffPhotoMimeTypes = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+const allowedStaffCvMimeTypes = new Set([
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif'
+]);
+const allowedStaffPhotoExtensions = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif']);
+const allowedStaffCvExtensions = new Set(['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png', '.webp', '.gif']);
+
+fs.mkdirSync(STAFF_PHOTO_DIRECTORY, { recursive: true });
+fs.mkdirSync(STAFF_CV_DIRECTORY, { recursive: true });
+
+
 function sanitizeBaseFilename(originalName: string): string {
   const withoutExtension = originalName.replace(/\.[^/.]+$/, '');
   const sanitized = withoutExtension
@@ -25,7 +46,11 @@ function sanitizeBaseFilename(originalName: string): string {
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '')
     .toLowerCase();
-  return sanitized || 'cv';
+  return sanitized || 'upload';
+}
+
+function staffUploadPath(fieldName: string): string {
+  return fieldName === 'photo' ? STAFF_PHOTO_DIRECTORY : STAFF_CV_DIRECTORY;
 }
 
 const storage = multer.diskStorage({
@@ -63,6 +88,65 @@ export const uploadWorkerCv: RequestHandler = (req, res, next) => {
         return;
       }
       next(new ApiError(400, `Invalid CV upload request: ${error.message}`));
+      return;
+    }
+    next(error);
+  });
+};
+
+
+const staffStorage = multer.diskStorage({
+  destination: (_req, file, callback) => {
+    callback(null, staffUploadPath(file.fieldname));
+  },
+  filename: (_req, file, callback) => {
+    const extension = path.extname(file.originalname).toLowerCase();
+    const safeBaseName = sanitizeBaseFilename(file.originalname);
+    callback(null, `${safeBaseName}-${crypto.randomUUID()}${extension}`);
+  }
+});
+
+const staffUpload = multer({
+  storage: staffStorage,
+  limits: {
+    files: 2,
+    fileSize: MAX_STAFF_FILE_SIZE_BYTES
+  },
+  fileFilter: (_req, file, callback) => {
+    const extension = path.extname(file.originalname).toLowerCase();
+    if (file.fieldname === 'photo') {
+      if (!allowedStaffPhotoExtensions.has(extension) || !allowedStaffPhotoMimeTypes.has(file.mimetype)) {
+        callback(new ApiError(400, 'Invalid photo format. Allowed formats: JPG, PNG, WEBP, GIF.'));
+        return;
+      }
+      callback(null, true);
+      return;
+    }
+
+    if (file.fieldname === 'cv') {
+      if (!allowedStaffCvExtensions.has(extension) || !allowedStaffCvMimeTypes.has(file.mimetype)) {
+        callback(new ApiError(400, 'Invalid CV format. Allowed formats: PDF, DOC, DOCX, JPG, PNG, WEBP, GIF.'));
+        return;
+      }
+      callback(null, true);
+      return;
+    }
+
+    callback(new ApiError(400, `Unsupported staff upload field: ${file.fieldname}`));
+  }
+});
+
+export const uploadStaffFiles: RequestHandler = (req, res, next) => {
+  staffUpload.fields([
+    { name: 'photo', maxCount: 1 },
+    { name: 'cv', maxCount: 1 }
+  ])(req, res, (error: unknown) => {
+    if (error instanceof multer.MulterError) {
+      if (error.code === 'LIMIT_FILE_SIZE') {
+        next(new ApiError(400, 'Staff upload file is too large. Maximum size is 5MB.'));
+        return;
+      }
+      next(new ApiError(400, `Invalid staff upload request: ${error.message}`));
       return;
     }
     next(error);
