@@ -156,7 +156,7 @@ const getStaffById = asyncHandler(async (req: Request, res: Response) => {
 
 
 const provisionStaffCredentials = asyncHandler(async (req: Request, res: Response) => {
-  const result = await adminService.provisionStaffCredentials(req.params.id as string, getActorUserId(req));
+  const result = await adminService.provisionStaffCredentials(req.params.id as string, req.body, getActorUserId(req));
   return sendSuccess(res, 200, 'Staff credentials provisioned successfully', result);
 });
 
@@ -172,7 +172,7 @@ const updateStaff = asyncHandler(async (req: Request, res: Response) => {
 
 const deleteStaff = asyncHandler(async (req: Request, res: Response) => {
   const result = await adminService.deleteStaff(req.params.id as string);
-  return sendSuccess(res, 200, 'Staff deactivated successfully', result);
+  return sendSuccess(res, 200, 'Staff deleted successfully', result);
 });
 
 const listRecruitmentApplications = asyncHandler(async (req: Request, res: Response) => {
