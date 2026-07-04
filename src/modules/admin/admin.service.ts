@@ -1,4 +1,6 @@
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
 import {
   ApplicationStatus,
   BookingStatus,
@@ -9,7 +11,7 @@ import {
   UserStatus,
   VisitStatus
 } from '@prisma/client';
-import { sendPasswordResetEmail } from '../../config/mailer';
+import { sendPasswordResetEmail, sendStaffCredentialsEmail } from '../../config/mailer';
 import { env } from '../../config/env';
 import { prisma } from '../../config/prisma';
 import { ApiError } from '../../utils/api-error';
@@ -28,6 +30,7 @@ import type {
   CreatePackageInput,
   CreateStaffInput,
   PackageListQuery,
+  ProvisionStaffCredentialsInput,
   RecruitmentListQuery,
   ResetStaffPasswordInput,
   StaffListQuery,
@@ -110,8 +113,12 @@ async function generateNextStaffCode(role: Role): Promise<string> {
     .map((code: any) => Number(code.replace(/^DA/, '')))
     .filter((n: any) => Number.isFinite(n));
 
-  const maxNumber = parsed.length ? Math.max(...parsed) : baseNumber - 1;
-  const next = Math.max(baseNumber, maxNumber + 1);
+  const usedNumbers = new Set(parsed);
+  let next = baseNumber;
+
+  while (usedNumbers.has(next)) {
+    next += 1;
+  }
 
   return `DA${String(next).padStart(4, '0')}`;
 }
@@ -807,6 +814,58 @@ function staffLookupWhere(id: string): Prisma.UserWhereInput {
   };
 }
 
+function formatStaffDocumentDate(value?: Date | string | null): string {
+  return value
+    ? new Intl.DateTimeFormat('en-GB', { month: 'long', day: 'numeric', year: 'numeric' }).format(new Date(value))
+    : '';
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function uploadedFileSizeLabel(url?: string | null): string {
+  if (!url?.startsWith('/uploads/')) return '';
+
+  const uploadPath = path.resolve(process.cwd(), url.replace(/^\/+/, ''));
+  if (!uploadPath.startsWith(path.resolve(process.cwd(), 'uploads'))) return '';
+
+  try {
+    return formatBytes(fs.statSync(uploadPath).size);
+  } catch {
+    return '';
+  }
+}
+
+function buildStaffDocuments(profile: any) {
+  const documents = [];
+  const date = formatStaffDocumentDate(profile.updatedAt);
+
+  if (profile.photoUrl) {
+    documents.push({
+      type: 'image',
+      title: 'Photo',
+      date,
+      size: uploadedFileSizeLabel(profile.photoUrl),
+      url: profile.photoUrl
+    });
+  }
+
+  if (profile.cvFileUrl) {
+    documents.push({
+      type: 'doc',
+      title: 'CV',
+      date,
+      size: uploadedFileSizeLabel(profile.cvFileUrl),
+      url: profile.cvFileUrl
+    });
+  }
+
+  return documents;
+}
+
 function serializeStaff(user: any) {
   const profile = user.staffProfile ?? {};
   const firstName = profile.firstName ?? '';
@@ -829,19 +888,7 @@ function serializeStaff(user: any) {
     zone: profile.zone ?? '',
     vehicle: ownsCarToVehicle(profile.ownsCar),
     address: profile.address ?? '',
-    documents: profile.cvFileUrl
-      ? [
-          {
-            type: 'doc',
-            title: 'CV',
-            date: profile.updatedAt
-              ? new Intl.DateTimeFormat('en-GB', { month: 'long', day: 'numeric', year: 'numeric' }).format(new Date(profile.updatedAt))
-              : '',
-            size: '',
-            url: profile.cvFileUrl
-          }
-        ]
-      : []
+    documents: buildStaffDocuments(profile)
   };
 }
 
@@ -948,7 +995,11 @@ async function getStaffById(id: string) {
   return serializeStaff(staff);
 }
 
-async function provisionStaffCredentials(id: string, actorUserId: string) {
+async function provisionStaffCredentials(
+  id: string,
+  input: ProvisionStaffCredentialsInput,
+  actorUserId: string
+) {
   const staff = await db.user.findFirst({
     where: staffLookupWhere(id),
     select: {
@@ -973,17 +1024,25 @@ async function provisionStaffCredentials(id: string, actorUserId: string) {
     throw new ApiError(400, 'Staff profile is incomplete and cannot provision credentials');
   }
 
-  const hasWorkEmail = staff.email.endsWith('@dailyassistuk.com');
-  const nextEmail = hasWorkEmail
-    ? staff.email
-    : await generateUniqueWorkEmail(staff.staffProfile.firstName, staff.staffProfile.lastName, staff.id);
+  const requestedEmail = input.email ? normalizeEmail(input.email) : undefined;
+  const nextEmail = requestedEmail
+    ?? (staff.email.endsWith('@dailyassistuk.com')
+      ? staff.email
+      : await generateUniqueWorkEmail(staff.staffProfile.firstName, staff.staffProfile.lastName, staff.id));
 
-  const tempPassword = generateTempPassword();
-  const passwordHash = await hashPassword(tempPassword);
+  if (nextEmail !== staff.email) {
+    const existingUser = await db.user.findFirst({
+      where: { email: nextEmail, id: { not: staff.id } },
+      select: { id: true }
+    });
 
-  const rawToken = crypto.randomBytes(32).toString('hex');
-  const tokenHash = hashValue(rawToken);
-  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    if (existingUser) {
+      throw new ApiError(409, 'Email address is already in use');
+    }
+  }
+
+  const password = input.password ?? generateTempPassword();
+  const passwordHash = await hashPassword(password);
 
   await db.$transaction(async (tx: any) => {
     await tx.user.update({
@@ -1003,18 +1062,13 @@ async function provisionStaffCredentials(id: string, actorUserId: string) {
     await tx.passwordResetToken.deleteMany({
       where: { userId: staff.id, usedAt: null }
     });
-
-    await tx.passwordResetToken.create({
-      data: {
-        userId: staff.id,
-        tokenHash,
-        expiresAt
-      }
-    });
   });
 
-  const resetUrl = `${env.FRONTEND_URL}/reset-password?token=${rawToken}`;
-  await sendPasswordResetEmail(nextEmail, resetUrl);
+  await sendStaffCredentialsEmail({
+    to: nextEmail,
+    email: nextEmail,
+    password
+  });
 
   await recordAuditLog({
     actorUserId,
@@ -1023,9 +1077,10 @@ async function provisionStaffCredentials(id: string, actorUserId: string) {
     entityId: staff.id,
     metadataJson: {
       email: nextEmail,
-      emailRegenerated: !hasWorkEmail,
-      onboardingEmailSent: true,
-      deliveryMode: 'reset_link_only'
+      emailRegenerated: nextEmail !== staff.email,
+      passwordProvidedByAdmin: Boolean(input.password),
+      credentialsEmailSent: true,
+      deliveryMode: 'direct_credentials'
     }
   });
 
@@ -1034,9 +1089,9 @@ async function provisionStaffCredentials(id: string, actorUserId: string) {
     userId: staff.id,
     email: nextEmail,
     credentialsProvisioned: true,
-    onboardingEmailSent: true,
-    passwordDelivery: 'reset_link_only' as const,
-    emailRegenerated: !hasWorkEmail
+    credentialsEmailSent: true,
+    passwordDelivery: 'direct_credentials' as const,
+    emailRegenerated: nextEmail !== staff.email
   };
 }
 
@@ -1130,8 +1185,7 @@ async function deleteStaff(id: string) {
     where: staffLookupWhere(id),
     select: {
       id: true,
-      staffCode: true,
-      status: true
+      staffCode: true
     }
   });
 
@@ -1139,29 +1193,45 @@ async function deleteStaff(id: string) {
     throw new ApiError(404, 'Staff user not found');
   }
 
-  if (staff.status === UserStatus.INACTIVE) {
-    return {
-      id: staff.staffCode ?? staff.id,
-      userId: staff.id,
-      status: userStatusToFrontendStatus(staff.status)
-    };
-  }
+  await db.$transaction(async (tx: any) => {
+    const staffVisits = await tx.visit.findMany({
+      where: { staffId: staff.id },
+      select: { id: true }
+    });
+    const staffVisitIds = staffVisits.map((visit: { id: string }) => visit.id);
 
-  await db.$transaction([
-    db.user.update({
-      where: { id: staff.id },
-      data: { status: UserStatus.INACTIVE }
-    }),
-    db.refreshToken.updateMany({
-      where: { userId: staff.id, revokedAt: null },
-      data: { revokedAt: new Date() }
-    })
-  ]);
+    if (staffVisitIds.length > 0) {
+      await tx.visitEvent.deleteMany({ where: { visitId: { in: staffVisitIds } } });
+      await tx.visit.deleteMany({ where: { id: { in: staffVisitIds } } });
+    }
+
+    const staffConversations = await tx.conversation.findMany({
+      where: { staffId: staff.id },
+      select: { id: true }
+    });
+    const staffConversationIds = staffConversations.map((conversation: { id: string }) => conversation.id);
+
+    if (staffConversationIds.length > 0) {
+      await tx.message.deleteMany({ where: { conversationId: { in: staffConversationIds } } });
+      await tx.conversation.deleteMany({ where: { id: { in: staffConversationIds } } });
+    }
+
+    await tx.message.deleteMany({ where: { senderUserId: staff.id } });
+    await tx.visitEvent.deleteMany({ where: { actorUserId: staff.id } });
+    await tx.announcement.deleteMany({ where: { createdBy: staff.id } });
+    await tx.booking.updateMany({ where: { assignedStaffId: staff.id }, data: { assignedStaffId: null, assignedAt: null } });
+    await tx.booking.updateMany({ where: { assignedBy: staff.id }, data: { assignedBy: null } });
+    await tx.report.deleteMany({ where: { createdBy: staff.id } });
+    await tx.report.updateMany({ where: { updatedBy: staff.id }, data: { updatedBy: null } });
+    await tx.systemSetting.updateMany({ where: { updatedBy: staff.id }, data: { updatedBy: null } });
+    await tx.auditLog.updateMany({ where: { actorUserId: staff.id }, data: { actorUserId: null } });
+    await tx.user.delete({ where: { id: staff.id } });
+  });
 
   return {
     id: staff.staffCode ?? staff.id,
     userId: staff.id,
-    status: 'unavailable' as const
+    deleted: true
   };
 }
 

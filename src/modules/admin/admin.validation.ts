@@ -206,6 +206,11 @@ const staffFormSchema = z.object({
 
 export const createStaffSchema = staffFormSchema;
 
+export const provisionStaffCredentialsSchema = z.object({
+  email: optionalEmail,
+  password: passwordSchema.optional()
+});
+
 export const resetStaffPasswordSchema = z.object({
   newPassword: passwordSchema
 });
@@ -249,6 +254,7 @@ export type CreateClientInput = z.infer<typeof createClientSchema>;
 export type UpdateClientInput = z.infer<typeof updateClientSchema>;
 export type StaffListQuery = z.infer<typeof staffListQuerySchema>;
 export type CreateStaffInput = z.infer<typeof createStaffSchema>;
+export type ProvisionStaffCredentialsInput = z.infer<typeof provisionStaffCredentialsSchema>;
 export type ResetStaffPasswordInput = z.infer<typeof resetStaffPasswordSchema>;
 export type UpdateStaffInput = z.infer<typeof updateStaffSchema>;
 export type RecruitmentListQuery = z.infer<typeof recruitmentListQuerySchema>;
