@@ -200,6 +200,45 @@ export const schemas: SchemasMap = {
     }
   },
 
+
+
+  BookingListItem: {
+    type: 'object',
+    properties: {
+      id: { type: 'string' },
+      status: { type: 'string', enum: ['pending', 'contacted', 'assigned', 'completed', 'cancelled'] },
+      clientName: { type: 'string' },
+      serviceRequest: { type: 'string' },
+      phone: { type: 'string' },
+      address: { type: 'string' },
+      date: { type: 'string', format: 'date' }
+    }
+  },
+
+  Booking: {
+    type: 'object',
+    properties: {
+      id: { type: 'string' },
+      status: { type: 'string', enum: ['pending', 'contacted', 'assigned', 'completed', 'cancelled'] },
+      clientName: { type: 'string' },
+      email: { type: 'string', format: 'email' },
+      phone: { type: 'string' },
+      address: { type: 'string' },
+      date: { type: 'string', format: 'date' },
+      emergencyContact: { type: 'object' },
+      service: { type: 'object' },
+      selectedServiceTypes: { type: 'array', items: { type: 'string', enum: ['Home-Help (cleaning, tidying, laundry)', 'Errands & Shopping Support', 'Welfare Check-Ins & Companionship', 'Appointment Escort/Transport', 'Light Gardening & Practical Tasks', 'Community Access Support', 'Light Meal Preparation'] } },
+      selectedAdditional: { type: 'array', items: { type: 'string', enum: ['One-off Deep Clean', 'End of Tenancy Cleaning', 'Building Construction Cleaning'] } },
+      preferredDays: { type: 'array', items: { type: 'string', enum: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] } },
+      preferredTime: { type: 'string', enum: ['8:00 Am', '9:00 Am', '10:00 Am', '11:00 Am', '12:00 Pm', '1:00 Pm', '2:00 Pm', '3:00 Pm', '4:00 Pm', '5:00 Pm', '6:00 Pm'] },
+      preferredStartDate: { type: 'string' },
+      assignedStaffId: { type: 'string', nullable: true },
+      assignedStaffName: { type: 'string', nullable: true },
+      pricingAdjustment: { type: 'number', nullable: true },
+      mileageFee: { type: 'number', nullable: true }
+    }
+  },
+
   // ── Phase 2: Consultation + Public Booking ─────────────────────────────────────
 
   ConsultationRequest: {
@@ -276,7 +315,7 @@ export const schemas: SchemasMap = {
     type: "object",
     properties: {
       id: { type: "string", format: "uuid" },
-      status: { type: "string", enum: ["REQUESTED","ASSIGNED","IN_PROGRESS","COMPLETED","CANCELLED"] },
+      status: { type: "string", enum: ["pending","contacted","assigned","completed","cancelled"] },
       createdAt: { type: "string", format: "date-time" }
     }
   },

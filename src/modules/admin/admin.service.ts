@@ -232,6 +232,101 @@ async function deletePackage(id: string) {
   await db.package.delete({ where: { id } });
 }
 
+
+const apiStatusToDb: Record<string, BookingStatus | 'CONTACTED'> = {
+  pending: BookingStatus.REQUESTED,
+  contacted: 'CONTACTED',
+  assigned: BookingStatus.ASSIGNED,
+  completed: BookingStatus.COMPLETED,
+  cancelled: BookingStatus.CANCELLED
+};
+
+function dbStatusToApi(status: string): string {
+  if (status === BookingStatus.REQUESTED) return 'pending';
+  return status.toLowerCase();
+}
+
+function staffDisplayName(staff?: any): string | null {
+  if (!staff) return null;
+  const profile = staff.staffProfile;
+  const name = profile ? [profile.firstName, profile.lastName].filter(Boolean).join(' ').trim() : '';
+  return name || staff.email || null;
+}
+
+function dateOnly(value?: Date | string | null): string {
+  return value ? new Date(value).toISOString().slice(0, 10) : '';
+}
+
+function planSnapshot(booking: any): any {
+  return booking.selectedPlanSnapshot && typeof booking.selectedPlanSnapshot === 'object' ? booking.selectedPlanSnapshot : {};
+}
+
+function serializeBookingDetail(booking: any) {
+  const clientName = [booking.client?.firstName, booking.client?.lastName].filter(Boolean).join(' ').trim();
+  const snapshot = planSnapshot(booking);
+  const selected = (booking.bookingServices ?? []).filter((s: any) => s.serviceType === 'SELECTED').map((s: any) => s.serviceNameSnapshot);
+  const additional = (booking.bookingServices ?? []).filter((s: any) => s.serviceType === 'ADDITIONAL').map((s: any) => s.serviceNameSnapshot);
+  return {
+    id: booking.id,
+    clientId: booking.clientId,
+    status: dbStatusToApi(booking.status),
+    clientName,
+    email: booking.client?.email ?? '',
+    phone: booking.client?.phone ?? '',
+    address: booking.client?.address ?? '',
+    date: dateOnly(booking.createdAt),
+    emergencyContact: {
+      name: booking.emergencyContactName ?? booking.client?.emergencyContactName ?? '',
+      phone: booking.emergencyContactPhone ?? booking.client?.emergencyContactPhone ?? '',
+      relationship: booking.emergencyContactRelationship ?? booking.client?.emergencyContactRelationship ?? ''
+    },
+    service: {
+      name: snapshot.serviceName ?? snapshot.packageName ?? booking.package?.name ?? '',
+      price: snapshot.servicePrice ?? '',
+      frequency: snapshot.serviceFrequency ?? '',
+      visitsPerWeek: snapshot.visitsPerWeek ?? '',
+      transportMileage: snapshot.transportMileage ?? ''
+    },
+    selectedServiceTypes: selected.length ? selected : (snapshot.selectedServices ?? []),
+    selectedAdditional: additional.length ? additional : (snapshot.additionalServices ?? []),
+    preferredDays: snapshot.preferredDays ?? [],
+    preferredTime: booking.preferredTime ?? '',
+    preferredStartDate: dateOnly(booking.startDate),
+    assignedStaffId: booking.assignedStaffId ?? null,
+    assignedStaffName: staffDisplayName(booking.assignedStaff),
+    pricingAdjustment: snapshot.pricingAdjustment ?? null,
+    mileageFee: snapshot.mileageFee ?? null
+  };
+}
+
+function serializeBookingListItem(booking: any) {
+  const detail = serializeBookingDetail({ ...booking, bookingServices: booking.bookingServices ?? [] });
+  return {
+    id: detail.id,
+    status: detail.status,
+    clientName: detail.clientName,
+    serviceRequest: detail.selectedServiceTypes[0] ?? detail.service.name,
+    phone: detail.phone,
+    address: detail.address,
+    date: detail.date
+  };
+}
+
+function combineDateAndTime(dateValue?: Date | string | null, timeValue?: string | null): Date {
+  const date = dateValue ? dateOnly(dateValue) : dateOnly(new Date());
+  const parsed = new Date(`${date}T09:00:00.000Z`);
+  const match = timeValue?.match(/^(\d{1,2}):(\d{2})\s*(Am|Pm)$/i);
+  if (match) {
+    let hours = Number(match[1]);
+    const minutes = Number(match[2]);
+    const suffix = match[3].toLowerCase();
+    if (suffix === 'pm' && hours !== 12) hours += 12;
+    if (suffix === 'am' && hours === 12) hours = 0;
+    parsed.setUTCHours(hours, minutes, 0, 0);
+  }
+  return parsed;
+}
+
 const bookingInclude = {
   client: {
     select: {
@@ -239,7 +334,11 @@ const bookingInclude = {
       firstName: true,
       lastName: true,
       email: true,
-      phone: true
+      phone: true,
+      address: true,
+      emergencyContactName: true,
+      emergencyContactPhone: true,
+      emergencyContactRelationship: true
     }
   },
   package: {
@@ -249,6 +348,7 @@ const bookingInclude = {
       slug: true
     }
   },
+  bookingServices: { select: { serviceNameSnapshot: true, serviceType: true } },
   assignedStaff: {
     select: {
       id: true,
@@ -330,7 +430,7 @@ async function getDashboardAlerts() {
 
 async function listBookings(filters: BookingListQuery) {
   const where: Prisma.BookingWhereInput = {};
-  if (filters.status) where.status = filters.status;
+  if (filters.status) where.status = (apiStatusToDb as any)[filters.status as any] ?? filters.status;
   if (filters.clientId) where.clientId = filters.clientId;
   if (filters.assignedStaffId) where.assignedStaffId = filters.assignedStaffId;
 
@@ -349,7 +449,7 @@ async function listBookings(filters: BookingListQuery) {
     })
   ]);
 
-  return buildPaginatedResult(items, total, page, limit);
+  return { data: items.map(serializeBookingListItem), items: items.map(serializeBookingListItem), pagination: buildPaginatedResult([], total, page, limit).pagination };
 }
 
 async function getBookingById(id: string) {
@@ -373,7 +473,7 @@ async function getBookingById(id: string) {
     throw new ApiError(404, 'Booking not found');
   }
 
-  return booking;
+  return serializeBookingDetail(booking);
 }
 
 async function assignBooking(id: string, input: AssignBookingInput, actorUserId: string) {
@@ -467,13 +567,16 @@ async function completeBooking(id: string, _input: CompleteBookingInput) {
   });
 }
 
-async function updateBooking(id: string, input: UpdateBookingInput) {
-  const booking = await db.booking.findUnique({ where: { id }, select: { id: true } });
+async function updateBooking(id: string, input: UpdateBookingInput, actorUserId?: string) {
+  const booking = await db.booking.findUnique({ where: { id }, include: { ...bookingInclude, bookingServices: true, visits: true } });
   if (!booking) {
     throw new ApiError(404, 'Booking not found');
   }
 
   const data: Prisma.BookingUpdateInput = {};
+  if (input.status !== undefined) data.status = (apiStatusToDb as any)[input.status] ?? input.status;
+  if (input.confirmedStartDate !== undefined) data.startDate = input.confirmedStartDate;
+  if (input.confirmedTime !== undefined) data.preferredTime = input.confirmedTime;
   if (input.preferredDate !== undefined) data.preferredDate = input.preferredDate;
   if (input.preferredTime !== undefined) data.preferredTime = input.preferredTime;
   if (input.startDate !== undefined) data.startDate = input.startDate;
@@ -486,7 +589,34 @@ async function updateBooking(id: string, input: UpdateBookingInput) {
     data.emergencyContactRelationship = input.emergencyContactRelationship;
   }
 
-  return db.booking.update({ where: { id }, data, include: bookingInclude });
+  if (input.pricingAdjustment !== undefined || input.mileageFee !== undefined) {
+    data.selectedPlanSnapshot = { ...planSnapshot(booking), ...(input.pricingAdjustment !== undefined ? { pricingAdjustment: input.pricingAdjustment } : {}), ...(input.mileageFee !== undefined ? { mileageFee: input.mileageFee } : {}) };
+  }
+
+  if (input.status === 'assigned') {
+    if (booking.status === BookingStatus.ASSIGNED || booking.visits.length > 0) throw new ApiError(409, 'Booking is already assigned');
+    if (!input.staffId) throw new ApiError(400, 'staffId is required when assigning a booking');
+    const staffUser = await db.user.findFirst({ where: { id: input.staffId, role: Role.STAFF, status: UserStatus.ACTIVE }, select: { id: true } });
+    if (!staffUser) throw new ApiError(404, 'Active staff user not found');
+    (data as any).assignedStaffId = input.staffId;
+    (data as any).assignedBy = actorUserId ?? null;
+    data.assignedAt = new Date();
+    const start = combineDateAndTime(input.confirmedStartDate ?? input.startDate ?? booking.startDate ?? booking.createdAt, input.confirmedTime ?? input.preferredTime ?? booking.preferredTime);
+    const end = new Date(start.getTime() + 60 * 60 * 1000);
+    await db.$transaction(async (tx: any) => {
+      await tx.booking.update({ where: { id }, data });
+      await tx.visit.create({ data: { bookingId: id, staffId: input.staffId, scheduledStartAt: start, scheduledEndAt: end } });
+    });
+  } else if (input.status === 'cancelled') {
+    await db.$transaction(async (tx: any) => {
+      await tx.visit.deleteMany({ where: { bookingId: id } });
+      await tx.booking.update({ where: { id }, data });
+    });
+  } else {
+    await db.booking.update({ where: { id }, data });
+  }
+
+  return getBookingById(id);
 }
 
 function frontendClientSexToDbSex(sex?: string): string | null | undefined {
