@@ -559,11 +559,11 @@ export const adminPaths: OpenAPIV3.PathsObject = {
     },
     delete: {
       tags: ['Admin — Staff'],
-      summary: 'Deactivate staff',
-      description: 'Soft-deactivates a staff account. This endpoint is documented because the frontend delete buttons need a backend action.',
+      summary: 'Delete staff',
+      description: 'Permanently deletes a staff account and frees its staff code for future reassignment. Related staff-owned operational records are cleaned up or unassigned as needed.',
       security: adminSecurity,
       parameters: [{ ...idParam, schema: { type: 'string' } }],
-      responses: { '200': { description: 'Staff deactivated' } }
+      responses: { '200': { description: 'Staff deleted' } }
     }
   },
   '/admin/staff/{id}/visits': {
@@ -580,9 +580,25 @@ export const adminPaths: OpenAPIV3.PathsObject = {
     post: {
       tags: ['Admin — Staff'],
       summary: 'Provision staff dashboard credentials',
+      description: 'Saves admin-generated staff credentials. If email or password is omitted, the backend generates it. The saved credentials are emailed directly to the staff member.',
       security: adminSecurity,
       parameters: [idParam],
-      responses: { '200': { description: 'Staff credentials provisioned' } }
+      requestBody: {
+        required: false,
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              properties: {
+                email: { type: 'string', format: 'email', description: 'Optional admin-generated staff login email.' },
+                password: { type: 'string', minLength: 8, description: 'Optional admin-generated staff login password.' }
+              }
+            },
+            example: { email: 'jane.doe@dailyassistuk.com', password: 'TempPass123' }
+          }
+        }
+      },
+      responses: { '200': { description: 'Staff credentials provisioned and emailed' } }
     }
   },
   '/admin/staff/{id}/reset-password': {

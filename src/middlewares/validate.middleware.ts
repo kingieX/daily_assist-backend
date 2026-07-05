@@ -9,17 +9,30 @@ interface ValidationSchema {
   params?: ZodTypeAny;
 }
 
+function setValidatedRequestValue<Key extends 'body' | 'query' | 'params'>(
+  req: Request,
+  key: Key,
+  value: Request[Key]
+): void {
+  Object.defineProperty(req, key, {
+    value,
+    writable: true,
+    configurable: true,
+    enumerable: true
+  });
+}
+
 export function validate(schema: ValidationSchema): RequestHandler {
   return (req: Request, _res: Response, next: NextFunction): void => {
     try {
       if (schema.body) {
-        req.body = schema.body.parse(req.body) as Request['body'];
+        setValidatedRequestValue(req, 'body', schema.body.parse(req.body) as Request['body']);
       }
       if (schema.query) {
-        req.query = schema.query.parse(req.query) as Request['query'];
+        setValidatedRequestValue(req, 'query', schema.query.parse(req.query) as Request['query']);
       }
       if (schema.params) {
-        req.params = schema.params.parse(req.params) as Request['params'];
+        setValidatedRequestValue(req, 'params', schema.params.parse(req.params) as Request['params']);
       }
       next();
     } catch (error) {

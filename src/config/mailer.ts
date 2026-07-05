@@ -72,6 +72,43 @@ export async function sendPasswordResetEmail(
   logger.info({ to }, "Password reset email sent");
 }
 
+
+export type StaffCredentialsEmailInput = {
+  to: string;
+  email: string;
+  password: string;
+};
+
+export async function sendStaffCredentialsEmail(input: StaffCredentialsEmailInput): Promise<void> {
+  const subject = "DailyAssist — Staff Dashboard Credentials";
+  const html = `
+    <p>Hello,</p>
+    <p>Your DailyAssist staff dashboard credentials have been created.</p>
+    <p><strong>Email:</strong> ${input.email}</p>
+    <p><strong>Temporary password:</strong> ${input.password}</p>
+    <p>Please keep these details secure.</p>
+    <br/>
+    <p>— The DailyAssist Team</p>
+  `;
+
+  if (!transporter) {
+    logger.info(
+      { to: input.to, email: input.email, password: input.password },
+      "[DEV] Staff credentials email not sent — Mailtrap/SMTP config not set.",
+    );
+    return;
+  }
+
+  await transporter.sendMail({
+    from: env.EMAIL_FROM,
+    to: input.to,
+    subject,
+    html,
+  });
+
+  logger.info({ to: input.to }, "Staff credentials email sent");
+}
+
 export type BookingInquiryEmailInput = {
   fullName: string;
   email: string;

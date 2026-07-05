@@ -5,6 +5,13 @@ import {
   UserStatus
 } from '@prisma/client';
 import { z } from 'zod';
+import {
+  emptyStringToUndefined,
+  optionalQueryBoolean,
+  optionalQueryUuid,
+  queryLimit,
+  queryPage
+} from '../../utils/query-validation';
 
 const optionalTrimmedString = z.preprocess(
   (value) => {
@@ -25,8 +32,8 @@ const optionalEmail = z.preprocess(
 );
 
 const paginationSchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(100).default(20)
+  page: queryPage(),
+  limit: queryLimit()
 });
 
 const sexSchema = z.enum(['MALE', 'FEMALE', 'OTHER', 'PREFER_NOT_TO_SAY']);
@@ -63,7 +70,7 @@ export const clientIdParamSchema = z.object({
   id: z.string().trim().min(1, 'Invalid client ID')
 });
 
-const sortOrderSchema = z.enum(['asc', 'desc']).default('desc');
+const sortOrderSchema = z.preprocess(emptyStringToUndefined, z.enum(['asc', 'desc']).default('desc'));
 
 const packageIconSchema = z.preprocess(
   (value) => (typeof value === 'string' ? value.trim().toLowerCase() : value),
@@ -73,8 +80,11 @@ const packageDurationSchema = z.enum(['per hour', 'per week', 'per month', 'per 
 const packageFeatureSchema = z.array(z.string().trim().min(1).max(160)).max(10, 'A package can have at most 10 features').default([]);
 
 export const packageListQuerySchema = paginationSchema.extend({
-  isActive: z.coerce.boolean().optional(),
-  sortBy: z.enum(['createdAt', 'updatedAt', 'displayOrder', 'name']).default('displayOrder'),
+  isActive: optionalQueryBoolean(),
+  sortBy: z.preprocess(
+    emptyStringToUndefined,
+    z.enum(['createdAt', 'updatedAt', 'displayOrder', 'name']).default('displayOrder')
+  ),
   sortOrder: sortOrderSchema
 });
 
@@ -98,10 +108,10 @@ export const updatePackageSchema = createPackageSchema.partial().refine((data) =
 const bookingSortBySchema = z.enum(['createdAt', 'preferredDate', 'updatedAt']).default('createdAt');
 
 export const bookingListQuerySchema = paginationSchema.extend({
-  status: z.nativeEnum(BookingStatus).optional(),
-  clientId: z.string().uuid('Invalid client ID').optional(),
-  assignedStaffId: z.string().uuid('Invalid staff ID').optional(),
-  sortBy: bookingSortBySchema,
+  status: z.preprocess(emptyStringToUndefined, z.nativeEnum(BookingStatus).optional()),
+  clientId: optionalQueryUuid('Invalid client ID'),
+  assignedStaffId: optionalQueryUuid('Invalid staff ID'),
+  sortBy: z.preprocess(emptyStringToUndefined, bookingSortBySchema),
   sortOrder: sortOrderSchema
 });
 
@@ -135,8 +145,8 @@ const clientSortBySchema = z.enum(['createdAt', 'updatedAt', 'firstName']).defau
 
 export const clientListQuerySchema = z
   .object({
-    status: z.nativeEnum(ClientStatus).optional(),
-    sortBy: clientSortBySchema.optional(),
+    status: z.preprocess(emptyStringToUndefined, z.nativeEnum(ClientStatus).optional()),
+    sortBy: z.preprocess(emptyStringToUndefined, clientSortBySchema.optional()),
     sortOrder: sortOrderSchema.optional()
   })
   .partial()
@@ -168,8 +178,11 @@ const staffSortBySchema = z.enum(['createdAt', 'updatedAt', 'lastLoginAt', 'emai
 
 export const staffListQuerySchema = z
   .object({
-    status: z.union([z.nativeEnum(UserStatus), frontendStaffStatusSchema]).optional(),
-    sortBy: staffSortBySchema.optional(),
+    status: z.preprocess(
+      emptyStringToUndefined,
+      z.union([z.nativeEnum(UserStatus), frontendStaffStatusSchema]).optional()
+    ),
+    sortBy: z.preprocess(emptyStringToUndefined, staffSortBySchema.optional()),
     sortOrder: sortOrderSchema.optional()
   })
   .partial()
@@ -193,17 +206,23 @@ const staffFormSchema = z.object({
 
 export const createStaffSchema = staffFormSchema;
 
+export const provisionStaffCredentialsSchema = z.object({
+  email: optionalEmail,
+  password: passwordSchema.optional()
+});
+
 export const resetStaffPasswordSchema = z.object({
   newPassword: passwordSchema
 });
 
-export const updateStaffSchema = staffFormSchema.partial().refine((data) => Object.keys(data).length > 0, {
-  message: 'At least one field must be provided for update'
-});
+export const updateStaffSchema = staffFormSchema.partial();
 
 export const recruitmentListQuerySchema = paginationSchema.extend({
-  status: z.nativeEnum(ApplicationStatus).optional(),
-  sortBy: z.enum(['createdAt', 'updatedAt', 'status']).default('createdAt'),
+  status: z.preprocess(emptyStringToUndefined, z.nativeEnum(ApplicationStatus).optional()),
+  sortBy: z.preprocess(
+    emptyStringToUndefined,
+    z.enum(['createdAt', 'updatedAt', 'status']).default('createdAt')
+  ),
   sortOrder: sortOrderSchema
 });
 
@@ -233,6 +252,7 @@ export type CreateClientInput = z.infer<typeof createClientSchema>;
 export type UpdateClientInput = z.infer<typeof updateClientSchema>;
 export type StaffListQuery = z.infer<typeof staffListQuerySchema>;
 export type CreateStaffInput = z.infer<typeof createStaffSchema>;
+export type ProvisionStaffCredentialsInput = z.infer<typeof provisionStaffCredentialsSchema>;
 export type ResetStaffPasswordInput = z.infer<typeof resetStaffPasswordSchema>;
 export type UpdateStaffInput = z.infer<typeof updateStaffSchema>;
 export type RecruitmentListQuery = z.infer<typeof recruitmentListQuerySchema>;

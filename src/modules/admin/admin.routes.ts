@@ -20,6 +20,7 @@ import {
   createPackageSchema,
   createStaffSchema,
   idParamSchema,
+  provisionStaffCredentialsSchema,
   packageListQuerySchema,
   recruitmentListQuerySchema,
   resetStaffPasswordSchema,
@@ -99,7 +100,7 @@ adminRouter.get('/staff/:id', validate({ params: staffIdParamSchema }), adminCon
 adminRouter.get('/staff/:id/visits', validate({ params: staffIdParamSchema }), adminController.listStaffVisits);
 adminRouter.post(
   '/staff/:id/provision-credentials',
-  validate({ params: staffIdParamSchema }),
+  validate({ params: staffIdParamSchema, body: provisionStaffCredentialsSchema }),
   adminController.provisionStaffCredentials
 );
 adminRouter.post(
