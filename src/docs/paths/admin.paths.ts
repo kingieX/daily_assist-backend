@@ -284,7 +284,7 @@ export const adminPaths: OpenAPIV3.PathsObject = {
     get: {
       tags: ['Admin — Bookings'],
       summary: 'List bookings',
-      description: 'Returns paginated bookings with stable sorting and optional filters.',
+      description: 'Returns bookings for the frontend list. Filtering/searching is client-side; each row includes serviceRequest and an ISO date.',
       security: adminSecurity,
       parameters: [
         ...paginationParameters,
@@ -293,7 +293,7 @@ export const adminPaths: OpenAPIV3.PathsObject = {
           in: 'query',
           schema: {
             type: 'string',
-            enum: ['REQUESTED', 'ASSIGNED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED']
+            enum: ['pending', 'contacted', 'assigned', 'completed', 'cancelled']
           }
         },
         { name: 'clientId', in: 'query', schema: { type: 'string', format: 'uuid' } },
@@ -310,7 +310,7 @@ export const adminPaths: OpenAPIV3.PathsObject = {
         }
       ],
       responses: {
-        '200': { description: 'Bookings retrieved' },
+        '200': { description: 'Bookings retrieved', content: { 'application/json': { schema: { allOf: [{ $ref: '#/components/schemas/SuccessResponse' }, { type: 'object', properties: { data: { type: 'object', properties: { data: { type: 'array', items: { $ref: '#/components/schemas/BookingListItem' } } } } } }] } } } },
         '401': { $ref: '#/components/responses/UnauthorizedError' },
         '403': { $ref: '#/components/responses/ForbiddenError' }
       }
@@ -323,15 +323,17 @@ export const adminPaths: OpenAPIV3.PathsObject = {
       security: adminSecurity,
       parameters: [idParam],
       responses: {
-        '200': { description: 'Booking retrieved' },
+        '200': { description: 'Booking retrieved', content: { 'application/json': { schema: { allOf: [{ $ref: '#/components/schemas/SuccessResponse' }, { type: 'object', properties: { data: { $ref: '#/components/schemas/Booking' } } }] } } } },
         '401': { $ref: '#/components/responses/UnauthorizedError' },
         '403': { $ref: '#/components/responses/ForbiddenError' },
-        '404': { $ref: '#/components/responses/NotFound' }
+        '404': { $ref: '#/components/responses/NotFound' },
+        '409': { description: 'Booking is already assigned' }
       }
     },
     patch: {
       tags: ['Admin — Bookings'],
-      summary: 'Update mutable booking fields',
+      summary: 'Update/manage booking',
+      description: 'Handles status changes, staff assignment, pricing, approval, cancellation, and completion. status=assigned with staffId stores assigned staff and creates a visit; duplicate assignment returns 409. status=cancelled removes associated visits and is the cancellation-notification trigger point.',
       security: adminSecurity,
       parameters: [idParam],
       requestBody: {
@@ -341,6 +343,12 @@ export const adminPaths: OpenAPIV3.PathsObject = {
             schema: {
               type: 'object',
               properties: {
+                status: { type: 'string', enum: ['pending', 'contacted', 'assigned', 'completed', 'cancelled'] },
+                staffId: { type: 'string', format: 'uuid', description: 'Staff.userId from GET /admin/staff; populate the Assign To dropdown from that endpoint, not a static list.' },
+                pricingAdjustment: { type: 'number' },
+                mileageFee: { type: 'number' },
+                confirmedStartDate: { type: 'string', format: 'date' },
+                confirmedTime: { type: 'string' },
                 preferredDate: { type: 'string', format: 'date-time' },
                 preferredTime: { type: 'string' },
                 startDate: { type: 'string', format: 'date-time' },

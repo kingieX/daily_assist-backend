@@ -120,6 +120,11 @@ async function submitBooking(input: CreatePublicBookingInput) {
           preferredDays: input.preferredDays,
           packageSlug: input.packageSlug ?? null,
           packageName: input.packageName ?? null,
+          serviceName: input.serviceName ?? input.packageName ?? null,
+          servicePrice: input.servicePrice ?? null,
+          serviceFrequency: input.serviceFrequency ?? null,
+          visitsPerWeek: input.visitsPerWeek ?? null,
+          transportMileage: input.transportMileage ?? null,
           selectedServices: selectedServiceNames,
           additionalServices: additionalServiceNames
         },
@@ -132,7 +137,7 @@ async function submitBooking(input: CreatePublicBookingInput) {
         agreeToTerms: input.agreeToTerms,
         consentToDailyassist: input.consentToDailyassist
       },
-      select: { id: true, status: true, createdAt: true }
+      include: { client: true, package: true, bookingServices: true, assignedStaff: { include: { staffProfile: true } } }
     });
 
     const bookingServicesData: Prisma.BookingServiceCreateManyInput[] = [];
@@ -173,7 +178,26 @@ async function submitBooking(input: CreatePublicBookingInput) {
       await tx.bookingService.createMany({ data: bookingServicesData });
     }
 
-    return booking;
+    return {
+      id: booking.id,
+      status: 'pending',
+      clientName: `${booking.client.firstName} ${booking.client.lastName}`.trim(),
+      email: booking.client.email ?? '',
+      phone: booking.client.phone,
+      address: booking.client.address ?? '',
+      date: booking.createdAt.toISOString().slice(0, 10),
+      emergencyContact: { name: booking.emergencyContactName ?? '', phone: booking.emergencyContactPhone ?? '', relationship: booking.emergencyContactRelationship ?? '' },
+      service: { name: (booking.selectedPlanSnapshot as any)?.serviceName ?? booking.package?.name ?? '', price: (booking.selectedPlanSnapshot as any)?.servicePrice ?? '', frequency: (booking.selectedPlanSnapshot as any)?.serviceFrequency ?? '', visitsPerWeek: (booking.selectedPlanSnapshot as any)?.visitsPerWeek ?? '', transportMileage: (booking.selectedPlanSnapshot as any)?.transportMileage ?? '' },
+      selectedServiceTypes: selectedServiceNames,
+      selectedAdditional: additionalServiceNames,
+      preferredDays: input.preferredDays,
+      preferredTime: input.preferredTime,
+      preferredStartDate: booking.startDate?.toISOString().slice(0, 10) ?? '',
+      assignedStaffId: null,
+      assignedStaffName: null,
+      pricingAdjustment: null,
+      mileageFee: null
+    };
   });
 }
 
