@@ -215,9 +215,7 @@ export const resetStaffPasswordSchema = z.object({
   newPassword: passwordSchema
 });
 
-export const updateStaffSchema = staffFormSchema.partial().refine((data) => Object.keys(data).length > 0, {
-  message: 'At least one field must be provided for update'
-});
+export const updateStaffSchema = staffFormSchema.partial();
 
 export const recruitmentListQuerySchema = paginationSchema.extend({
   status: z.preprocess(emptyStringToUndefined, z.nativeEnum(ApplicationStatus).optional()),

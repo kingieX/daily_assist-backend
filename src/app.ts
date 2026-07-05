@@ -33,7 +33,14 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(pinoHttp({ logger }));
-app.use('/uploads', express.static(path.resolve(process.cwd(), 'uploads')));
+app.use(
+  '/uploads',
+  (_req, res, next) => {
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    next();
+  },
+  express.static(path.resolve(process.cwd(), 'uploads'))
+);
 
 app.use('/api/v1', v1Router);
 
