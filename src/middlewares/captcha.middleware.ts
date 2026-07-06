@@ -9,7 +9,7 @@ type CaptchaVerifyResponse = {
 };
 
 function resolveCaptchaToken(req: Request): string | undefined {
-  const headerToken = req.header('x-captcha-token')?.trim();
+  const headerToken = req.header('x-captcha-token')?.trim() || req.header('x-chaptcha-token')?.trim();
   if (headerToken) return headerToken;
 
   const bodyToken = typeof req.body?.captchaToken === 'string' ? req.body.captchaToken.trim() : '';

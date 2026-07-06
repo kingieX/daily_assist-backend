@@ -99,7 +99,7 @@ const completeBooking = asyncHandler(async (req: Request, res: Response) => {
 });
 
 const updateBooking = asyncHandler(async (req: Request, res: Response) => {
-  const booking = await adminService.updateBooking(req.params.id as string, req.body);
+  const booking = await adminService.updateBooking(req.params.id as string, req.body, getActorUserId(req));
   return sendSuccess(res, 200, 'Booking updated successfully', booking);
 });
 
