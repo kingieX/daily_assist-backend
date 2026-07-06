@@ -60,3 +60,27 @@ test('public booking still accepts existing UUID-based service payloads', () => 
   assert.deepEqual(parsed.selectedServiceIds, [serviceId]);
   assert.equal(parsed.zipcode, 'SS8 0XY');
 });
+
+test('public booking accepts form-style booleans, scalar arrays, and label values in service ID fields', () => {
+  const parsed = createPublicBookingSchema.parse({
+    firstName: 'Ada',
+    lastName: 'Lovelace',
+    email: 'ada@example.com',
+    phone: '+44 7000 123456',
+    address: '1 High Street',
+    selectedServiceIds: ['Welfare Check-Ins & Companionship'],
+    additionalServiceIds: ['One-off Deep Clean'],
+    preferredDays: 'Monday',
+    preferredTime: '8:00 Am',
+    preferredStartDate: '2026-07-08',
+    agreeToTerms: 'on',
+    consentToDataProcessing: 'true'
+  });
+
+  assert.deepEqual(parsed.selectedServiceIds, []);
+  assert.deepEqual(parsed.additionalServiceIds, []);
+  assert.deepEqual(parsed.selectedServices, ['Welfare Check-Ins & Companionship']);
+  assert.deepEqual(parsed.additionalServices, ['One-off Deep Clean']);
+  assert.deepEqual(parsed.preferredDays, ['MONDAY']);
+  assert.equal(parsed.consentToDailyassist, true);
+});
