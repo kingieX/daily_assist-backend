@@ -25,14 +25,12 @@ publicRouter.post('/consultations', ...consultationMiddlewares, publicController
 publicRouter.post(
   '/bookings',
   publicFormRateLimiter,
-  requireCaptcha,
   validate({ body: createPublicBookingSchema }),
   publicController.createBooking
 );
 
 const workerApplicationMiddlewares = [
   publicFormRateLimiter,
-  requireCaptcha,
   uploadWorkerCv
 ] as const;
 

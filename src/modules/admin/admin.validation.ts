@@ -107,8 +107,10 @@ export const updatePackageSchema = createPackageSchema.partial().refine((data) =
 
 const bookingSortBySchema = z.enum(['createdAt', 'preferredDate', 'updatedAt']).default('createdAt');
 
+const apiBookingStatusSchema = z.enum(['pending', 'contacted', 'assigned', 'completed', 'cancelled']);
+
 export const bookingListQuerySchema = paginationSchema.extend({
-  status: z.preprocess(emptyStringToUndefined, z.nativeEnum(BookingStatus).optional()),
+  status: z.preprocess(emptyStringToUndefined, z.union([z.nativeEnum(BookingStatus), apiBookingStatusSchema]).optional()),
   clientId: optionalQueryUuid('Invalid client ID'),
   assignedStaffId: optionalQueryUuid('Invalid staff ID'),
   sortBy: z.preprocess(emptyStringToUndefined, bookingSortBySchema),
@@ -129,6 +131,12 @@ export const completeBookingSchema = z.object({
 
 export const updateBookingSchema = z
   .object({
+    status: apiBookingStatusSchema.optional(),
+    staffId: z.string().uuid('Invalid staff ID').optional(),
+    pricingAdjustment: z.coerce.number().optional(),
+    mileageFee: z.coerce.number().optional(),
+    confirmedStartDate: z.coerce.date().optional(),
+    confirmedTime: optionalTrimmedString,
     preferredDate: z.coerce.date().optional(),
     preferredTime: optionalTrimmedString,
     startDate: z.coerce.date().optional(),
