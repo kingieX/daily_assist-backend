@@ -166,15 +166,6 @@ export const publicPaths: OpenAPIV3.PathsObject = {
       tags: ['Public — Intake'],
       summary: 'Submit package booking request',
       description: 'Submits the public booking form and creates client + booking + booking services records. Supports the frontend form shape with postcode, service labels, package slug/name, and data-processing consent alias.',
-      parameters: [
-        {
-          name: 'x-captcha-token',
-          in: 'header',
-          required: false,
-          schema: { type: 'string' },
-          description: 'Captcha token from the frontend widget (required when CAPTCHA_SECRET is configured).'
-        }
-      ],
       requestBody: {
         required: true,
         content: {
@@ -232,9 +223,6 @@ export const publicPaths: OpenAPIV3.PathsObject = {
       description: [
         'Submits a job application for a domestic assistance worker position. No authentication required.',
         '',
-        '**Captcha:**',
-        '- Provide captcha token via `x-captcha-token` header (or `captchaToken` multipart field)',
-        '',
         '**CV upload requirements:**',
         '- Field name: `cv`',
         '- Allowed types: PDF, DOC, DOCX',
@@ -246,15 +234,6 @@ export const publicPaths: OpenAPIV3.PathsObject = {
         '',
         '**Rate limited:** 10 requests per IP per hour.'
       ].join('\n'),
-      parameters: [
-        {
-          name: 'x-captcha-token',
-          in: 'header',
-          required: false,
-          schema: { type: 'string' },
-          description: 'Captcha token from the frontend widget (required when CAPTCHA_SECRET is configured).'
-        }
-      ],
       requestBody: {
         required: true,
         content: {
