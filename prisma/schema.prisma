@@ -130,6 +130,8 @@ enum AuditAction {
 model User {
   id                   String               @id @default(uuid())
   email                String               @unique
+  businessEmail        String?              @unique @map("business_email")
+  dashboardPassword    String?              @map("dashboard_password")
   staffCode            String?              @unique @map("staff_code")
   passwordHash         String               @map("password_hash")
   role                 Role                 @default(STAFF)

@@ -506,11 +506,24 @@ export const adminPaths: OpenAPIV3.PathsObject = {
       responses: { '200': { description: 'Staff visits retrieved', content: { 'application/json': { schema: { type: 'object', properties: { success: { type: 'boolean' }, message: { type: 'string' }, data: { type: 'array', items: visitSchema } } } } } } }
     }
   },
+  '/admin/staff/{id}/credentials': {
+    get: {
+      tags: ['Admin — Staff'],
+      summary: 'Get staff dashboard credentials',
+      description: 'Returns previously provisioned staff dashboard credentials (business email and temporary password) without regenerating them. The business email is the dashboard login alias and does not replace the staff member primary email.',
+      security: adminSecurity,
+      parameters: [idParam],
+      responses: {
+        '200': { description: 'Staff credentials retrieved', content: { 'application/json': { schema: { type: 'object', properties: { success: { type: 'boolean' }, message: { type: 'string' }, data: { type: 'object', properties: { id: { type: 'string' }, userId: { type: 'string', format: 'uuid' }, primaryEmail: { type: 'string', format: 'email' }, businessEmail: { type: 'string', format: 'email' }, password: { type: 'string' }, credentialsProvisioned: { type: 'boolean' } } } } } } } },
+        '404': { $ref: '#/components/responses/NotFound' }
+      }
+    }
+  },
   '/admin/staff/{id}/provision-credentials': {
     post: {
       tags: ['Admin — Staff'],
       summary: 'Provision staff dashboard credentials',
-      description: 'Saves admin-generated staff credentials. If email or password is omitted, the backend generates it. The saved credentials are emailed directly to the staff member.',
+      description: 'Saves admin-generated staff dashboard credentials. The businessEmail is used as a dashboard login alias and does not replace the staff primary email. If businessEmail or password is omitted, the backend generates it. Credentials are emailed to the primary staff email using Mailtrap SMTP/nodemailer.',
       security: adminSecurity,
       parameters: [idParam],
       requestBody: {
@@ -520,11 +533,12 @@ export const adminPaths: OpenAPIV3.PathsObject = {
             schema: {
               type: 'object',
               properties: {
-                email: { type: 'string', format: 'email', description: 'Optional admin-generated staff login email.' },
+                businessEmail: { type: 'string', format: 'email', description: 'Optional staff dashboard login email. Legacy request bodies may still send email.' },
+                email: { type: 'string', format: 'email', deprecated: true, description: 'Deprecated alias for businessEmail.' },
                 password: { type: 'string', minLength: 8, description: 'Optional admin-generated staff login password.' }
               }
             },
-            example: { email: 'jane.doe@dailyassistuk.com', password: 'TempPass123' }
+            example: { businessEmail: 'jane.doe@dailyassistuk.com', password: 'TempPass123' }
           }
         }
       },

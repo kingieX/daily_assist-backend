@@ -80,6 +80,7 @@ adminRouter.get('/staff', validate({ query: staffListQuerySchema }), adminContro
 adminRouter.post('/staff', uploadStaffFiles, validate({ body: createStaffSchema }), adminController.createStaff);
 adminRouter.get('/staff/:id', validate({ params: staffIdParamSchema }), adminController.getStaffById);
 adminRouter.get('/staff/:id/visits', validate({ params: staffIdParamSchema }), adminController.listStaffVisits);
+adminRouter.get('/staff/:id/credentials', validate({ params: staffIdParamSchema }), adminController.getStaffCredentials);
 adminRouter.post(
   '/staff/:id/provision-credentials',
   validate({ params: staffIdParamSchema, body: provisionStaffCredentialsSchema }),
