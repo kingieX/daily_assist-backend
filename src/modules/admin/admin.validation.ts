@@ -216,6 +216,7 @@ export const createStaffSchema = staffFormSchema;
 
 export const provisionStaffCredentialsSchema = z.object({
   email: optionalEmail,
+  businessEmail: optionalEmail,
   password: passwordSchema.optional()
 });
 

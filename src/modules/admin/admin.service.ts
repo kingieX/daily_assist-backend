@@ -1130,12 +1130,13 @@ async function provisionStaffCredentials(
   input: ProvisionStaffCredentialsInput,
   actorUserId: string
 ) {
-  const staff = await db.user.findFirst({
+  const staff = await (db.user as any).findFirst({
     where: staffLookupWhere(id),
     select: {
       id: true,
       staffCode: true,
       email: true,
+      businessEmail: true,
       status: true,
       staffProfile: {
         select: {
@@ -1154,20 +1155,26 @@ async function provisionStaffCredentials(
     throw new ApiError(400, 'Staff profile is incomplete and cannot provision credentials');
   }
 
-  const requestedEmail = input.email ? normalizeEmail(input.email) : undefined;
-  const nextEmail = requestedEmail
-    ?? (staff.email.endsWith('@dailyassistuk.com')
-      ? staff.email
-      : await generateUniqueWorkEmail(staff.staffProfile.firstName, staff.staffProfile.lastName, staff.id));
+  const requestedBusinessEmail = input.businessEmail
+    ? normalizeEmail(input.businessEmail)
+    : input.email
+      ? normalizeEmail(input.email)
+      : undefined;
+  const nextBusinessEmail = requestedBusinessEmail
+    ?? staff.businessEmail
+    ?? await generateUniqueWorkEmail(staff.staffProfile.firstName, staff.staffProfile.lastName, staff.id);
 
-  if (nextEmail !== staff.email) {
-    const existingUser = await db.user.findFirst({
-      where: { email: nextEmail, id: { not: staff.id } },
+  if (nextBusinessEmail !== staff.businessEmail) {
+    const existingUser = await (db.user as any).findFirst({
+      where: {
+        id: { not: staff.id },
+        OR: [{ email: nextBusinessEmail }, { businessEmail: nextBusinessEmail }]
+      },
       select: { id: true }
     });
 
     if (existingUser) {
-      throw new ApiError(409, 'Email address is already in use');
+      throw new ApiError(409, 'Business email address is already in use');
     }
   }
 
@@ -1178,7 +1185,8 @@ async function provisionStaffCredentials(
     await tx.user.update({
       where: { id: staff.id },
       data: {
-        email: nextEmail,
+        businessEmail: nextBusinessEmail,
+        dashboardPassword: password,
         passwordHash,
         status: staff.status === UserStatus.INACTIVE ? UserStatus.ACTIVE : staff.status
       }
@@ -1195,8 +1203,8 @@ async function provisionStaffCredentials(
   });
 
   await sendStaffCredentialsEmail({
-    to: nextEmail,
-    email: nextEmail,
+    to: staff.email,
+    email: nextBusinessEmail,
     password
   });
 
@@ -1206,22 +1214,55 @@ async function provisionStaffCredentials(
     entity: 'staff_credentials',
     entityId: staff.id,
     metadataJson: {
-      email: nextEmail,
-      emailRegenerated: nextEmail !== staff.email,
+      primaryEmail: staff.email,
+      businessEmail: nextBusinessEmail,
+      businessEmailRegenerated: nextBusinessEmail !== staff.businessEmail,
       passwordProvidedByAdmin: Boolean(input.password),
       credentialsEmailSent: true,
-      deliveryMode: 'direct_credentials'
+      deliveryMode: 'smtp_direct_credentials'
     }
   });
 
   return {
     id: staff.staffCode ?? staff.id,
     userId: staff.id,
-    email: nextEmail,
+    primaryEmail: staff.email,
+    businessEmail: nextBusinessEmail,
+    password,
     credentialsProvisioned: true,
     credentialsEmailSent: true,
     passwordDelivery: 'direct_credentials' as const,
-    emailRegenerated: nextEmail !== staff.email
+    emailRegenerated: nextBusinessEmail !== staff.businessEmail
+  };
+}
+
+async function getStaffCredentials(id: string) {
+  const staff = await (db.user as any).findFirst({
+    where: staffLookupWhere(id),
+    select: {
+      id: true,
+      staffCode: true,
+      email: true,
+      businessEmail: true,
+      dashboardPassword: true
+    }
+  });
+
+  if (!staff) {
+    throw new ApiError(404, 'Staff user not found');
+  }
+
+  if (!staff.businessEmail || !staff.dashboardPassword) {
+    throw new ApiError(404, 'Staff credentials have not been provisioned yet');
+  }
+
+  return {
+    id: staff.staffCode ?? staff.id,
+    userId: staff.id,
+    primaryEmail: staff.email,
+    businessEmail: staff.businessEmail,
+    password: staff.dashboardPassword,
+    credentialsProvisioned: true
   };
 }
 
@@ -1586,6 +1627,7 @@ export const adminService = {
   createStaff,
   getStaffById,
   provisionStaffCredentials,
+  getStaffCredentials,
   resetStaffPassword,
   updateStaff,
   deleteStaff,

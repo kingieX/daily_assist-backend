@@ -76,8 +76,8 @@ async function issueSession(user: {
 async function login(input: LoginInput): Promise<SessionResult> {
   const normalizedEmail = input.email.toLowerCase().trim();
 
-  const user = await prisma.user.findUnique({
-    where: { email: normalizedEmail },
+  const user = await (prisma.user as any).findFirst({
+    where: { OR: [{ email: normalizedEmail }, { businessEmail: normalizedEmail }] },
     select: {
       id: true,
       email: true,

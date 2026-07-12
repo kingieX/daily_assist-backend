@@ -333,7 +333,7 @@ export const adminPaths: OpenAPIV3.PathsObject = {
     patch: {
       tags: ['Admin — Bookings'],
       summary: 'Update/manage booking',
-      description: 'Handles status changes, staff assignment, pricing, approval, cancellation, and completion. status=assigned with staffId stores assigned staff and creates a visit; duplicate assignment returns 409. status=cancelled removes associated visits and is the cancellation-notification trigger point.',
+      description: 'Updates status, staffId, pricingAdjustment, mileageFee, confirmedStartDate, and confirmedTime. When status is assigned, staffId is required and the backend creates a visit that can be queried with GET /admin/visits/{staffId}. When status is cancelled, associated visits are removed and the client notification hook is triggered. Status values completed, contacted, and pending have no visit side effects.',
       security: adminSecurity,
       parameters: [idParam],
       requestBody: {
@@ -363,84 +363,6 @@ export const adminPaths: OpenAPIV3.PathsObject = {
       },
       responses: {
         '200': { description: 'Booking updated' },
-        '400': { $ref: '#/components/responses/ValidationError' },
-        '404': { $ref: '#/components/responses/NotFound' }
-      }
-    }
-  },
-  '/admin/bookings/{id}/assign': {
-    post: {
-      tags: ['Admin — Bookings'],
-      summary: 'Assign booking to staff',
-      security: adminSecurity,
-      parameters: [idParam],
-      requestBody: {
-        required: true,
-        content: {
-          'application/json': {
-            schema: {
-              type: 'object',
-              required: ['staffId'],
-              properties: {
-                staffId: { type: 'string', format: 'uuid' }
-              }
-            }
-          }
-        }
-      },
-      responses: {
-        '200': { description: 'Booking assigned' },
-        '400': { $ref: '#/components/responses/ValidationError' },
-        '404': { $ref: '#/components/responses/NotFound' }
-      }
-    }
-  },
-  '/admin/bookings/{id}/cancel': {
-    post: {
-      tags: ['Admin — Bookings'],
-      summary: 'Cancel booking',
-      security: adminSecurity,
-      parameters: [idParam],
-      requestBody: {
-        required: true,
-        content: {
-          'application/json': {
-            schema: {
-              type: 'object',
-              required: ['reason'],
-              properties: { reason: { type: 'string', minLength: 3, maxLength: 500 } }
-            }
-          }
-        }
-      },
-      responses: {
-        '200': { description: 'Booking cancelled' },
-        '400': { $ref: '#/components/responses/ValidationError' },
-        '404': { $ref: '#/components/responses/NotFound' }
-      }
-    }
-  },
-  '/admin/bookings/{id}/complete': {
-    post: {
-      tags: ['Admin — Bookings'],
-      summary: 'Complete booking',
-      security: adminSecurity,
-      parameters: [idParam],
-      requestBody: {
-        required: false,
-        content: {
-          'application/json': {
-            schema: {
-              type: 'object',
-              properties: {
-                completionNotes: { type: 'string', maxLength: 1000 }
-              }
-            }
-          }
-        }
-      },
-      responses: {
-        '200': { description: 'Booking completed' },
         '400': { $ref: '#/components/responses/ValidationError' },
         '404': { $ref: '#/components/responses/NotFound' }
       }
@@ -584,11 +506,24 @@ export const adminPaths: OpenAPIV3.PathsObject = {
       responses: { '200': { description: 'Staff visits retrieved', content: { 'application/json': { schema: { type: 'object', properties: { success: { type: 'boolean' }, message: { type: 'string' }, data: { type: 'array', items: visitSchema } } } } } } }
     }
   },
+  '/admin/staff/{id}/credentials': {
+    get: {
+      tags: ['Admin — Staff'],
+      summary: 'Get staff dashboard credentials',
+      description: 'Returns previously provisioned staff dashboard credentials (business email and temporary password) without regenerating them. The business email is the dashboard login alias and does not replace the staff member primary email.',
+      security: adminSecurity,
+      parameters: [idParam],
+      responses: {
+        '200': { description: 'Staff credentials retrieved', content: { 'application/json': { schema: { type: 'object', properties: { success: { type: 'boolean' }, message: { type: 'string' }, data: { type: 'object', properties: { id: { type: 'string' }, userId: { type: 'string', format: 'uuid' }, primaryEmail: { type: 'string', format: 'email' }, businessEmail: { type: 'string', format: 'email' }, password: { type: 'string' }, credentialsProvisioned: { type: 'boolean' } } } } } } } },
+        '404': { $ref: '#/components/responses/NotFound' }
+      }
+    }
+  },
   '/admin/staff/{id}/provision-credentials': {
     post: {
       tags: ['Admin — Staff'],
       summary: 'Provision staff dashboard credentials',
-      description: 'Saves admin-generated staff credentials. If email or password is omitted, the backend generates it. The saved credentials are emailed directly to the staff member.',
+      description: 'Saves admin-generated staff dashboard credentials. The businessEmail is used as a dashboard login alias and does not replace the staff primary email. If businessEmail or password is omitted, the backend generates it. Credentials are emailed to the primary staff email using Mailtrap SMTP/nodemailer.',
       security: adminSecurity,
       parameters: [idParam],
       requestBody: {
@@ -598,11 +533,12 @@ export const adminPaths: OpenAPIV3.PathsObject = {
             schema: {
               type: 'object',
               properties: {
-                email: { type: 'string', format: 'email', description: 'Optional admin-generated staff login email.' },
+                businessEmail: { type: 'string', format: 'email', description: 'Optional staff dashboard login email. Legacy request bodies may still send email.' },
+                email: { type: 'string', format: 'email', deprecated: true, description: 'Deprecated alias for businessEmail.' },
                 password: { type: 'string', minLength: 8, description: 'Optional admin-generated staff login password.' }
               }
             },
-            example: { email: 'jane.doe@dailyassistuk.com', password: 'TempPass123' }
+            example: { businessEmail: 'jane.doe@dailyassistuk.com', password: 'TempPass123' }
           }
         }
       },
