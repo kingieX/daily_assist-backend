@@ -14,8 +14,13 @@ const listVisits = asyncHandler(async (req: Request, res: Response) => {
   return sendSuccess(res, 200, 'Visits retrieved', result);
 });
 
-const getVisitById = asyncHandler(async (req: Request, res: Response) => {
-  const result = await visitService.getVisitById(req.params.id as string);
+const getStaffWithTasks = asyncHandler(async (req: Request, res: Response) => {
+  const result = await visitService.getStaffWithTasks(req.params.staffId as string);
+  return sendSuccess(res, 200, 'Staff visits retrieved', result);
+});
+
+const getStaffTask = asyncHandler(async (req: Request, res: Response) => {
+  const result = await visitService.getStaffTask(req.params.staffId as string, req.params.taskId as string);
   return sendSuccess(res, 200, 'Visit retrieved', result);
 });
 
@@ -41,7 +46,8 @@ const cancelVisit = asyncHandler(async (req: Request, res: Response) => {
 
 export const adminVisitsController = {
   listVisits,
-  getVisitById,
+  getStaffWithTasks,
+  getStaffTask,
   createVisit,
   updateVisit,
   reassignVisit,

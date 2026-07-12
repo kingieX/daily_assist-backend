@@ -23,137 +23,47 @@ export const visitPaths: OpenAPIV3.PathsObject = {
   },
   '/admin/visits': {
     get: {
-      tags: ['Admin — Visits'],
-      summary: 'List visits',
-      description:
-        'Example request: `GET /api/v1/admin/visits?page=1&limit=20`. Query values are accepted as URL strings and coerced to integers during validation.',
-      security: adminSecurity,
-      parameters: [
-        { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 }, example: 1 },
-        { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 }, example: 20 },
-        {
-          name: 'status',
-          in: 'query',
-          schema: {
-            type: 'string',
-            enum: ['ASSIGNED', 'ACKNOWLEDGED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'NO_SHOW']
-          }
-        },
-        { name: 'staffId', in: 'query', schema: { type: 'string', format: 'uuid' } },
-        { name: 'bookingId', in: 'query', schema: { type: 'string', format: 'uuid' } },
-        {
-          name: 'sortBy',
-          in: 'query',
-          schema: { type: 'string', enum: ['scheduledStartAt', 'createdAt', 'updatedAt'], default: 'scheduledStartAt' }
-        },
-        { name: 'sortOrder', in: 'query', schema: { type: 'string', enum: ['asc', 'desc'], default: 'desc' } }
-      ],
-      responses: {
-        '200': {
-          description: 'Visits retrieved',
-          content: {
-            'application/json': {
-              example: {
-                success: true,
-                message: 'Visits retrieved',
-                data: { items: [], meta: { page: 1, limit: 20, total: 0, totalPages: 1 } }
-              }
-            }
-          }
-        },
-        '400': { $ref: '#/components/responses/ValidationError' }
-      }
+      tags: ['Admin — Visits'], summary: 'List staff visit summaries', security: adminSecurity,
+      description: 'Returns all active staff enriched with today’s visit counts for the staff-card schedule view. Current period is today (UTC). Cancelled visits are excluded so task counts drop after cancellation.',
+      responses: { '200': { description: 'Visits retrieved', content: { 'application/json': { schema: { allOf: [{ $ref: '#/components/schemas/SuccessResponse' }, { type: 'object', properties: { data: { type: 'array', items: { $ref: '#/components/schemas/StaffVisitSummary' } } } }] } } } } }
     },
     post: {
-      tags: ['Admin — Visits'],
-      summary: 'Create/assign a visit',
-      security: adminSecurity,
-      requestBody: {
-        required: true,
-        content: {
-          'application/json': {
-            schema: {
-              type: 'object',
-              required: ['bookingId', 'staffId', 'scheduledStartAt', 'scheduledEndAt'],
-              properties: {
-                bookingId: { type: 'string', format: 'uuid' },
-                staffId: { type: 'string', format: 'uuid' },
-                scheduledStartAt: { type: 'string', format: 'date-time' },
-                scheduledEndAt: { type: 'string', format: 'date-time' },
-                adminNotes: { type: 'string' }
-              }
-            }
-          }
-        }
-      },
-      responses: { '201': { description: 'Visit created' } }
+      tags: ['Admin — Visits'], summary: 'Assign a new visit', security: adminSecurity,
+      description: 'Creates a visit with status not-started/ASSIGNED and notifies the assigned staff member. staffId must come from GET /admin/staff. clientId remains nullable for free-text client names, which is a data-integrity gap for client history until a client-linking flow exists.',
+      requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['clientName', 'address', 'date', 'startTime', 'endTime', 'staffId', 'package'], properties: { clientTitle: { type: 'string', enum: ['Mr.', 'Mrs.', 'Ms.', 'Dr.', 'Prof.'] }, clientName: { type: 'string' }, address: { type: 'string' }, date: { type: 'string', format: 'date' }, startTime: { type: 'string' }, endTime: { type: 'string' }, staffId: { type: 'string', format: 'uuid' }, package: { type: 'string', enum: ['Basic Package', 'Standard Package', 'Premium Package'] }, selectedServiceTypes: { type: 'array', items: { type: 'string' } }, selectedAdditional: { type: 'array', items: { type: 'string' } }, note: { type: 'string' } } } } } },
+      responses: { '201': { description: 'Visit created', content: { 'application/json': { schema: { allOf: [{ $ref: '#/components/schemas/SuccessResponse' }, { type: 'object', properties: { data: { $ref: '#/components/schemas/Visit' } } }] } } } }, '400': { $ref: '#/components/responses/ValidationError' } }
+    }
+  },
+  '/admin/visits/{staffId}': {
+    get: {
+      tags: ['Admin — Visits'], summary: 'Get staff tasks', security: adminSecurity,
+      description: 'Returns a staff profile with all non-cancelled tasks. The path parameter is a staffId, not a visit ID (changed from the old GET /admin/visits/{id} behaviour). ownsCar is mapped from the staff profile, trainingUpToDate currently defaults to false, and milesCovered defaults to "0 miles".',
+      parameters: [{ name: 'staffId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+      responses: { '200': { description: 'Staff visits retrieved', content: { 'application/json': { schema: { allOf: [{ $ref: '#/components/schemas/SuccessResponse' }, { type: 'object', properties: { data: { $ref: '#/components/schemas/StaffWithTasks' } } }] } } } }, '404': { $ref: '#/components/responses/NotFound' } }
+    }
+  },
+  '/admin/visits/{staffId}/tasks/{taskId}': {
+    get: {
+      tags: ['Admin — Visits'], summary: 'Get staff task details', security: adminSecurity,
+      description: 'Returns one visit assigned to the given staff member. The time field is a derived display string from the stored schedule and should not be written directly.',
+      parameters: [{ name: 'staffId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }, { name: 'taskId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+      responses: { '200': { description: 'Visit retrieved', content: { 'application/json': { schema: { allOf: [{ $ref: '#/components/schemas/SuccessResponse' }, { type: 'object', properties: { data: { $ref: '#/components/schemas/Visit' } } }] } } } }, '404': { $ref: '#/components/responses/NotFound' } }
     }
   },
   '/admin/visits/{id}': {
-    get: {
-      tags: ['Admin — Visits'],
-      summary: 'Get visit details',
-      security: adminSecurity,
-      parameters: [visitIdParam],
-      responses: { '200': { description: 'Visit retrieved' }, '404': { $ref: '#/components/responses/NotFound' } }
-    },
     patch: {
-      tags: ['Admin — Visits'],
-      summary: 'Edit visit details',
-      security: adminSecurity,
+      tags: ['Admin — Visits'], summary: 'Edit visit details', security: adminSecurity,
+      description: 'Edits a visit by visit ID. If staffId changes, this is treated as a reassignment and both old and new staff members are notified.',
       parameters: [visitIdParam],
-      requestBody: {
-        required: true,
-        content: {
-          'application/json': {
-            schema: {
-              type: 'object',
-              properties: {
-                scheduledStartAt: { type: 'string', format: 'date-time' },
-                scheduledEndAt: { type: 'string', format: 'date-time' },
-                adminNotes: { type: 'string' },
-                staffNotes: { type: 'string' }
-              }
-            }
-          }
-        }
-      },
+      requestBody: { required: true, content: { 'application/json': { schema: { $ref: '#/components/schemas/Visit' } } } },
       responses: { '200': { description: 'Visit updated' } }
     }
   },
   '/admin/visits/{id}/reassign': {
-    post: {
-      tags: ['Admin — Visits'],
-      summary: 'Reassign visit to another staff',
-      security: adminSecurity,
-      parameters: [visitIdParam],
-      requestBody: {
-        required: true,
-        content: {
-          'application/json': {
-            schema: { type: 'object', required: ['staffId'], properties: { staffId: { type: 'string', format: 'uuid' } } }
-          }
-        }
-      },
-      responses: { '200': { description: 'Visit reassigned' } }
-    }
+    post: { tags: ['Admin — Visits'], summary: 'Reassign visit to another staff', security: adminSecurity, description: 'Full visit resubmission with a new staffId. Notifies both the previous and new staff members.', parameters: [visitIdParam], requestBody: { required: true, content: { 'application/json': { schema: { $ref: '#/components/schemas/Visit' } } } }, responses: { '200': { description: 'Visit reassigned' } } }
   },
   '/admin/visits/{id}/cancel': {
-    post: {
-      tags: ['Admin — Visits'],
-      summary: 'Cancel visit',
-      security: adminSecurity,
-      parameters: [visitIdParam],
-      requestBody: {
-        required: true,
-        content: {
-          'application/json': {
-            schema: { type: 'object', required: ['reason'], properties: { reason: { type: 'string' } } }
-          }
-        }
-      },
-      responses: { '200': { description: 'Visit cancelled' } }
-    }
+    post: { tags: ['Admin — Visits'], summary: 'Cancel visit', security: adminSecurity, description: 'Soft-cancels the visit using the database CANCELLED state, notifies assigned staff, and excludes it from staff task lists/counts.', parameters: [visitIdParam], requestBody: { required: false, content: { 'application/json': { schema: { type: 'object', properties: { reason: { type: 'string' } } } } } }, responses: { '200': { description: 'Visit cancelled' } } }
   },
   '/staff/visits/today': {
     get: {

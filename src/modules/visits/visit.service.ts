@@ -1,4 +1,4 @@
-import { Prisma, Role, UserStatus } from '@prisma/client';
+import { ClientSource, NotificationType, Prisma, Role, UserStatus } from '@prisma/client';
 import { prisma } from '../../config/prisma';
 import { ApiError } from '../../utils/api-error';
 import { assertTransition, VISIT_STATUS } from './visit-state';
@@ -85,163 +85,171 @@ async function addVisitEvent(
   });
 }
 
-async function listAdminVisits(query: AdminVisitListQuery) {
-  const where: Prisma.VisitWhereInput = {};
-  if (query.status) where.status = query.status;
-  if (query.staffId) where.staffId = query.staffId;
-  if (query.bookingId) where.bookingId = query.bookingId;
 
-  const page = query.page;
-  const limit = query.limit;
-  const skip = (page - 1) * limit;
+function parseVisitDateTime(date?: string, time?: string) {
+  if (!date || !time) return undefined;
+  const match = time.match(/^(\d{1,2}):00\s+(Am|Pm)$/i);
+  if (!match) return undefined;
+  let hour = Number(match[1]);
+  const meridiem = match[2].toLowerCase();
+  if (meridiem === 'pm' && hour !== 12) hour += 12;
+  if (meridiem === 'am' && hour === 12) hour = 0;
+  return new Date(`${date}T${String(hour).padStart(2, '0')}:00:00.000Z`);
+}
 
-  const [total, items] = await Promise.all([
-    prisma.visit.count({ where }),
-    prisma.visit.findMany({
-      where,
-      include: visitInclude,
-      orderBy: [{ [query.sortBy]: query.sortOrder }, { id: 'asc' }],
-      skip,
-      take: limit
-    })
-  ]);
+function staffName(staff: any) {
+  return [staff?.staffProfile?.firstName, staff?.staffProfile?.lastName].filter(Boolean).join(' ') || staff?.email || '';
+}
 
-  return paginatedResult(items, total, page, limit);
+function apiVisitStatus(status: string) {
+  if (status === VISIT_STATUS.COMPLETED) return 'completed';
+  if (status === VISIT_STATUS.IN_PROGRESS) return 'in-progress';
+  if (status === VISIT_STATUS.NO_SHOW) return 'late';
+  return 'not-started';
+}
+
+function visitTimeLabel(visit: any) {
+  return `${visit.scheduledStartAt.toISOString().slice(11, 16)} - ${visit.scheduledEndAt.toISOString().slice(11, 16)}`;
+}
+
+function planSnapshot(visit: any) {
+  return (visit.booking?.selectedPlanSnapshot && typeof visit.booking.selectedPlanSnapshot === 'object') ? visit.booking.selectedPlanSnapshot as any : {};
+}
+
+function serializeVisit(visit: any) {
+  const snapshot = planSnapshot(visit);
+  const selected = (visit.booking?.bookingServices ?? []).filter((s: any) => s.serviceType === 'SELECTED').map((s: any) => s.serviceNameSnapshot);
+  const additional = (visit.booking?.bookingServices ?? []).filter((s: any) => s.serviceType === 'ADDITIONAL').map((s: any) => s.serviceNameSnapshot);
+  return {
+    id: visit.id,
+    clientTitle: visit.booking?.client?.title ?? snapshot.clientTitle ?? '',
+    clientName: [visit.booking?.client?.firstName, visit.booking?.client?.lastName].filter(Boolean).join(' ') || snapshot.clientName || '',
+    clientId: visit.booking?.client?.id ?? null,
+    address: visit.booking?.client?.address ?? snapshot.address ?? '',
+    date: visit.scheduledStartAt.toISOString().slice(0, 10),
+    startTime: snapshot.startTime ?? visit.scheduledStartAt.toISOString().slice(11, 16),
+    endTime: snapshot.endTime ?? visit.scheduledEndAt.toISOString().slice(11, 16),
+    staffId: visit.staffId,
+    staffName: staffName(visit.staff),
+    package: visit.booking?.package?.name ?? snapshot.package ?? '',
+    selectedServiceTypes: selected.length ? selected : (snapshot.selectedServiceTypes ?? []),
+    selectedAdditional: additional.length ? additional : (snapshot.selectedAdditional ?? []),
+    note: visit.adminNotes ?? snapshot.note ?? '',
+    status: apiVisitStatus(visit.status),
+    time: visitTimeLabel(visit)
+  };
+}
+
+function serializeTask(visit: any) {
+  const full = serializeVisit(visit);
+  return { id: full.id, client: full.clientName, status: full.status, address: full.address, serviceType: full.selectedServiceTypes[0] ?? full.package, time: full.time, notes: full.note };
+}
+
+async function notifyVisit(tx: Prisma.TransactionClient, userId: string, title: string, body: string, visitId: string) {
+  await tx.notification.create({ data: { userId, type: NotificationType.VISIT, title, body, metadataJson: { visitId } } });
+}
+
+async function ensureFrontendBooking(tx: Prisma.TransactionClient, input: any) {
+  if (input.bookingId) return input.bookingId;
+  const [firstName, ...rest] = input.clientName.trim().split(/\s+/);
+  const client = await tx.client.create({ data: { firstName, lastName: rest.join(' ') || 'Unknown', title: input.clientTitle, phone: 'Not provided', address: input.address, source: ClientSource.ADMIN_CREATED } });
+  const booking = await tx.booking.create({ data: { clientId: client.id, preferredDate: parseVisitDateTime(input.date, input.startTime), preferredTime: input.startTime, startDate: parseVisitDateTime(input.date, input.startTime), selectedPlanSnapshot: { clientTitle: input.clientTitle, clientName: input.clientName, address: input.address, package: input.package, startTime: input.startTime, endTime: input.endTime, selectedServiceTypes: input.selectedServiceTypes ?? [], selectedAdditional: input.selectedAdditional ?? [], note: input.note }, agreeToTerms: true, consentToDailyassist: true } });
+  return booking.id;
+}
+
+async function listAdminVisits(_query: AdminVisitListQuery) {
+  const start = new Date();
+  start.setUTCHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setUTCDate(end.getUTCDate() + 1);
+
+  const staff = await prisma.user.findMany({
+    where: { role: Role.STAFF, status: UserStatus.ACTIVE },
+    include: { staffProfile: true, visitsAsStaff: { where: { status: { not: VISIT_STATUS.CANCELLED }, scheduledStartAt: { gte: start, lt: end } } } },
+    orderBy: { createdAt: 'asc' }
+  });
+
+  return staff.map((member: any) => ({
+    id: member.id,
+    name: staffName(member),
+    status: String(member.status).toLowerCase(),
+    phone: member.staffProfile?.phone ?? '',
+    email: member.email,
+    photo: member.staffProfile?.photoUrl ?? null,
+    tasksDone: member.visitsAsStaff.filter((visit: any) => visit.status === VISIT_STATUS.COMPLETED).length,
+    tasksTotal: member.visitsAsStaff.length
+  }));
 }
 
 async function getVisitById(id: string) {
-  const visit = await prisma.visit.findUnique({
-    where: { id },
-    include: {
-      ...visitInclude,
-      events: {
-        orderBy: { createdAt: 'asc' },
-        select: {
-          id: true,
-          actorUserId: true,
-          eventType: true,
-          payloadJson: true,
-          createdAt: true
-        }
-      }
-    }
+  return getStaffWithTasks(id);
+}
+
+async function getStaffWithTasks(staffId: string) {
+  const member = await prisma.user.findFirst({
+    where: { id: staffId, role: Role.STAFF },
+    include: { staffProfile: true, visitsAsStaff: { where: { status: { not: VISIT_STATUS.CANCELLED } }, include: visitInclude, orderBy: [{ scheduledStartAt: 'asc' }] } }
   });
+  if (!member) throw new ApiError(404, 'Staff not found');
+  const tasks = member.visitsAsStaff.map(serializeTask);
+  return { id: member.id, name: staffName(member), role: member.staffProfile?.staffRoleLabel ?? 'Support Worker', phone: member.staffProfile?.phone ?? '', email: member.email, status: String(member.status).toLowerCase(), photo: member.staffProfile?.photoUrl ?? null, ownsCar: Boolean(member.staffProfile?.ownsCar), trainingUpToDate: false, milesCovered: '0 miles', tasksDone: tasks.filter((t: any) => t.status === 'completed').length, tasksTotal: tasks.length, tasks };
+}
 
-  if (!visit) {
-    throw new ApiError(404, 'Visit not found');
-  }
-
-  return visit;
+async function getStaffTask(staffId: string, taskId: string) {
+  const visit = await prisma.visit.findFirst({ where: { id: taskId, staffId, status: { not: VISIT_STATUS.CANCELLED } }, include: visitInclude });
+  if (!visit) throw new ApiError(404, 'Visit not found for staff member');
+  return serializeVisit(visit);
 }
 
 async function createVisit(input: CreateVisitInput, actorUserId: string) {
-  const [booking, staff] = await Promise.all([
-    prisma.booking.findUnique({ where: { id: input.bookingId }, select: { id: true } }),
-    prisma.user.findFirst({
-      where: { id: input.staffId, role: Role.STAFF, status: UserStatus.ACTIVE },
-      select: { id: true }
-    })
-  ]);
-
-  if (!booking) throw new ApiError(404, 'Booking not found');
+  const staff = await prisma.user.findFirst({ where: { id: input.staffId, role: Role.STAFF, status: UserStatus.ACTIVE }, select: { id: true } });
   if (!staff) throw new ApiError(404, 'Active staff user not found');
-
+  const start = input.scheduledStartAt ?? parseVisitDateTime((input as any).date, (input as any).startTime);
+  const end = input.scheduledEndAt ?? parseVisitDateTime((input as any).date, (input as any).endTime);
+  if (!start || !end || end <= start) throw new ApiError(400, 'endTime must be after startTime');
   return prisma.$transaction(async (tx) => {
-    const visit = await tx.visit.create({
-      data: {
-        bookingId: input.bookingId,
-        staffId: input.staffId,
-        scheduledStartAt: input.scheduledStartAt,
-        scheduledEndAt: input.scheduledEndAt,
-        adminNotes: input.adminNotes ?? null,
-        status: VISIT_STATUS.ASSIGNED
-      },
-      include: visitInclude
-    });
-
-    await addVisitEvent(tx, visit.id, actorUserId, VISIT_EVENT.ASSIGNED, {
-      staffId: input.staffId,
-      scheduledStartAt: input.scheduledStartAt.toISOString(),
-      scheduledEndAt: input.scheduledEndAt.toISOString()
-    });
-
-    return visit;
+    const bookingId = await ensureFrontendBooking(tx, input);
+    const visit = await tx.visit.create({ data: { bookingId, staffId: input.staffId, scheduledStartAt: start, scheduledEndAt: end, adminNotes: (input as any).note ?? input.adminNotes ?? null, status: VISIT_STATUS.ASSIGNED }, include: visitInclude });
+    await addVisitEvent(tx, visit.id, actorUserId, VISIT_EVENT.ASSIGNED, { staffId: input.staffId });
+    await notifyVisit(tx, input.staffId, 'New visit assigned', 'A new visit has been assigned to you.', visit.id);
+    return serializeVisit(visit);
   });
 }
 
 async function updateVisit(id: string, input: UpdateVisitInput, actorUserId: string) {
   const existing = await prisma.visit.findUnique({ where: { id } });
   if (!existing) throw new ApiError(404, 'Visit not found');
-
+  const newStaffId = (input as any).staffId;
+  if (newStaffId) {
+    const staff = await prisma.user.findFirst({ where: { id: newStaffId, role: Role.STAFF, status: UserStatus.ACTIVE }, select: { id: true } });
+    if (!staff) throw new ApiError(404, 'Active staff user not found');
+  }
+  const start = input.scheduledStartAt ?? parseVisitDateTime((input as any).date, (input as any).startTime);
+  const end = input.scheduledEndAt ?? parseVisitDateTime((input as any).date, (input as any).endTime);
+  if (start && end && end <= start) throw new ApiError(400, 'endTime must be after startTime');
   return prisma.$transaction(async (tx) => {
-    const visit = await tx.visit.update({
-      where: { id },
-      data: {
-        scheduledStartAt: input.scheduledStartAt,
-        scheduledEndAt: input.scheduledEndAt,
-        adminNotes: input.adminNotes,
-        staffNotes: input.staffNotes
-      },
-      include: visitInclude
-    });
-
-    await addVisitEvent(tx, id, actorUserId, VISIT_EVENT.NOTE_UPDATED, {
-      updatedFields: Object.keys(input)
-    });
-
-    return visit;
+    const visit = await tx.visit.update({ where: { id }, data: { scheduledStartAt: start, scheduledEndAt: end, adminNotes: (input as any).note ?? input.adminNotes, staffNotes: input.staffNotes, staffId: newStaffId }, include: visitInclude });
+    await addVisitEvent(tx, id, actorUserId, newStaffId && newStaffId !== existing.staffId ? VISIT_EVENT.REASSIGNED : VISIT_EVENT.NOTE_UPDATED, { updatedFields: Object.keys(input) });
+    if (newStaffId && newStaffId !== existing.staffId) {
+      await notifyVisit(tx, existing.staffId, 'Visit reassigned', 'A visit has been removed from your schedule.', id);
+      await notifyVisit(tx, newStaffId, 'Visit assigned', 'A visit has been assigned to you.', id);
+    }
+    return serializeVisit(visit);
   });
 }
 
 async function reassignVisit(id: string, input: ReassignVisitInput, actorUserId: string) {
-  const [visit, staff] = await Promise.all([
-    prisma.visit.findUnique({ where: { id } }),
-    prisma.user.findFirst({
-      where: { id: input.staffId, role: Role.STAFF, status: UserStatus.ACTIVE },
-      select: { id: true }
-    })
-  ]);
-
-  if (!visit) throw new ApiError(404, 'Visit not found');
-  if (!staff) throw new ApiError(404, 'Active staff user not found');
-  if (visit.status === VISIT_STATUS.COMPLETED || visit.status === VISIT_STATUS.CANCELLED) {
-    throw new ApiError(400, 'Visit cannot be reassigned in current status');
-  }
-
-  return prisma.$transaction(async (tx) => {
-    const updated = await tx.visit.update({
-      where: { id },
-      data: { staffId: input.staffId, status: VISIT_STATUS.ASSIGNED, acknowledgedAt: null },
-      include: visitInclude
-    });
-
-    await addVisitEvent(tx, id, actorUserId, VISIT_EVENT.REASSIGNED, {
-      fromStaffId: visit.staffId,
-      toStaffId: input.staffId
-    });
-
-    return updated;
-  });
+  return updateVisit(id, input as any, actorUserId);
 }
 
 async function cancelVisit(id: string, input: CancelVisitInput, actorUserId: string) {
   const visit = await prisma.visit.findUnique({ where: { id } });
   if (!visit) throw new ApiError(404, 'Visit not found');
-
-  assertTransition(visit.status, VISIT_STATUS.CANCELLED);
-
   return prisma.$transaction(async (tx) => {
-    const updated = await tx.visit.update({
-      where: { id },
-      data: { status: VISIT_STATUS.CANCELLED },
-      include: visitInclude
-    });
-
-    await addVisitEvent(tx, id, actorUserId, VISIT_EVENT.CANCELLED, {
-      reason: input.reason
-    });
-
-    return updated;
+    const updated = await tx.visit.update({ where: { id }, data: { status: VISIT_STATUS.CANCELLED }, include: visitInclude });
+    await addVisitEvent(tx, id, actorUserId, VISIT_EVENT.CANCELLED, { reason: input.reason ?? 'Cancelled by admin' });
+    await notifyVisit(tx, visit.staffId, 'Visit cancelled', 'A visit has been cancelled and removed from your task list.', id);
+    return serializeVisit(updated);
   });
 }
 
@@ -360,6 +368,8 @@ async function checkOutVisit(visitId: string, staffUserId: string, input: CheckO
 export const visitService = {
   listAdminVisits,
   getVisitById,
+  getStaffWithTasks,
+  getStaffTask,
   createVisit,
   updateVisit,
   reassignVisit,
