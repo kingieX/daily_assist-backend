@@ -333,7 +333,7 @@ export const adminPaths: OpenAPIV3.PathsObject = {
     patch: {
       tags: ['Admin — Bookings'],
       summary: 'Update/manage booking',
-      description: 'Handles status changes, staff assignment, pricing, approval, cancellation, and completion. status=assigned with staffId stores assigned staff and creates a visit; duplicate assignment returns 409. status=cancelled removes associated visits and is the cancellation-notification trigger point.',
+      description: 'Updates status, staffId, pricingAdjustment, mileageFee, confirmedStartDate, and confirmedTime. When status is assigned, staffId is required and the backend creates a visit that can be queried with GET /admin/visits/{staffId}. When status is cancelled, associated visits are removed and the client notification hook is triggered. Status values completed, contacted, and pending have no visit side effects.',
       security: adminSecurity,
       parameters: [idParam],
       requestBody: {
@@ -363,84 +363,6 @@ export const adminPaths: OpenAPIV3.PathsObject = {
       },
       responses: {
         '200': { description: 'Booking updated' },
-        '400': { $ref: '#/components/responses/ValidationError' },
-        '404': { $ref: '#/components/responses/NotFound' }
-      }
-    }
-  },
-  '/admin/bookings/{id}/assign': {
-    post: {
-      tags: ['Admin — Bookings'],
-      summary: 'Assign booking to staff',
-      security: adminSecurity,
-      parameters: [idParam],
-      requestBody: {
-        required: true,
-        content: {
-          'application/json': {
-            schema: {
-              type: 'object',
-              required: ['staffId'],
-              properties: {
-                staffId: { type: 'string', format: 'uuid' }
-              }
-            }
-          }
-        }
-      },
-      responses: {
-        '200': { description: 'Booking assigned' },
-        '400': { $ref: '#/components/responses/ValidationError' },
-        '404': { $ref: '#/components/responses/NotFound' }
-      }
-    }
-  },
-  '/admin/bookings/{id}/cancel': {
-    post: {
-      tags: ['Admin — Bookings'],
-      summary: 'Cancel booking',
-      security: adminSecurity,
-      parameters: [idParam],
-      requestBody: {
-        required: true,
-        content: {
-          'application/json': {
-            schema: {
-              type: 'object',
-              required: ['reason'],
-              properties: { reason: { type: 'string', minLength: 3, maxLength: 500 } }
-            }
-          }
-        }
-      },
-      responses: {
-        '200': { description: 'Booking cancelled' },
-        '400': { $ref: '#/components/responses/ValidationError' },
-        '404': { $ref: '#/components/responses/NotFound' }
-      }
-    }
-  },
-  '/admin/bookings/{id}/complete': {
-    post: {
-      tags: ['Admin — Bookings'],
-      summary: 'Complete booking',
-      security: adminSecurity,
-      parameters: [idParam],
-      requestBody: {
-        required: false,
-        content: {
-          'application/json': {
-            schema: {
-              type: 'object',
-              properties: {
-                completionNotes: { type: 'string', maxLength: 1000 }
-              }
-            }
-          }
-        }
-      },
-      responses: {
-        '200': { description: 'Booking completed' },
         '400': { $ref: '#/components/responses/ValidationError' },
         '404': { $ref: '#/components/responses/NotFound' }
       }

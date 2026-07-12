@@ -113,6 +113,18 @@ export const schemas: SchemasMap = {
     }
   },
 
+
+  VisitStatus: { type: 'string', enum: ['late', 'not-started', 'completed', 'in-progress'], description: 'Frontend visit/task status enum; separate from booking status.' },
+  Visit: {
+    type: 'object',
+    properties: {
+      id: { type: 'string', format: 'uuid' }, clientTitle: { type: 'string', enum: ['Mr.', 'Mrs.', 'Ms.', 'Dr.', 'Prof.'] }, clientName: { type: 'string' }, clientId: { type: 'string', nullable: true, description: 'References Client when linked; nullable for free-text admin-created visits.' }, address: { type: 'string' }, date: { type: 'string', format: 'date' }, startTime: { type: 'string' }, endTime: { type: 'string' }, staffId: { type: 'string', format: 'uuid', description: 'References Staff/User returned by GET /admin/staff.' }, staffName: { type: 'string' }, package: { type: 'string', enum: ['Basic Package', 'Standard Package', 'Premium Package'] }, selectedServiceTypes: { type: 'array', items: { type: 'string' } }, selectedAdditional: { type: 'array', items: { type: 'string' } }, note: { type: 'string' }, status: { $ref: '#/components/schemas/VisitStatus' }, time: { type: 'string', readOnly: true, description: 'Derived display range from startTime/endTime; not written by clients.' }
+    }
+  },
+  StaffVisitSummary: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, name: { type: 'string' }, status: { type: 'string' }, phone: { type: 'string' }, email: { type: 'string' }, photo: { type: 'string', nullable: true }, tasksDone: { type: 'integer' }, tasksTotal: { type: 'integer' } } },
+  StaffTask: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, client: { type: 'string' }, status: { $ref: '#/components/schemas/VisitStatus' }, address: { type: 'string' }, serviceType: { type: 'string' }, time: { type: 'string' }, notes: { type: 'string' } } },
+  StaffWithTasks: { allOf: [{ $ref: '#/components/schemas/StaffVisitSummary' }, { type: 'object', properties: { role: { type: 'string' }, ownsCar: { type: 'boolean' }, trainingUpToDate: { type: 'boolean', description: 'Defaults false until a training data source is added.' }, milesCovered: { type: 'string', description: 'Defaults to 0 miles until mileage tracking is added.' }, tasks: { type: 'array', items: { $ref: '#/components/schemas/StaffTask' } } } }] },
+
   // ── Phase 2: Auth ─────────────────────────────────────────────────────────────
 
   ForgotPasswordRequest: {

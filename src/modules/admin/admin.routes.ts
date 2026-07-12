@@ -9,12 +9,9 @@ import { validate } from '../../middlewares/validate.middleware';
 import { uploadClientProofOfAddress, uploadStaffFiles } from '../../middlewares/upload.middleware';
 import { adminController } from './admin.controller';
 import {
-  assignBookingSchema,
   bookingListQuerySchema,
-  cancelBookingSchema,
   clientIdParamSchema,
   clientListQuerySchema,
-  completeBookingSchema,
   convertApplicationSchema,
   createClientSchema,
   createPackageSchema,
@@ -61,21 +58,6 @@ adminRouter.get(
   adminController.listBookings
 );
 adminRouter.get('/bookings/:id', validate({ params: idParamSchema }), adminController.getBookingById);
-adminRouter.post(
-  '/bookings/:id/assign',
-  validate({ params: idParamSchema, body: assignBookingSchema }),
-  adminController.assignBooking
-);
-adminRouter.post(
-  '/bookings/:id/cancel',
-  validate({ params: idParamSchema, body: cancelBookingSchema }),
-  adminController.cancelBooking
-);
-adminRouter.post(
-  '/bookings/:id/complete',
-  validate({ params: idParamSchema, body: completeBookingSchema }),
-  adminController.completeBooking
-);
 adminRouter.patch(
   '/bookings/:id',
   validate({ params: idParamSchema, body: updateBookingSchema }),
