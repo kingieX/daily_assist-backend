@@ -114,7 +114,7 @@ export const schemas: SchemasMap = {
   },
 
 
-  VisitStatus: { type: 'string', enum: ['late', 'not-started', 'completed', 'in-progress'], description: 'Frontend visit/task status enum; separate from booking status.' },
+  VisitStatus: { type: 'string', enum: ['Assigned', 'late', 'not-started', 'completed', 'in-progress'], description: 'Frontend visit/task status enum; separate from booking status.' },
   Visit: {
     type: 'object',
     properties: {
