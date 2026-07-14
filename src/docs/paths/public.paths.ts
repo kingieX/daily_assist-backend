@@ -221,9 +221,9 @@ export const publicPaths: OpenAPIV3.PathsObject = {
       tags: ['Public — Intake'],
       summary: 'Submit worker application',
       description: [
-        'Submits a job application for a domestic assistance worker position. No authentication required.',
+        'Submits a job application for a domestic assistance worker position. No authentication required. Stored submissions feed GET /admin/recruitment/applications.',
         '',
-        '**CV upload requirements:**',
+        '**CV upload requirements (optional):**',
         '- Field name: `cv`',
         '- Allowed types: PDF, DOC, DOCX',
         '- Maximum size: 5MB',

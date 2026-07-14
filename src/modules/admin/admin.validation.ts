@@ -40,9 +40,13 @@ const sexSchema = z.enum(['MALE', 'FEMALE', 'OTHER', 'PREFER_NOT_TO_SAY']);
 const frontendStaffRoleSchema = z.enum([
   'Home-Help & Support Assistant',
   'Senior Carer',
+  'Senior Care Worker',
   'Support Worker',
+  'Community Support Worker',
   'Community Access Support',
-  'Care Assistant'
+  'Care Assistant',
+  'Live-In Carer',
+  'Admin'
 ]);
 const frontendStaffSexSchema = z.enum(['Male', 'Female', 'Prefer not to say']);
 const frontendStaffZoneSchema = z.enum(['Canvey Island', 'Basildon', 'Southend-on-Sea', 'Chelmsford', 'Rayleigh']);
@@ -245,8 +249,19 @@ export const updateRecruitmentStatusSchema = z.object({
 });
 
 export const convertApplicationSchema = z.object({
-  password: passwordSchema
-});
+  staffId: z.string().trim().min(1, 'Staff ID is required'),
+  staffRole: frontendStaffRoleSchema.optional(),
+  role: frontendStaffRoleSchema.optional(),
+  firstName: z.string().trim().min(1, 'First name is required'),
+  lastName: z.string().trim().min(1, 'Last name is required'),
+  email: z.string().trim().email('Invalid email format'),
+  phone: z.string().trim().min(7, 'Phone number is required'),
+  dob: z.string().trim().min(1, 'Date of birth is required'),
+  sex: frontendStaffSexSchema,
+  photoUrl: z.string().url('Photo URL must be valid').optional(),
+  cvFileUrl: z.string().url('CV URL must be valid').optional(),
+  password: passwordSchema.optional()
+}).refine((data) => Boolean(data.staffRole ?? data.role), { message: 'Staff role is required', path: ['staffRole'] });
 
 export type PackageListQuery = z.infer<typeof packageListQuerySchema>;
 export type CreatePackageInput = z.infer<typeof createPackageSchema>;

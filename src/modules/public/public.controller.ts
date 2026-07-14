@@ -45,20 +45,18 @@ const createWorkerApplication = asyncHandler(async (req: Request, res: Response)
     throw new ApiError(400, 'Validation failed', 'VALIDATION_ERROR', formatValidationError(parsedBody.error));
   }
 
-  if (!req.file) {
-    throw new ApiError(400, 'CV file is required');
-  }
-
-  const cvFileUrl = `/uploads/cv/${req.file.filename}`;
+  const cvFileUrl = req.file ? `/uploads/cv/${req.file.filename}` : undefined;
 
   try {
     const result = await publicService.submitWorkerApplication({
       ...parsedBody.data,
-      cvFileUrl
+      cvFileUrl,
+      cvFileName: req.file?.originalname,
+      cvFileSize: req.file?.size
     });
     return sendSuccess(res, 201, 'Application submitted successfully', result);
   } catch (error) {
-    await removeUploadedFile(req.file.path);
+    await removeUploadedFile(req.file?.path);
     throw error;
   }
 });

@@ -105,9 +105,13 @@ const visitSchema: OpenAPIV3.SchemaObject = {
 const staffRoleValues = [
   'Home-Help & Support Assistant',
   'Senior Carer',
+  'Senior Care Worker',
   'Support Worker',
+  'Community Support Worker',
   'Community Access Support',
-  'Care Assistant'
+  'Care Assistant',
+  'Live-In Carer',
+  'Admin'
 ];
 const staffZoneValues = ['Canvey Island', 'Basildon', 'Southend-on-Sea', 'Chelmsford', 'Rayleigh'];
 const staffVehicleValues = ['Yes, owns a vehicle', 'No vehicle'];
@@ -570,69 +574,50 @@ export const adminPaths: OpenAPIV3.PathsObject = {
     get: {
       tags: ['Admin — Recruitment'],
       summary: 'List recruitment applications',
+      description: 'Returns all worker applications submitted through POST /public/worker-applications, newest first, using the full Application shape so the frontend can open ViewApplicantModal without a second request.',
       security: adminSecurity,
-      parameters: [
-        ...paginationParameters,
-        {
-          name: 'status',
-          in: 'query',
-          schema: {
-            type: 'string',
-            enum: ['PENDING', 'SHORTLISTED', 'INTERVIEWED', 'APPROVED', 'REJECTED', 'CONVERTED_TO_STAFF']
-          }
-        },
-        {
-          name: 'sortBy',
-          in: 'query',
-          schema: { type: 'string', enum: ['createdAt', 'updatedAt', 'status'], default: 'createdAt' }
-        },
-        {
-          name: 'sortOrder',
-          in: 'query',
-          schema: { type: 'string', enum: ['asc', 'desc'], default: 'desc' }
-        }
-      ],
-      responses: { '200': { description: 'Applications retrieved' } }
+      responses: { '200': { description: 'Applications retrieved', content: { 'application/json': { schema: { allOf: [{ $ref: '#/components/schemas/SuccessResponse' }, { type: 'object', properties: { data: { type: 'array', items: { $ref: '#/components/schemas/Application' } } } }] } } } } }
     }
   },
   '/admin/recruitment/applications/{id}': {
     get: {
       tags: ['Admin — Recruitment'],
       summary: 'Get application by ID',
+      description: 'Returns one full Application object, including cv.url for the View and Download buttons.',
       security: adminSecurity,
       parameters: [idParam],
-      responses: { '200': { description: 'Application retrieved' }, '404': { $ref: '#/components/responses/NotFound' } }
+      responses: { '200': { description: 'Application retrieved', content: { 'application/json': { schema: { allOf: [{ $ref: '#/components/schemas/SuccessResponse' }, { type: 'object', properties: { data: { $ref: '#/components/schemas/Application' } } }] } } } }, '404': { $ref: '#/components/responses/NotFound' } }
+    },
+    delete: {
+      tags: ['Admin — Recruitment'],
+      summary: 'Delete application',
+      description: 'Permanently deletes the application and backend-owned CV file. This does not cascade to any staff record created from this application.',
+      security: adminSecurity,
+      parameters: [idParam],
+      responses: { '204': { description: 'Application deleted' }, '404': { $ref: '#/components/responses/NotFound' } }
     }
   },
   '/admin/recruitment/applications/{id}/status': {
     patch: {
       tags: ['Admin — Recruitment'],
-      summary: 'Update application status',
+      summary: 'Removed: update application status',
+      deprecated: true,
+      description: 'Removed because RecruitmentPage.jsx has no status field or status action. Use DELETE for destructive actions or convert-to-staff for staff creation.',
       security: adminSecurity,
       parameters: [idParam],
-      requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['status'], properties: { status: { type: 'string', enum: ['PENDING', 'SHORTLISTED', 'INTERVIEWED', 'APPROVED', 'REJECTED'] }, reviewNotes: { type: 'string', maxLength: 2000 } } }, example: { status: 'SHORTLISTED', reviewNotes: 'Good availability and experience.' } } } },
-      responses: { '200': { description: 'Status updated' } }
+      responses: { '410': { description: 'Endpoint removed' } }
     }
   },
   '/admin/recruitment/applications/{id}/convert-to-staff': {
     post: {
       tags: ['Admin — Recruitment'],
-      summary: 'Convert approved application to staff account',
+      summary: 'Convert application to staff account',
+      description: 'Creates a normal Staff record using the same staff table/schema as POST /admin/staff. staffId is pre-filled from the application but editable. dob and sex are not pre-filled and are required. If no new cv file is uploaded, the existing application CV is carried over to the staff profile. The canonical staff role enum is the merged staff-management and recruitment role list documented here.',
       security: adminSecurity,
       parameters: [idParam],
-      requestBody: {
-        required: true,
-        content: {
-          'application/json': {
-            schema: {
-              type: 'object',
-              required: ['password'],
-              properties: { password: { type: 'string', minLength: 8 } }
-            }
-          }
-        }
-      },
-      responses: { '201': { description: 'Applicant converted to staff' } }
+      requestBody: { required: true, content: { 'multipart/form-data': { schema: { type: 'object', required: ['staffId', 'firstName', 'lastName', 'email', 'phone', 'dob', 'sex'], properties: { staffId: { type: 'string', description: 'Editable pre-assigned staff ID.' }, staffRole: { type: 'string', enum: staffRoleValues, description: 'Merged canonical role list; supersedes previous mismatched recruitment/staff lists.' }, firstName: { type: 'string' }, lastName: { type: 'string' }, email: { type: 'string', format: 'email' }, phone: { type: 'string' }, dob: { type: 'string', description: 'Required; admin must enter because it is not pre-filled.' }, sex: { type: 'string', enum: ['Male', 'Female', 'Prefer not to say'], description: 'Required; admin must select because it is not pre-filled.' }, image: { type: 'string', format: 'binary' }, cv: { type: 'string', format: 'binary', description: 'Optional replacement CV.' } } } } } },
+      responses: { '201': { description: 'Applicant converted to staff', content: { 'application/json': { schema: { allOf: [{ $ref: '#/components/schemas/SuccessResponse' }, { type: 'object', properties: { data: staffSchema } }] } } } }, '409': { $ref: '#/components/responses/Conflict' } }
     }
   }
+
 };

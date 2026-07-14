@@ -524,13 +524,18 @@ model AuditLog {
 // ─── Recruitment ──────────────────────────────────────────────────────────────
 
 model WorkerApplication {
-  id          String            @id @default(uuid())
-  firstName   String            @map("first_name")
-  lastName    String            @map("last_name")
-  email       String
-  phone       String
-  cvFileUrl   String?           @map("cv_file_url")
-  status      ApplicationStatus @default(PENDING)
+  id              String            @id @default(uuid())
+  applicantNumber Int               @unique @default(autoincrement()) @map("applicant_number")
+  firstName       String            @map("first_name")
+  lastName        String            @map("last_name")
+  email           String
+  phone           String
+  role            String            @default("Home-Help & Support Assistant Role")
+  staffCode       String?           @unique @map("staff_code")
+  cvFileUrl       String?           @map("cv_file_url")
+  cvFileName      String?           @map("cv_file_name")
+  cvFileSize      Int?              @map("cv_file_size")
+  status          ApplicationStatus @default(PENDING)
   reviewNotes String?           @map("review_notes")
   reviewedBy  String?           @map("reviewed_by")
   reviewer    User?             @relation(fields: [reviewedBy], references: [id])

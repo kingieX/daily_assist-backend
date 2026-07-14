@@ -1,4 +1,4 @@
-import { ClientSource, NotificationType, Prisma, Role, UserStatus } from '@prisma/client';
+import { BookingStatus, ClientSource, NotificationType, Prisma, Role, ServiceType, UserStatus } from '@prisma/client';
 import { prisma } from '../../config/prisma';
 import { ApiError } from '../../utils/api-error';
 import { assertTransition, VISIT_STATUS } from './visit-state';
@@ -47,9 +47,13 @@ const visitInclude = {
           id: true,
           firstName: true,
           lastName: true,
-          phone: true
+          phone: true,
+          title: true,
+          address: true
         }
-      }
+      },
+      bookingServices: true,
+      package: { select: { name: true } }
     }
   },
   staff: {
@@ -105,6 +109,7 @@ function apiVisitStatus(status: string) {
   if (status === VISIT_STATUS.COMPLETED) return 'completed';
   if (status === VISIT_STATUS.IN_PROGRESS) return 'in-progress';
   if (status === VISIT_STATUS.NO_SHOW) return 'late';
+  if (status === VISIT_STATUS.ASSIGNED) return 'Assigned';
   return 'not-started';
 }
 
@@ -122,10 +127,10 @@ function serializeVisit(visit: any) {
   const additional = (visit.booking?.bookingServices ?? []).filter((s: any) => s.serviceType === 'ADDITIONAL').map((s: any) => s.serviceNameSnapshot);
   return {
     id: visit.id,
-    clientTitle: visit.booking?.client?.title ?? snapshot.clientTitle ?? '',
-    clientName: [visit.booking?.client?.firstName, visit.booking?.client?.lastName].filter(Boolean).join(' ') || snapshot.clientName || '',
+    clientTitle: snapshot.clientTitle ?? visit.booking?.client?.title ?? '',
+    clientName: snapshot.clientName || [visit.booking?.client?.firstName, visit.booking?.client?.lastName].filter(Boolean).join(' ') || '',
     clientId: visit.booking?.client?.id ?? null,
-    address: visit.booking?.client?.address ?? snapshot.address ?? '',
+    address: snapshot.address ?? visit.booking?.client?.address ?? '',
     date: visit.scheduledStartAt.toISOString().slice(0, 10),
     startTime: snapshot.startTime ?? visit.scheduledStartAt.toISOString().slice(11, 16),
     endTime: snapshot.endTime ?? visit.scheduledEndAt.toISOString().slice(11, 16),
@@ -152,8 +157,28 @@ async function notifyVisit(tx: Prisma.TransactionClient, userId: string, title: 
 async function ensureFrontendBooking(tx: Prisma.TransactionClient, input: any) {
   if (input.bookingId) return input.bookingId;
   const [firstName, ...rest] = input.clientName.trim().split(/\s+/);
-  const client = await tx.client.create({ data: { firstName, lastName: rest.join(' ') || 'Unknown', title: input.clientTitle, phone: 'Not provided', address: input.address, source: ClientSource.ADMIN_CREATED } });
-  const booking = await tx.booking.create({ data: { clientId: client.id, preferredDate: parseVisitDateTime(input.date, input.startTime), preferredTime: input.startTime, startDate: parseVisitDateTime(input.date, input.startTime), selectedPlanSnapshot: { clientTitle: input.clientTitle, clientName: input.clientName, address: input.address, package: input.package, startTime: input.startTime, endTime: input.endTime, selectedServiceTypes: input.selectedServiceTypes ?? [], selectedAdditional: input.selectedAdditional ?? [], note: input.note }, agreeToTerms: true, consentToDailyassist: true } });
+  const packageRecord = await tx.package.findFirst({ where: { name: input.package }, select: { id: true } });
+  const client = await tx.client.create({ data: { firstName, lastName: rest.join(' ') || '', title: input.clientTitle, phone: 'Not provided', address: input.address, source: ClientSource.ADMIN_CREATED } });
+  const booking = await tx.booking.create({
+    data: {
+      clientId: client.id,
+      packageId: packageRecord?.id,
+      preferredDate: parseVisitDateTime(input.date, input.startTime),
+      preferredTime: input.startTime,
+      startDate: parseVisitDateTime(input.date, input.startTime),
+      selectedPlanSnapshot: { clientTitle: input.clientTitle, clientName: input.clientName, address: input.address, package: input.package, startTime: input.startTime, endTime: input.endTime, selectedServiceTypes: input.selectedServiceTypes ?? [], selectedAdditional: input.selectedAdditional ?? [], note: input.note },
+      agreeToTerms: true,
+      consentToDailyassist: true,
+      status: BookingStatus.ASSIGNED,
+      assignedStaffId: input.staffId,
+      bookingServices: {
+        create: [
+          ...(input.selectedServiceTypes ?? []).map((serviceNameSnapshot: string) => ({ serviceNameSnapshot, serviceType: ServiceType.SELECTED })),
+          ...(input.selectedAdditional ?? []).map((serviceNameSnapshot: string) => ({ serviceNameSnapshot, serviceType: ServiceType.ADDITIONAL }))
+        ]
+      }
+    }
+  });
   return booking.id;
 }
 
