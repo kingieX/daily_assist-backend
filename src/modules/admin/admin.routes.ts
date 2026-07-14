@@ -14,6 +14,7 @@ import {
   clientListQuerySchema,
   convertApplicationSchema,
   createClientSchema,
+  createJobPostSchema,
   createPackageSchema,
   createStaffSchema,
   idParamSchema,
@@ -25,6 +26,7 @@ import {
   staffListQuerySchema,
   updateBookingSchema,
   updateClientSchema,
+  updateJobPostSchema,
   updatePackageSchema,
   updateStaffSchema
 } from './admin.validation';
@@ -40,6 +42,16 @@ adminRouter.get('/dashboard/alerts', adminController.getDashboardAlerts);
 adminRouter.use('/visits', adminVisitsRouter);
 adminRouter.use('/', adminCommunicationsRouter);
 adminRouter.use('/', adminOpsRouter);
+
+
+adminRouter.get('/job-posts', adminController.listJobPosts);
+adminRouter.post('/job-posts', validate({ body: createJobPostSchema }), adminController.createJobPost);
+adminRouter.patch(
+  '/job-posts/:id',
+  validate({ params: idParamSchema, body: updateJobPostSchema }),
+  adminController.updateJobPost
+);
+adminRouter.delete('/job-posts/:id', validate({ params: idParamSchema }), adminController.deleteJobPost);
 
 adminRouter.get('/packages', validate({ query: packageListQuerySchema }), adminController.listPackages);
 adminRouter.post('/packages', validate({ body: createPackageSchema }), adminController.createPackage);

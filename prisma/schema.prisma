@@ -248,6 +248,28 @@ model Client {
   @@map("clients")
 }
 
+model JobPost {
+  id               String   @id @default(uuid())
+  title            String
+  reportTo         String   @default("") @map("report_to")
+  payRate          String   @default("") @map("pay_rate")
+  contractTypes    Json     @default("[]") @map("contract_types")
+  hours            String   @default("")
+  location         String   @default("")
+  overview         String   @default("")
+  responsibilities Json     @default("[]")
+  exclusions       Json     @default("[]")
+  benefits         Json     @default("[]")
+  requirements     Json     @default("[]")
+  desirable        Json     @default("[]")
+  standards        Json     @default("[]")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@index([createdAt])
+  @@map("job_posts")
+}
+
 model Package {
   id               String           @id @default(uuid())
   name             String

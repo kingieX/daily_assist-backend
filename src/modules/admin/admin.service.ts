@@ -26,6 +26,7 @@ import type {
   ClientListQuery,
   CompleteBookingInput,
   ConvertApplicationInput,
+  CreateJobPostInput,
   CreateClientInput,
   CreatePackageInput,
   CreateStaffInput,
@@ -36,12 +37,89 @@ import type {
   StaffListQuery,
   UpdateBookingInput,
   UpdateClientInput,
+  UpdateJobPostInput,
   UpdatePackageInput,
   UpdateRecruitmentStatusInput,
   UpdateStaffInput
 } from './admin.validation';
 
 const db = prisma as any;
+
+const jobPostArrayFields = [
+  'contractTypes',
+  'responsibilities',
+  'exclusions',
+  'benefits',
+  'requirements',
+  'desirable',
+  'standards'
+] as const;
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+}
+
+function serializeJobPost(jobPost: any) {
+  const legacyContractType = typeof jobPost.contractType === 'string' && jobPost.contractType.trim()
+    ? [jobPost.contractType.trim()]
+    : [];
+
+  return {
+    id: jobPost.id,
+    title: jobPost.title,
+    reportTo: jobPost.reportTo ?? '',
+    payRate: jobPost.payRate ?? '',
+    contractTypes: stringArray(jobPost.contractTypes).length ? stringArray(jobPost.contractTypes) : legacyContractType,
+    hours: jobPost.hours ?? '',
+    location: jobPost.location ?? '',
+    overview: jobPost.overview ?? jobPost.description ?? '',
+    responsibilities: stringArray(jobPost.responsibilities),
+    exclusions: stringArray(jobPost.exclusions),
+    benefits: stringArray(jobPost.benefits),
+    requirements: stringArray(jobPost.requirements),
+    desirable: stringArray(jobPost.desirable),
+    standards: stringArray(jobPost.standards)
+  };
+}
+
+function jobPostDataFromInput(input: CreateJobPostInput | UpdateJobPostInput): Record<string, unknown> {
+  const data: Record<string, unknown> = {};
+  for (const field of ['title', 'reportTo', 'payRate', 'hours', 'location', 'overview'] as const) {
+    if (input[field] !== undefined) data[field] = input[field];
+  }
+  for (const field of jobPostArrayFields) {
+    if (input[field] !== undefined) data[field] = input[field];
+  }
+  return data;
+}
+
+async function listJobPosts() {
+  const posts = await db.jobPost.findMany({ orderBy: [{ createdAt: 'desc' }, { id: 'asc' }] });
+  return posts.map(serializeJobPost);
+}
+
+async function createJobPost(input: CreateJobPostInput) {
+  const post = await db.jobPost.create({ data: jobPostDataFromInput(input) });
+  return serializeJobPost(post);
+}
+
+async function getJobPostById(id: string) {
+  const post = await db.jobPost.findUnique({ where: { id } });
+  if (!post) throw new ApiError(404, 'Job post not found');
+  return post;
+}
+
+async function updateJobPost(id: string, input: UpdateJobPostInput) {
+  await getJobPostById(id);
+  const post = await db.jobPost.update({ where: { id }, data: jobPostDataFromInput(input) });
+  return serializeJobPost(post);
+}
+
+async function deleteJobPost(id: string) {
+  await getJobPostById(id);
+  // Worker applications store the applied role as free text, so no cascade/nullification is required.
+  await db.jobPost.delete({ where: { id } });
+}
 
 function normalizeEmail(email: string): string {
   return email.toLowerCase().trim();
@@ -1585,6 +1663,10 @@ export const adminService = {
   getDashboardSummary,
   getDashboardCharts,
   getDashboardAlerts,
+  listJobPosts,
+  createJobPost,
+  updateJobPost,
+  deleteJobPost,
   listPackages,
   createPackage,
   getPackageById,

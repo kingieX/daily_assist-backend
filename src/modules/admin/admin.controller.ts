@@ -44,6 +44,26 @@ const getDashboardAlerts = asyncHandler(async (_req: Request, res: Response) => 
   return sendSuccess(res, 200, 'Dashboard alerts retrieved', alerts);
 });
 
+const listJobPosts = asyncHandler(async (_req: Request, res: Response) => {
+  const posts = await adminService.listJobPosts();
+  return sendSuccess(res, 200, 'Job posts retrieved', posts);
+});
+
+const createJobPost = asyncHandler(async (req: Request, res: Response) => {
+  const post = await adminService.createJobPost(req.body);
+  return sendSuccess(res, 201, 'Job post created successfully', post);
+});
+
+const updateJobPost = asyncHandler(async (req: Request, res: Response) => {
+  const post = await adminService.updateJobPost(req.params.id as string, req.body);
+  return sendSuccess(res, 200, 'Job post updated successfully', post);
+});
+
+const deleteJobPost = asyncHandler(async (req: Request, res: Response) => {
+  await adminService.deleteJobPost(req.params.id as string);
+  return res.status(204).send();
+});
+
 const listPackages = asyncHandler(async (req: Request, res: Response) => {
   const packages = await adminService.listPackages(req.query as any);
   return sendSuccess(res, 200, 'Packages retrieved', packages);
@@ -218,6 +238,10 @@ export const adminController = {
   getDashboardSummary,
   getDashboardCharts,
   getDashboardAlerts,
+  listJobPosts,
+  createJobPost,
+  updateJobPost,
+  deleteJobPost,
   listPackages,
   createPackage,
   getPackageById,

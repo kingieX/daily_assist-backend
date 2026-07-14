@@ -114,6 +114,53 @@ export const schemas: SchemasMap = {
   },
 
 
+  JobPost: {
+    type: 'object',
+    required: ['id', 'title', 'reportTo', 'payRate', 'contractTypes', 'hours', 'location', 'overview', 'responsibilities', 'exclusions', 'benefits', 'requirements', 'desirable', 'standards'],
+    description: 'Admin-managed job post. overview is the canonical role description; legacy description must not be written. Legacy contractType is deprecated and normalized to this contractTypes array on read.',
+    properties: {
+      id: { type: 'string', format: 'uuid' },
+      title: { type: 'string', description: 'Role Name.' },
+      reportTo: { type: 'string', default: '' },
+      payRate: { type: 'string', default: '', example: '£13.00 per hour' },
+      contractTypes: {
+        type: 'array',
+        description: 'Multiple values may be selected. Defaults to [] when empty; never null. Replaces deprecated single-value contractType.',
+        items: { type: 'string', enum: ['Full-Time Contract', 'Part-Time Contract', 'Zero-Hour Contract', 'Freelance / Remote Contract', 'Fixed-Term Contract'] },
+        default: []
+      },
+      hours: { type: 'string', default: '' },
+      location: { type: 'string', default: '' },
+      overview: { type: 'string', default: '', description: 'Canonical role overview/description. Do not write legacy description.' },
+      responsibilities: { type: 'array', items: { type: 'string' }, default: [], description: 'Defaults to [] when empty; never null.' },
+      exclusions: { type: 'array', items: { type: 'string' }, default: [], description: 'Defaults to [] when empty; never null.' },
+      benefits: { type: 'array', items: { type: 'string' }, default: [], description: 'Defaults to [] when empty; never null.' },
+      requirements: { type: 'array', items: { type: 'string' }, default: [], description: 'Defaults to [] when empty; never null.' },
+      desirable: { type: 'array', items: { type: 'string' }, default: [], description: 'Defaults to [] when empty; never null.' },
+      standards: { type: 'array', items: { type: 'string' }, default: [], description: 'Defaults to [] when empty; never null.' }
+    }
+  },
+
+  JobPostRequest: {
+    type: 'object',
+    properties: {
+      title: { type: 'string' },
+      reportTo: { type: 'string' },
+      payRate: { type: 'string' },
+      contractTypes: { type: 'array', items: { type: 'string', enum: ['Full-Time Contract', 'Part-Time Contract', 'Zero-Hour Contract', 'Freelance / Remote Contract', 'Fixed-Term Contract'] }, default: [] },
+      hours: { type: 'string' },
+      location: { type: 'string' },
+      overview: { type: 'string', description: 'Canonical role description field.' },
+      responsibilities: { type: 'array', items: { type: 'string' }, default: [] },
+      exclusions: { type: 'array', items: { type: 'string' }, default: [] },
+      benefits: { type: 'array', items: { type: 'string' }, default: [] },
+      requirements: { type: 'array', items: { type: 'string' }, default: [] },
+      desirable: { type: 'array', items: { type: 'string' }, default: [] },
+      standards: { type: 'array', items: { type: 'string' }, default: [] }
+    }
+  },
+
+
   VisitStatus: { type: 'string', enum: ['Assigned', 'late', 'not-started', 'completed', 'in-progress'], description: 'Frontend visit/task status enum; separate from booking status.' },
   Visit: {
     type: 'object',

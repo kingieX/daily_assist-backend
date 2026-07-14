@@ -56,6 +56,38 @@ const frontendClientTitleSchema = z.enum(['Mr.', 'Mrs.', 'Ms.', 'Dr.', 'Prof.'])
 const frontendClientSexSchema = z.enum(['Male', 'Female', 'Prefer not to say']);
 const staffRoleLabelSchema = z.enum(['HOME_HELP_SUPPORT_ASSISTANT', 'ADMIN']);
 
+export const jobPostContractTypes = [
+  'Full-Time Contract',
+  'Part-Time Contract',
+  'Zero-Hour Contract',
+  'Freelance / Remote Contract',
+  'Fixed-Term Contract'
+] as const;
+
+const jobPostArraySchema = z.array(z.string().trim().min(1)).default([]);
+const contractTypesSchema = z.array(z.enum(jobPostContractTypes)).default([]);
+
+const jobPostFormSchema = z.object({
+  title: z.string().trim().min(1, 'Title is required').max(160),
+  reportTo: z.string().trim().max(160).default(''),
+  payRate: z.string().trim().max(120).default(''),
+  contractTypes: contractTypesSchema,
+  hours: z.string().trim().max(160).default(''),
+  location: z.string().trim().max(180).default(''),
+  overview: z.string().trim().max(5000).default(''),
+  responsibilities: jobPostArraySchema,
+  exclusions: jobPostArraySchema,
+  benefits: jobPostArraySchema,
+  requirements: jobPostArraySchema,
+  desirable: jobPostArraySchema,
+  standards: jobPostArraySchema
+});
+
+export const createJobPostSchema = jobPostFormSchema;
+export const updateJobPostSchema = jobPostFormSchema.partial().refine((data) => Object.keys(data).length > 0, {
+  message: 'At least one field must be provided for update'
+});
+
 const passwordSchema = z
   .string()
   .min(8, 'Password must be at least 8 characters')
@@ -263,6 +295,8 @@ export const convertApplicationSchema = z.object({
   password: passwordSchema.optional()
 }).refine((data) => Boolean(data.staffRole ?? data.role), { message: 'Staff role is required', path: ['staffRole'] });
 
+export type CreateJobPostInput = z.infer<typeof createJobPostSchema>;
+export type UpdateJobPostInput = z.infer<typeof updateJobPostSchema>;
 export type PackageListQuery = z.infer<typeof packageListQuerySchema>;
 export type CreatePackageInput = z.infer<typeof createPackageSchema>;
 export type UpdatePackageInput = z.infer<typeof updatePackageSchema>;
