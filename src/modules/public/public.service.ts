@@ -201,13 +201,29 @@ async function submitBooking(input: CreatePublicBookingInput) {
   });
 }
 
-async function submitWorkerApplication(input: WorkerApplicationInput & { cvFileUrl: string }) {
+
+async function generateNextApplicantStaffCode(): Promise<string> {
+  const [users, applications] = await Promise.all([
+    prisma.user.findMany({ where: { staffCode: { not: null } }, select: { staffCode: true } }),
+    (prisma.workerApplication as any).findMany({ where: { staffCode: { not: null } }, select: { staffCode: true } })
+  ]);
+  const used = new Set([...users, ...applications]
+    .map((record: any) => record.staffCode)
+    .filter((code: any): code is string => Boolean(code))
+    .map((code: string) => Number(code.replace(/^DA/, '')))
+    .filter((value: number) => Number.isFinite(value)));
+  let next = 10;
+  while (used.has(next)) next += 1;
+  return `DA${String(next).padStart(4, '0')}`;
+}
+
+async function submitWorkerApplication(input: WorkerApplicationInput & { cvFileUrl?: string; cvFileName?: string; cvFileSize?: number }) {
   const normalizedEmail = input.email.toLowerCase().trim();
 
   // Prevent duplicate applications (active or under review)
   const [existingUser, existingApplication] = await Promise.all([
     prisma.user.findUnique({ where: { email: normalizedEmail }, select: { id: true } }),
-    prisma.workerApplication.findFirst({
+    (prisma.workerApplication as any).findFirst({
       where: {
         email: normalizedEmail,
         status: { notIn: [ApplicationStatus.REJECTED] }
@@ -225,19 +241,26 @@ async function submitWorkerApplication(input: WorkerApplicationInput & { cvFileU
   }
 
   try {
-    const application = await prisma.workerApplication.create({
+    const application = await (prisma.workerApplication as any).create({
       data: {
         firstName: input.firstName,
         lastName: input.lastName,
         email: normalizedEmail,
         phone: input.phone,
-        cvFileUrl: input.cvFileUrl
+        role: input.role,
+        staffCode: await generateNextApplicantStaffCode(),
+        cvFileUrl: input.cvFileUrl,
+        cvFileName: input.cvFileName,
+        cvFileSize: input.cvFileSize
       },
       select: {
         id: true,
         firstName: true,
         lastName: true,
         email: true,
+        role: true,
+        staffCode: true,
+        applicantNumber: true,
         status: true,
         createdAt: true
       }

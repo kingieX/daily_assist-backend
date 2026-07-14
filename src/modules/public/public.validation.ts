@@ -104,7 +104,8 @@ export const workerApplicationSchema = z.object({
   firstName: z.string().trim().min(1, "First name is required"),
   lastName: z.string().trim().min(1, "Last name is required"),
   email: z.string().trim().email("Invalid email format"),
-  phone: z.string().trim().min(7, "Phone number is required")
+  phone: z.string().trim().min(7, "Phone number is required"),
+  role: z.string().trim().min(1, "Role is required")
 });
 
 export type CreateConsultationInput = z.infer<typeof createConsultationSchema>;

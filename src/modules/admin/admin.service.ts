@@ -1406,76 +1406,75 @@ async function deleteStaff(id: string) {
   };
 }
 
-async function listRecruitmentApplications(filters: RecruitmentListQuery) {
-  const page = filters.page;
-  const limit = filters.limit;
-  const skip = (page - 1) * limit;
 
-  const where: Prisma.WorkerApplicationWhereInput = {
-    status: filters.status
+function formatApplicationCv(application: any) {
+  if (!application.cvFileUrl) return null;
+  return {
+    title: application.cvFileName ?? path.basename(application.cvFileUrl),
+    date: application.createdAt.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' }),
+    size: application.cvFileSize ? `${(application.cvFileSize / (1024 * 1024)).toFixed(1)} MB` : '',
+    url: application.cvFileUrl
   };
+}
 
-  const [total, items] = await Promise.all([
-    db.workerApplication.count({ where }),
-    db.workerApplication.findMany({
-      where,
-      orderBy: [{ [filters.sortBy]: filters.sortOrder }, { id: 'asc' }],
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        email: true,
-        phone: true,
-        cvFileUrl: true,
-        status: true,
-        reviewNotes: true,
-        reviewedBy: true,
-        createdAt: true,
-        updatedAt: true,
-        reviewer: {
-          select: {
-            id: true,
-            email: true
-          }
-        }
-      },
-      skip,
-      take: limit
-    })
-  ]);
+function serializeApplication(application: any) {
+  return {
+    id: application.id,
+    number: application.applicantNumber,
+    role: application.role,
+    name: [application.firstName, application.lastName].filter(Boolean).join(' '),
+    firstName: application.firstName,
+    lastName: application.lastName,
+    email: application.email,
+    phone: application.phone,
+    staffId: application.staffCode,
+    cv: formatApplicationCv(application)
+  };
+}
 
-  return buildPaginatedResult(items, total, page, limit);
+async function removeApplicationCv(application: { cvFileUrl?: string | null }) {
+  if (!application.cvFileUrl?.startsWith('/uploads/cv/')) return;
+  const filePath = path.resolve(process.cwd(), application.cvFileUrl.replace(/^\//, ''));
+  const uploadsRoot = path.resolve(process.cwd(), 'uploads', 'cv');
+  if (!filePath.startsWith(uploadsRoot)) return;
+  await fs.promises.rm(filePath, { force: true });
+}
+
+async function ensureStaffCodeAvailable(staffCode: string) {
+  const existing = await db.user.findFirst({ where: { staffCode }, select: { id: true } });
+  if (existing) throw new ApiError(409, 'Staff ID is already in use');
+}
+
+async function listRecruitmentApplications(_filters: RecruitmentListQuery) {
+  const items = await db.workerApplication.findMany({
+    orderBy: [{ createdAt: 'desc' }, { id: 'asc' }]
+  });
+
+  return items.map(serializeApplication);
 }
 
 async function getRecruitmentApplicationById(id: string) {
+  const application = await db.workerApplication.findUnique({ where: { id } });
+
+  if (!application) {
+    throw new ApiError(404, 'Worker application not found');
+  }
+
+  return serializeApplication(application);
+}
+
+async function deleteRecruitmentApplication(id: string) {
   const application = await db.workerApplication.findUnique({
     where: { id },
-    select: {
-      id: true,
-      firstName: true,
-      lastName: true,
-      email: true,
-      phone: true,
-      cvFileUrl: true,
-      status: true,
-      reviewNotes: true,
-      reviewedBy: true,
-      createdAt: true,
-      updatedAt: true,
-      reviewer: {
-        select: {
-          id: true,
-          email: true
-        }
-      }
-    }
+    select: { id: true, cvFileUrl: true }
   });
 
   if (!application) {
     throw new ApiError(404, 'Worker application not found');
   }
 
-  return application;
+  await db.workerApplication.delete({ where: { id } });
+  await removeApplicationCv(application);
 }
 
 async function updateRecruitmentStatus(
@@ -1524,81 +1523,62 @@ async function updateRecruitmentStatus(
 async function convertApplicationToStaff(
   id: string,
   input: ConvertApplicationInput,
-  actorUserId: string
+  _actorUserId: string
 ) {
-  const application = await db.workerApplication.findUnique({
-    where: { id },
-    select: {
-      id: true,
-      firstName: true,
-      lastName: true,
-      email: true,
-      phone: true,
-      status: true
-    }
-  });
+  const application = await db.workerApplication.findUnique({ where: { id } });
 
   if (!application) {
     throw new ApiError(404, 'Worker application not found');
   }
 
-  if (application.status === ApplicationStatus.CONVERTED_TO_STAFF) {
-    throw new ApiError(400, 'Application has already been converted to staff');
-  }
-
-  if (application.status !== ApplicationStatus.APPROVED) {
-    throw new ApiError(400, 'Only approved applications can be converted to staff');
-  }
-
-  const normalizedEmail = normalizeEmail(application.email);
-  const existingUser = await db.user.findUnique({
+  const normalizedEmail = normalizeEmail(input.email);
+  const emailOwner = await db.user.findUnique({
     where: { email: normalizedEmail },
     select: { id: true }
   });
 
-  if (existingUser) {
-    throw new ApiError(409, 'A user with this email already exists');
+  if (emailOwner) {
+    throw new ApiError(409, 'Email address is already in use');
   }
 
-  const passwordHash = await hashPassword(input.password);
-  const staffCode = await generateNextStaffCode(Role.STAFF);
+  await ensureStaffCodeAvailable(input.staffId);
 
-  return db.$transaction(async (tx: any) => {
-    const staffUser = await tx.user.create({
-      data: {
-        email: normalizedEmail,
-        staffCode,
-        passwordHash,
-        role: Role.STAFF,
-        status: UserStatus.ACTIVE,
-        staffProfile: {
-          create: {
-            firstName: application.firstName,
-            lastName: application.lastName,
-            phone: application.phone
-          }
+  const passwordHash = await hashPassword(input.password ?? generateTempPassword());
+  const role = input.staffRole ?? input.role;
+
+  const staff = await db.user.create({
+    data: {
+      email: normalizedEmail,
+      staffCode: input.staffId,
+      passwordHash,
+      role: Role.STAFF,
+      status: UserStatus.ACTIVE,
+      staffProfile: {
+        create: {
+          firstName: input.firstName,
+          lastName: input.lastName,
+          phone: input.phone,
+          dobText: input.dob,
+          dateOfBirth: parseDob(input.dob),
+          sex: frontendSexToDbSex(input.sex),
+          staffRoleLabel: role,
+          photoUrl: (input as any).photoUrl,
+          cvFileUrl: (input as any).cvFileUrl ?? application.cvFileUrl
         }
-      },
-      select: {
-        id: true,
-        email: true,
-        role: true,
-        status: true,
-        createdAt: true,
-        staffProfile: true
       }
-    });
-
-    await tx.workerApplication.update({
-      where: { id: application.id },
-      data: {
-        status: ApplicationStatus.CONVERTED_TO_STAFF,
-        reviewer: { connect: { id: actorUserId } }
-      }
-    });
-
-    return staffUser;
+    },
+    select: {
+      id: true,
+      staffCode: true,
+      email: true,
+      status: true,
+      createdAt: true,
+      updatedAt: true,
+      staffProfile: true
+    }
   });
+
+  return serializeStaff(staff);
 }
 
 export const adminService = {
@@ -1633,6 +1613,7 @@ export const adminService = {
   deleteStaff,
   listRecruitmentApplications,
   getRecruitmentApplicationById,
+  deleteRecruitmentApplication,
   updateRecruitmentStatus,
   convertApplicationToStaff
 };

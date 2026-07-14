@@ -14,7 +14,7 @@ function clientProofUrl(req: Request): { proofOfAddressUrl?: string } {
 
 function staffUploadUrls(req: Request): { photoUrl?: string; cvFileUrl?: string } {
   const files = req.files as Record<string, Express.Multer.File[]> | undefined;
-  const photo = files?.photo?.[0];
+  const photo = files?.photo?.[0] ?? files?.image?.[0];
   const cv = files?.cv?.[0];
   return {
     ...(photo ? { photoUrl: `/uploads/staff/photos/${path.basename(photo.path)}` } : {}),
@@ -82,7 +82,7 @@ const getBookingById = asyncHandler(async (req: Request, res: Response) => {
 const assignBooking = asyncHandler(async (req: Request, res: Response) => {
   const booking = await adminService.assignBooking(
     req.params.id as string,
-    req.body,
+    { ...req.body, ...staffUploadUrls(req) },
     getActorUserId(req)
   );
   return sendSuccess(res, 200, 'Booking assigned successfully', booking);
@@ -190,6 +190,12 @@ const getRecruitmentApplicationById = asyncHandler(async (req: Request, res: Res
   return sendSuccess(res, 200, 'Recruitment application retrieved', application);
 });
 
+
+const deleteRecruitmentApplication = asyncHandler(async (req: Request, res: Response) => {
+  await adminService.deleteRecruitmentApplication(req.params.id as string);
+  return res.status(204).send();
+});
+
 const updateRecruitmentStatus = asyncHandler(async (req: Request, res: Response) => {
   const application = await adminService.updateRecruitmentStatus(
     req.params.id as string,
@@ -202,7 +208,7 @@ const updateRecruitmentStatus = asyncHandler(async (req: Request, res: Response)
 const convertApplicationToStaff = asyncHandler(async (req: Request, res: Response) => {
   const staff = await adminService.convertApplicationToStaff(
     req.params.id as string,
-    req.body,
+    { ...req.body, ...staffUploadUrls(req) },
     getActorUserId(req)
   );
   return sendSuccess(res, 201, 'Applicant converted to staff successfully', staff);
@@ -240,6 +246,7 @@ export const adminController = {
   deleteStaff,
   listRecruitmentApplications,
   getRecruitmentApplicationById,
+  deleteRecruitmentApplication,
   updateRecruitmentStatus,
   convertApplicationToStaff
 };

@@ -55,7 +55,7 @@ function sanitizeBaseFilename(originalName: string): string {
 }
 
 function staffUploadPath(fieldName: string): string {
-  return fieldName === 'photo' ? STAFF_PHOTO_DIRECTORY : STAFF_CV_DIRECTORY;
+  return fieldName === 'photo' || fieldName === 'image' ? STAFF_PHOTO_DIRECTORY : STAFF_CV_DIRECTORY;
 }
 
 const storage = multer.diskStorage({
@@ -119,7 +119,7 @@ const staffUpload = multer({
   },
   fileFilter: (_req, file, callback) => {
     const extension = path.extname(file.originalname).toLowerCase();
-    if (file.fieldname === 'photo') {
+    if (file.fieldname === 'photo' || file.fieldname === 'image') {
       if (!allowedStaffPhotoExtensions.has(extension) || !allowedStaffPhotoMimeTypes.has(file.mimetype)) {
         callback(new ApiError(400, 'Invalid photo format. Allowed formats: JPG, PNG, WEBP, GIF.'));
         return;
@@ -144,6 +144,7 @@ const staffUpload = multer({
 export const uploadStaffFiles: RequestHandler = (req, res, next) => {
   staffUpload.fields([
     { name: 'photo', maxCount: 1 },
+    { name: 'image', maxCount: 1 },
     { name: 'cv', maxCount: 1 }
   ])(req, res, (error: unknown) => {
     if (error instanceof multer.MulterError) {

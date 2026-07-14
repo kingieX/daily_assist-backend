@@ -26,7 +26,6 @@ import {
   updateBookingSchema,
   updateClientSchema,
   updatePackageSchema,
-  updateRecruitmentStatusSchema,
   updateStaffSchema
 } from './admin.validation';
 
@@ -109,13 +108,14 @@ adminRouter.get(
   validate({ params: idParamSchema }),
   adminController.getRecruitmentApplicationById
 );
-adminRouter.patch(
-  '/recruitment/applications/:id/status',
-  validate({ params: idParamSchema, body: updateRecruitmentStatusSchema }),
-  adminController.updateRecruitmentStatus
+adminRouter.delete(
+  '/recruitment/applications/:id',
+  validate({ params: idParamSchema }),
+  adminController.deleteRecruitmentApplication
 );
 adminRouter.post(
   '/recruitment/applications/:id/convert-to-staff',
+  uploadStaffFiles,
   validate({ params: idParamSchema, body: convertApplicationSchema }),
   adminController.convertApplicationToStaff
 );

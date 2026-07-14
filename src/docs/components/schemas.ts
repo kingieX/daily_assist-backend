@@ -336,16 +336,17 @@ export const schemas: SchemasMap = {
 
   WorkerApplicationRequest: {
     type: 'object',
-    required: ['firstName', 'lastName', 'email', 'phone', 'cv'],
+    required: ['firstName', 'lastName', 'email', 'phone', 'role'],
     properties: {
       firstName: { type: 'string', example: 'Alice' },
       lastName: { type: 'string', example: 'Smith' },
       email: { type: 'string', format: 'email', example: 'alice.smith@example.com' },
       phone: { type: 'string', example: '+1 555 123 4567' },
+      role: { type: 'string', example: 'Home-Help & Support Assistant Role', description: 'Stored exactly as submitted; admin recruitment reads this value.' },
       cv: {
         type: 'string',
         format: 'binary',
-        description: 'Upload CV file (PDF, DOC, or DOCX), max size 5MB.'
+        description: 'Optional upload CV file (PDF, DOC, or DOCX), max size 5MB.'
       }
     }
   },
@@ -357,8 +358,38 @@ export const schemas: SchemasMap = {
       firstName: { type: 'string' },
       lastName: { type: 'string' },
       email: { type: 'string', format: 'email' },
+      role: { type: 'string' },
+      number: { type: 'integer' },
+      staffId: { type: 'string' },
       status: { type: 'string', enum: ['PENDING'], example: 'PENDING' },
       createdAt: { type: 'string', format: 'date-time' }
     }
   }
+,
+  CV: {
+    type: 'object',
+    properties: {
+      title: { type: 'string' },
+      date: { type: 'string' },
+      size: { type: 'string' },
+      url: { type: 'string' }
+    }
+  },
+
+  Application: {
+    type: 'object',
+    properties: {
+      id: { type: 'string', format: 'uuid' },
+      number: { type: 'integer' },
+      role: { type: 'string', example: 'Home-Help & Support Assistant Role' },
+      name: { type: 'string' },
+      firstName: { type: 'string' },
+      lastName: { type: 'string' },
+      email: { type: 'string', format: 'email' },
+      phone: { type: 'string' },
+      staffId: { type: 'string', description: 'Pre-assigned staff ID; editable during conversion.' },
+      cv: { $ref: '#/components/schemas/CV', nullable: true }
+    }
+  }
+
 };
