@@ -174,6 +174,62 @@ const staffFormSchema: OpenAPIV3.SchemaObject = {
 };
 
 export const adminPaths: OpenAPIV3.PathsObject = {
+
+  '/admin/job-posts': {
+    get: {
+      tags: ['Admin — Job Posts'],
+      security: adminSecurity,
+      summary: 'List all admin job posts',
+      description: 'Returns the full list newest first, with every list field normalized to an array and overview as the canonical description field.',
+      responses: {
+        200: { description: 'Job posts retrieved', content: { 'application/json': { schema: { type: 'object', properties: { success: { type: 'boolean' }, message: { type: 'string' }, data: { type: 'array', items: { $ref: '#/components/schemas/JobPost' } } } } } } },
+        401: { $ref: '#/components/responses/UnauthorizedError' },
+        403: { $ref: '#/components/responses/ForbiddenError' }
+      }
+    },
+    post: {
+      tags: ['Admin — Job Posts'],
+      security: adminSecurity,
+      summary: 'Create a job post',
+      requestBody: { required: true, content: { 'application/json': { schema: { allOf: [{ $ref: '#/components/schemas/JobPostRequest' }, { required: ['title'] }] } } } },
+      responses: {
+        201: { description: 'Job post created', content: { 'application/json': { schema: { type: 'object', properties: { success: { type: 'boolean' }, message: { type: 'string' }, data: { $ref: '#/components/schemas/JobPost' } } } } } },
+        400: { $ref: '#/components/responses/ValidationError' },
+        401: { $ref: '#/components/responses/UnauthorizedError' },
+        403: { $ref: '#/components/responses/ForbiddenError' }
+      }
+    }
+  },
+  '/admin/job-posts/{id}': {
+    patch: {
+      tags: ['Admin — Job Posts'],
+      security: adminSecurity,
+      summary: 'Update a job post',
+      parameters: [idParam],
+      description: 'Array fields replace stored arrays entirely. contractType is deprecated and is never written back.',
+      requestBody: { required: true, content: { 'application/json': { schema: { $ref: '#/components/schemas/JobPostRequest' } } } },
+      responses: {
+        200: { description: 'Job post updated', content: { 'application/json': { schema: { type: 'object', properties: { success: { type: 'boolean' }, message: { type: 'string' }, data: { $ref: '#/components/schemas/JobPost' } } } } } },
+        400: { $ref: '#/components/responses/ValidationError' },
+        401: { $ref: '#/components/responses/UnauthorizedError' },
+        403: { $ref: '#/components/responses/ForbiddenError' },
+        404: { $ref: '#/components/responses/NotFound' }
+      }
+    },
+    delete: {
+      tags: ['Admin — Job Posts'],
+      security: adminSecurity,
+      summary: 'Delete a job post permanently',
+      parameters: [idParam],
+      description: 'Worker applications currently store the applied role as free text, so deleting a job post does not cascade, nullify, or block linked recruitment applications.',
+      responses: {
+        204: { description: 'Job post deleted; no response body.' },
+        401: { $ref: '#/components/responses/UnauthorizedError' },
+        403: { $ref: '#/components/responses/ForbiddenError' },
+        404: { $ref: '#/components/responses/NotFound' }
+      }
+    }
+  },
   '/admin/dashboard/summary': {
     get: {
       tags: ['Admin — Dashboard'],
