@@ -4,6 +4,7 @@ import { ApiError } from '../../utils/api-error';
 import type {
   CreateAnnouncementInput,
   CreateThreadInput,
+  ListAnnouncementsQuery,
   ListNotificationsQuery,
   ListThreadsQuery,
   PostMessageInput,
@@ -12,7 +13,9 @@ import type {
 
 const COMM_AUDIENCE = {
   ALL_STAFF: 'ALL_STAFF',
-  SELECTED_STAFF: 'SELECTED_STAFF'
+  SELECTED_STAFF: 'SELECTED_STAFF',
+  BY_ZONE: 'BY_ZONE',
+  CAR_OWNER: 'CAR_OWNER'
 } as const;
 
 const COMM_NOTIFICATION_TYPE = {
@@ -31,6 +34,72 @@ function paginated<T>(items: T[], total: number, page: number, limit: number) {
       total,
       totalPages: Math.max(1, Math.ceil(total / limit))
     }
+  };
+}
+
+function staffName(staff: any): string {
+  const profile = staff?.staffProfile;
+  return [profile?.firstName, profile?.lastName].filter(Boolean).join(' ').trim() || staff?.email || staff?.id || '';
+}
+
+function announcementIcon(sender: string): 'megaphone' | 'bell' | 'headset' {
+  if (sender === 'System') return 'bell';
+  if (sender === 'Daily Assist Uk Office') return 'headset';
+  return 'megaphone';
+}
+
+function visitsCard(announcement: any, staffFacing = false) {
+  if (!announcement.visitSummary) return null;
+  return {
+    ...(staffFacing ? { title: 'Today’s Visit Summary' } : {}),
+    count: announcement.visitCount ?? 0,
+    firstVisit: announcement.firstVisitTime ?? '',
+    lastVisit: announcement.lastVisitTime ?? ''
+  };
+}
+
+function adminAnnouncementResponse(announcement: any) {
+  const acknowledgements = announcement.acknowledgeRequired
+    ? (announcement.recipients ?? []).map((recipient: any) => ({
+      staffId: recipient.staffId,
+      name: staffName(recipient.staff),
+      status: recipient.acknowledgedAt ? 'Acknowledged' : 'Pending',
+      acknowledgedAt: recipient.acknowledgedAt ? recipient.acknowledgedAt.toISOString() : null
+    }))
+    : [];
+  return {
+    id: announcement.id,
+    icon: announcementIcon(announcement.sender),
+    title: announcement.title,
+    sender: announcement.sender,
+    sentAt: announcement.createdAt.toISOString(),
+    sendTo: announcement.sendTo,
+    recipients: announcement.sendTo === 'All Staff' ? 'All Staff' : `${announcement.recipients?.length ?? 0} staff`,
+    message: announcement.body,
+    acknowledgeRequired: announcement.acknowledgeRequired,
+    visitsCard: visitsCard(announcement),
+    acknowledgements,
+    acknowledgedCount: acknowledgements.filter((item: any) => item.status === 'Acknowledged').length,
+    totalRecipients: announcement.recipients?.length ?? 0
+  };
+}
+
+function staffAnnouncementResponse(recipient: any) {
+  const announcement = recipient.announcement;
+  return {
+    id: announcement.id,
+    icon: announcementIcon(announcement.sender),
+    subject: announcement.title,
+    from: announcement.sender,
+    sent: announcement.createdAt.toISOString(),
+    greeting: null,
+    body: announcement.body,
+    instructions: [],
+    closing: null,
+    visitsCard: visitsCard(announcement, true),
+    acknowledgeRequired: announcement.acknowledgeRequired,
+    acknowledgedByMe: Boolean(recipient.acknowledgedAt),
+    isNew: !recipient.readAt
   };
 }
 
@@ -254,32 +323,48 @@ async function deleteMessage(messageId: string, currentUserRole: Role, currentUs
   return { id: messageId, deleted: true };
 }
 
-async function listAnnouncements(currentUserRole: Role, currentUserId: string) {
+async function listAnnouncements(currentUserRole: Role, currentUserId: string, query?: ListAnnouncementsQuery) {
   if (currentUserRole === Role.STAFF) {
-    return db.announcementRecipient.findMany({
+    const recipients = await db.announcementRecipient.findMany({
       where: { staffId: currentUserId },
       include: {
-        announcement: {
-          select: {
-            id: true,
-            title: true,
-            body: true,
-            audienceType: true,
-            createdAt: true,
-            createdBy: true
-          }
-        }
+        announcement: true
       },
       orderBy: { announcement: { createdAt: 'desc' } }
     });
+    return recipients.map(staffAnnouncementResponse);
   }
 
-  return db.announcement.findMany({
-    include: {
-      _count: { select: { recipients: true } }
-    },
-    orderBy: { createdAt: 'desc' }
-  });
+  const page = query?.page ?? 1;
+  const limit = query?.pageSize ?? 20;
+  const skip = (page - 1) * limit;
+  const where: any = {};
+  if (query?.sendTo) where.sendTo = query.sendTo;
+  if (query?.fromDate || query?.toDate) {
+    where.createdAt = {};
+    if (query.fromDate) where.createdAt.gte = query.fromDate;
+    if (query.toDate) where.createdAt.lte = query.toDate;
+  }
+
+  const [total, items] = await Promise.all([
+    db.announcement.count({ where }),
+    db.announcement.findMany({
+      where,
+      include: {
+        recipients: {
+          include: {
+            staff: { select: { id: true, email: true, staffProfile: { select: { firstName: true, lastName: true } } } }
+          },
+          orderBy: { staffId: 'asc' }
+        }
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+      skip,
+      take: limit
+    })
+  ]);
+
+  return paginated(items.map(adminAnnouncementResponse), total, page, limit);
 }
 
 async function markAnnouncementRead(announcementId: string, userId: string) {
@@ -299,18 +384,19 @@ async function markAnnouncementRead(announcementId: string, userId: string) {
 }
 
 async function createAnnouncement(input: CreateAnnouncementInput, actorUserId: string) {
-  const staffWhere: any = {
-    role: Role.STAFF,
-    status: 'ACTIVE'
-  };
+  const staffWhere: any = { role: Role.STAFF, status: 'ACTIVE' };
 
-  if (input.audienceType === COMM_AUDIENCE.SELECTED_STAFF) {
-    staffWhere.id = { in: input.staffIds ?? [] };
+  if (input.sendTo === 'Select Staff') {
+    staffWhere.id = { in: input.recipientIds };
+  } else if (input.sendTo === 'By Zone') {
+    staffWhere.staffProfile = { zone: input.zone };
+  } else if (input.sendTo === 'Car Owner') {
+    staffWhere.staffProfile = { ownsCar: true };
   }
 
   const recipients = await db.user.findMany({
     where: staffWhere,
-    select: { id: true }
+    select: { id: true, email: true, staffProfile: { select: { firstName: true, lastName: true } } }
   });
 
   if (recipients.length === 0) {
@@ -321,24 +407,30 @@ async function createAnnouncement(input: CreateAnnouncementInput, actorUserId: s
     const announcement = await tx.announcement.create({
       data: {
         title: input.title,
-        body: input.body,
+        body: input.message,
+        sender: input.sender,
         audienceType: input.audienceType,
+        sendTo: input.sendTo,
+        recipientIds: input.recipientIds,
+        zone: input.zone ?? null,
+        acknowledgeRequired: input.acknowledgeRequired,
+        visitSummary: input.visitSummary,
+        visitCount: input.visitSummary ? input.visitCount : null,
+        firstVisitTime: input.visitSummary ? input.firstVisitTime : null,
+        lastVisitTime: input.visitSummary ? input.lastVisitTime : null,
         createdBy: actorUserId,
-        recipients: {
-          createMany: {
-            data: recipients.map((recipient: any) => ({ staffId: recipient.id }))
-          }
-        }
+        recipients: { createMany: { data: recipients.map((recipient: any) => ({ staffId: recipient.id })) } }
       },
       include: {
-        _count: { select: { recipients: true } }
+        recipients: {
+          include: { staff: { select: { id: true, email: true, staffProfile: { select: { firstName: true, lastName: true } } } } },
+          orderBy: { staffId: 'asc' }
+        }
       }
     });
 
     const recipientPreferences = await tx.notificationPreference.findMany({
-      where: {
-        userId: { in: recipients.map((recipient: any) => recipient.id) }
-      },
+      where: { userId: { in: recipients.map((recipient: any) => recipient.id) } },
       select: { userId: true, inAppEnabled: true, announcementEnabled: true }
     });
     const prefsMap = new Map<string, any>(recipientPreferences.map((pref: any) => [pref.userId, pref]));
@@ -353,13 +445,34 @@ async function createAnnouncement(input: CreateAnnouncementInput, actorUserId: s
           userId: recipient.id,
           type: COMM_NOTIFICATION_TYPE.ANNOUNCEMENT,
           title: input.title,
-          body: input.body.slice(0, 200),
+          body: input.message.slice(0, 200),
           metadataJson: { announcementId: announcement.id }
         }))
     });
 
-    return announcement;
+    return adminAnnouncementResponse(announcement);
   });
+}
+
+async function acknowledgeAnnouncement(announcementId: string, userId: string) {
+  const recipient = await db.announcementRecipient.findFirst({
+    where: { announcementId, staffId: userId },
+    include: { announcement: { select: { acknowledgeRequired: true } } }
+  });
+
+  if (!recipient) throw new ApiError(404, 'Announcement not found');
+  if (!recipient.announcement.acknowledgeRequired) throw new ApiError(400, 'This announcement does not require acknowledgement');
+  if (recipient.acknowledgedAt) {
+    return { id: announcementId, acknowledgedByMe: true, acknowledgedAt: recipient.acknowledgedAt.toISOString() };
+  }
+
+  const updated = await db.announcementRecipient.update({
+    where: { id: recipient.id },
+    data: { acknowledgedAt: new Date(), readAt: recipient.readAt ?? new Date() },
+    select: { acknowledgedAt: true }
+  });
+
+  return { id: announcementId, acknowledgedByMe: true, acknowledgedAt: updated.acknowledgedAt.toISOString() };
 }
 
 async function deleteAnnouncement(id: string) {
@@ -458,6 +571,7 @@ export const communicationsService = {
   listAnnouncements,
   markAnnouncementRead,
   createAnnouncement,
+  acknowledgeAnnouncement,
   deleteAnnouncement,
   listNotifications,
   markNotificationRead,

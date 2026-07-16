@@ -13,8 +13,19 @@ const paginationSchema = z.object({
 
 const COMM_AUDIENCE = {
   ALL_STAFF: 'ALL_STAFF',
-  SELECTED_STAFF: 'SELECTED_STAFF'
+  SELECTED_STAFF: 'SELECTED_STAFF',
+  BY_ZONE: 'BY_ZONE',
+  CAR_OWNER: 'CAR_OWNER'
 } as const;
+
+const announcementSenders = ['Daily Assist Uk Office', 'Operation Manager', 'HR Department', 'System'] as const;
+const announcementSendToValues = ['All Staff', 'Select Staff', 'By Zone', 'Car Owner'] as const;
+const sendToAudienceMap: Record<(typeof announcementSendToValues)[number], (typeof COMM_AUDIENCE)[keyof typeof COMM_AUDIENCE]> = {
+  'All Staff': COMM_AUDIENCE.ALL_STAFF,
+  'Select Staff': COMM_AUDIENCE.SELECTED_STAFF,
+  'By Zone': COMM_AUDIENCE.BY_ZONE,
+  'Car Owner': COMM_AUDIENCE.CAR_OWNER
+};
 
 const COMM_NOTIFICATION_TYPE = {
   MESSAGE: 'MESSAGE',
@@ -56,19 +67,39 @@ export const postMessageSchema = z
 export const createAnnouncementSchema = z
   .object({
     title: z.string().trim().min(1).max(200),
-    body: z.string().trim().min(1).max(4000),
-    audienceType: z.enum([COMM_AUDIENCE.ALL_STAFF, COMM_AUDIENCE.SELECTED_STAFF]),
-    staffIds: z.array(z.string().uuid()).optional()
+    sender: z.enum(announcementSenders),
+    sendTo: z.enum(announcementSendToValues),
+    recipientIds: z.array(z.string().uuid()).default([]),
+    zone: z.string().trim().min(1).max(120).optional(),
+    message: z.string().trim().min(1).max(4000),
+    acknowledgeRequired: z.boolean().default(false),
+    visitSummary: z.boolean().default(false),
+    visitCount: z.coerce.number().int().min(0).optional(),
+    firstVisitTime: z.string().trim().min(1).max(40).optional(),
+    lastVisitTime: z.string().trim().min(1).max(40).optional()
   })
   .superRefine((data, ctx) => {
-    if (data.audienceType === COMM_AUDIENCE.SELECTED_STAFF && (!data.staffIds || data.staffIds.length === 0)) {
-      ctx.addIssue({
-        code: 'custom',
-        message: 'staffIds is required when audienceType is SELECTED_STAFF',
-        path: ['staffIds']
-      });
+    if (data.sendTo === 'Select Staff' && data.recipientIds.length === 0) {
+      ctx.addIssue({ code: 'custom', message: 'recipientIds is required when sendTo is Select Staff', path: ['recipientIds'] });
     }
-  });
+    if (data.sendTo === 'By Zone' && !data.zone) {
+      ctx.addIssue({ code: 'custom', message: 'zone is required when sendTo is By Zone', path: ['zone'] });
+    }
+    if (data.visitSummary) {
+      if (data.visitCount === undefined) ctx.addIssue({ code: 'custom', message: 'visitCount is required when visitSummary is true', path: ['visitCount'] });
+      if (!data.firstVisitTime) ctx.addIssue({ code: 'custom', message: 'firstVisitTime is required when visitSummary is true', path: ['firstVisitTime'] });
+      if (!data.lastVisitTime) ctx.addIssue({ code: 'custom', message: 'lastVisitTime is required when visitSummary is true', path: ['lastVisitTime'] });
+    }
+  })
+  .transform((data) => ({ ...data, audienceType: sendToAudienceMap[data.sendTo] }));
+
+export const listAnnouncementsQuerySchema = z.object({
+  page: queryPage(),
+  pageSize: queryLimit(),
+  sendTo: z.preprocess(emptyStringToUndefined, z.enum(announcementSendToValues).optional()),
+  fromDate: z.preprocess(emptyStringToUndefined, z.coerce.date().optional()),
+  toDate: z.preprocess(emptyStringToUndefined, z.coerce.date().optional())
+});
 
 export const listNotificationsQuerySchema = paginationSchema.extend({
   type: z.preprocess(
@@ -107,5 +138,6 @@ export type ListThreadsQuery = z.infer<typeof listThreadsQuerySchema>;
 export type CreateThreadInput = z.infer<typeof createThreadSchema>;
 export type PostMessageInput = z.infer<typeof postMessageSchema>;
 export type CreateAnnouncementInput = z.infer<typeof createAnnouncementSchema>;
+export type ListAnnouncementsQuery = z.infer<typeof listAnnouncementsQuerySchema>;
 export type ListNotificationsQuery = z.infer<typeof listNotificationsQuerySchema>;
 export type UpdateNotificationPreferencesInput = z.infer<typeof updateNotificationPreferencesSchema>;

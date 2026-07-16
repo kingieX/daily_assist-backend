@@ -22,6 +22,7 @@ staffCommunicationsRouter.delete('/messages/:id', validate({ params: idParamSche
 
 staffCommunicationsRouter.get('/announcements', staffCommunicationsController.listAnnouncements);
 staffCommunicationsRouter.patch('/announcements/:id/read', validate({ params: idParamSchema, body: markAnnouncementReadSchema }), staffCommunicationsController.markAnnouncementRead);
+staffCommunicationsRouter.post('/announcements/:id/acknowledge', validate({ params: idParamSchema }), staffCommunicationsController.acknowledgeAnnouncement);
 
 staffCommunicationsRouter.get('/notifications', validate({ query: listNotificationsQuerySchema }), staffCommunicationsController.listNotifications);
 staffCommunicationsRouter.patch('/notifications/:id/read', validate({ params: idParamSchema, body: markNotificationReadSchema }), staffCommunicationsController.markNotificationRead);

@@ -4,6 +4,40 @@ import { prisma } from '../../config/prisma';
 import { ApiError } from '../../utils/api-error';
 import type { CreateConsultationInput, CreatePublicBookingInput, WorkerApplicationInput } from './public.validation';
 
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+}
+
+function serializePublicJobPost(jobPost: any) {
+  return {
+    id: jobPost.id,
+    title: jobPost.title,
+    reportTo: jobPost.reportTo ?? '',
+    payRate: jobPost.payRate ?? '',
+    contractTypes: stringArray(jobPost.contractTypes),
+    hours: jobPost.hours ?? '',
+    location: jobPost.location ?? '',
+    overview: jobPost.overview ?? '',
+    responsibilities: stringArray(jobPost.responsibilities),
+    exclusions: stringArray(jobPost.exclusions),
+    benefits: stringArray(jobPost.benefits),
+    requirements: stringArray(jobPost.requirements),
+    desirable: stringArray(jobPost.desirable),
+    standards: stringArray(jobPost.standards)
+  };
+}
+
+async function listJobPosts() {
+  const posts = await (prisma as any).jobPost.findMany({ orderBy: [{ createdAt: 'desc' }, { id: 'asc' }] });
+  return posts.map(serializePublicJobPost);
+}
+
+async function getJobPostById(id: string) {
+  const post = await (prisma as any).jobPost.findUnique({ where: { id } });
+  if (!post) throw new ApiError(404, 'Job post not found');
+  return serializePublicJobPost(post);
+}
+
 // ─── Packages ─────────────────────────────────────────────────────────────────
 
 async function listPackages() {
@@ -276,6 +310,8 @@ async function submitWorkerApplication(input: WorkerApplicationInput & { cvFileU
 }
 
 export const publicService = {
+  listJobPosts,
+  getJobPostById,
   listPackages,
   getPackageBySlug,
   listServices,

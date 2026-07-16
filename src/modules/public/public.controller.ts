@@ -12,6 +12,16 @@ async function removeUploadedFile(filePath?: string): Promise<void> {
   await fs.unlink(filePath).catch(() => undefined);
 }
 
+const getJobPosts = asyncHandler(async (_req: Request, res: Response) => {
+  const posts = await publicService.listJobPosts();
+  return sendSuccess(res, 200, 'Job posts retrieved', posts);
+});
+
+const getJobPostById = asyncHandler(async (req: Request, res: Response) => {
+  const post = await publicService.getJobPostById(req.params.id as string);
+  return sendSuccess(res, 200, 'Job post retrieved', post);
+});
+
 const getPackages = asyncHandler(async (_req: Request, res: Response) => {
   const packages = await publicService.listPackages();
   return sendSuccess(res, 200, 'Packages retrieved', packages);
@@ -62,6 +72,8 @@ const createWorkerApplication = asyncHandler(async (req: Request, res: Response)
 });
 
 export const publicController = {
+  getJobPosts,
+  getJobPostById,
   getPackages,
   getPackageBySlug,
   getServices,

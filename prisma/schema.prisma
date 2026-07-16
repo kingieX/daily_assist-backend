@@ -89,6 +89,8 @@ enum ConversationType {
 enum AudienceType {
   ALL_STAFF
   SELECTED_STAFF
+  BY_ZONE
+  CAR_OWNER
 }
 
 enum NotificationType {
@@ -436,11 +438,20 @@ model Message {
 }
 
 model Announcement {
-  id           String                  @id @default(uuid())
-  title        String
-  body         String
-  audienceType AudienceType            @map("audience_type")
-  createdBy    String                  @map("created_by")
+  id                  String                  @id @default(uuid())
+  title               String
+  body                String
+  sender              String                  @default("Daily Assist Uk Office")
+  audienceType        AudienceType            @map("audience_type")
+  sendTo              String                  @default("All Staff") @map("send_to")
+  recipientIds        Json                    @default("[]") @map("recipient_ids")
+  zone                String?
+  acknowledgeRequired Boolean                 @default(false) @map("acknowledge_required")
+  visitSummary        Boolean                 @default(false) @map("visit_summary")
+  visitCount          Int?                    @map("visit_count")
+  firstVisitTime      String?                 @map("first_visit_time")
+  lastVisitTime       String?                 @map("last_visit_time")
+  createdBy           String                  @map("created_by")
   creator      User                    @relation("AnnouncementCreator", fields: [createdBy], references: [id])
   createdAt    DateTime                @default(now()) @map("created_at")
   updatedAt    DateTime                @updatedAt @map("updated_at")
@@ -457,6 +468,7 @@ model AnnouncementRecipient {
   staffId        String       @map("staff_id")
   staff          User         @relation(fields: [staffId], references: [id], onDelete: Cascade)
   readAt         DateTime?    @map("read_at")
+  acknowledgedAt DateTime?    @map("acknowledged_at")
 
   @@unique([announcementId, staffId])
   @@index([staffId])

@@ -57,6 +57,12 @@ const markAnnouncementRead = asyncHandler(async (req: Request, res: Response) =>
   return sendSuccess(res, 200, 'Announcement marked as read', result);
 });
 
+const acknowledgeAnnouncement = asyncHandler(async (req: Request, res: Response) => {
+  const user = currentUser(req);
+  const result = await communicationsService.acknowledgeAnnouncement(req.params.id as string, user.id);
+  return sendSuccess(res, 200, 'Announcement acknowledged', result);
+});
+
 const listNotifications = asyncHandler(async (req: Request, res: Response) => {
   const user = currentUser(req);
   const result = await communicationsService.listNotifications(req.query as any, user.id);
@@ -89,6 +95,7 @@ export const staffCommunicationsController = {
   deleteMessage,
   listAnnouncements,
   markAnnouncementRead,
+  acknowledgeAnnouncement,
   listNotifications,
   markNotificationRead,
   getNotificationPreferences,

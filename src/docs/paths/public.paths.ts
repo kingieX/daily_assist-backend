@@ -1,6 +1,24 @@
 import type { OpenAPIV3 } from 'openapi-types';
 
 export const publicPaths: OpenAPIV3.PathsObject = {
+
+  '/public/job-posts': {
+    get: {
+      tags: ['Public — Catalog'],
+      summary: 'List public job posts',
+      description: 'Unauthenticated endpoint returning the same canonical job-post data created through POST /admin/job-posts.',
+      responses: { '200': { description: 'Job posts retrieved', content: { 'application/json': { schema: { allOf: [{ $ref: '#/components/schemas/SuccessResponse' }, { type: 'object', properties: { data: { type: 'array', items: { $ref: '#/components/schemas/JobPost' } } } }] } } } } }
+    }
+  },
+  '/public/job-posts/{id}': {
+    get: {
+      tags: ['Public — Catalog'],
+      summary: 'Get public job post by ID',
+      description: 'Unauthenticated endpoint returning one full job-post record by UUID.',
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+      responses: { '200': { description: 'Job post retrieved', content: { 'application/json': { schema: { allOf: [{ $ref: '#/components/schemas/SuccessResponse' }, { type: 'object', properties: { data: { $ref: '#/components/schemas/JobPost' } } }] } } } }, '404': { $ref: '#/components/responses/NotFound' } }
+    }
+  },
   '/public/packages': {
     get: {
       tags: ['Public — Catalog'],
