@@ -47,7 +47,7 @@ const deleteMessage = asyncHandler(async (req: Request, res: Response) => {
 
 const listAnnouncements = asyncHandler(async (req: Request, res: Response) => {
   const user = currentUser(req);
-  const result = await communicationsService.listAnnouncements(user.role, user.id);
+  const result = await communicationsService.listAnnouncements(user.role, user.id, req.query as any);
   return sendSuccess(res, 200, 'Announcements retrieved', result);
 });
 

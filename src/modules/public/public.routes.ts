@@ -9,6 +9,9 @@ import { createConsultationSchema, createPublicBookingSchema } from './public.va
 const publicRouter = Router();
 
 // ── Catalog reads (no auth, no rate limit) ─────────────────────────────────────
+publicRouter.get('/job-posts', publicController.getJobPosts);
+publicRouter.get('/job-posts/:id', publicController.getJobPostById);
+publicRouter.get('/job-posts.:id', publicController.getJobPostById);
 publicRouter.get('/packages', publicController.getPackages);
 publicRouter.get('/packages/:slug', publicController.getPackageBySlug);
 publicRouter.get('/services', publicController.getServices);

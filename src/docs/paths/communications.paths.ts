@@ -122,31 +122,38 @@ export const communicationsPaths: OpenAPIV3.PathsObject = {
   '/admin/announcements': {
     get: {
       tags: ['Admin — Communications'],
-      summary: 'List announcements',
-      description: 'Returns paginated announcements created for staff audiences.',
+      summary: 'List announcements with acknowledgements',
+      description: 'Returns paginated admin announcement cards with resolved recipients, acknowledgement status, optional date range filters, and sendTo filtering.',
       security: secured,
-      parameters: paginationParameters,
+      parameters: [...paginationParameters, { name: 'pageSize', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 } }, { name: 'sendTo', in: 'query', schema: { type: 'string', enum: ['All Staff', 'Select Staff', 'By Zone', 'Car Owner'] } }, { name: 'fromDate', in: 'query', schema: { type: 'string', format: 'date-time' } }, { name: 'toDate', in: 'query', schema: { type: 'string', format: 'date-time' } }],
       responses: { '200': { description: 'Announcements retrieved' } }
     },
     post: {
       tags: ['Admin — Communications'],
-      summary: 'Create announcement',
-      description: 'Creates an announcement for all staff or selected staff members.',
+      summary: 'Create and send announcement',
+      description: 'Creates an announcement, resolves the recipient staff roster at creation time, stores raw **bold** message markers, and sets sentAt server-side from createdAt.',
       security: secured,
       requestBody: jsonBody(
         {
           type: 'object',
-          required: ['title', 'body', 'audienceType'],
+          required: ['title', 'sender', 'sendTo', 'message'],
           properties: {
             title: { type: 'string', minLength: 1, maxLength: 200 },
-            body: { type: 'string', minLength: 1, maxLength: 4000 },
-            audienceType: { type: 'string', enum: ['ALL_STAFF', 'SELECTED_STAFF'] },
-            staffIds: { type: 'array', items: { type: 'string', format: 'uuid' }, description: 'Required when audienceType is SELECTED_STAFF.' }
+            sender: { type: 'string', enum: ['Daily Assist Uk Office', 'Operation Manager', 'HR Department', 'System'] },
+            sendTo: { type: 'string', enum: ['All Staff', 'Select Staff', 'By Zone', 'Car Owner'] },
+            recipientIds: { type: 'array', items: { type: 'string', format: 'uuid' }, description: 'Required when sendTo is Select Staff.' },
+            zone: { type: 'string', description: 'Required when sendTo is By Zone.' },
+            message: { type: 'string', minLength: 1, maxLength: 4000 },
+            acknowledgeRequired: { type: 'boolean', default: false },
+            visitSummary: { type: 'boolean', default: false },
+            visitCount: { type: 'integer', description: 'Required when visitSummary is true.' },
+            firstVisitTime: { type: 'string', description: 'Required when visitSummary is true.' },
+            lastVisitTime: { type: 'string', description: 'Required when visitSummary is true.' }
           }
         },
-        { title: 'Schedule reminder', body: 'Please check your visits for tomorrow.', audienceType: 'ALL_STAFF' }
+        { title: 'Schedule reminder', sender: 'Daily Assist Uk Office', sendTo: 'All Staff', message: 'Please check your visits for tomorrow.', acknowledgeRequired: true, visitSummary: false }
       ),
-      responses: { '201': { description: 'Announcement created' } }
+      responses: { '201': { description: 'Announcement created' }, '400': { $ref: '#/components/responses/ValidationError' } }
     }
   },
   '/admin/announcements/{id}': {
@@ -268,6 +275,17 @@ export const communicationsPaths: OpenAPIV3.PathsObject = {
       parameters: [idParam],
       requestBody: markReadBody,
       responses: { '200': { description: 'Announcement marked as read' } }
+    }
+  },
+
+  '/staff/announcements/{id}/acknowledge': {
+    post: {
+      tags: ['Staff — Communications'],
+      summary: 'Acknowledge staff announcement',
+      description: 'Records one acknowledgement for the authenticated staff member. Returns 404 if not targeted and 400 if acknowledgement is not required.',
+      security: secured,
+      parameters: [idParam],
+      responses: { '200': { description: 'Announcement acknowledged' }, '400': { $ref: '#/components/responses/ValidationError' }, '404': { $ref: '#/components/responses/NotFound' } }
     }
   },
   '/staff/notifications': {

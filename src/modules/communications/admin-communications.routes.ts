@@ -5,6 +5,7 @@ import {
   createAnnouncementSchema,
   createThreadSchema,
   idParamSchema,
+  listAnnouncementsQuerySchema,
   listNotificationsQuerySchema,
   listThreadsQuerySchema,
   postMessageSchema,
@@ -19,7 +20,7 @@ adminCommunicationsRouter.get('/messages/threads/:id/messages', validate({ param
 adminCommunicationsRouter.post('/messages/threads/:id/messages', validate({ params: idParamSchema, body: postMessageSchema }), adminCommunicationsController.postMessage);
 adminCommunicationsRouter.delete('/messages/:id', validate({ params: idParamSchema }), adminCommunicationsController.deleteMessage);
 
-adminCommunicationsRouter.get('/announcements', adminCommunicationsController.listAnnouncements);
+adminCommunicationsRouter.get('/announcements', validate({ query: listAnnouncementsQuerySchema }), adminCommunicationsController.listAnnouncements);
 adminCommunicationsRouter.post('/announcements', validate({ body: createAnnouncementSchema }), adminCommunicationsController.createAnnouncement);
 adminCommunicationsRouter.delete('/announcements/:id', validate({ params: idParamSchema }), adminCommunicationsController.deleteAnnouncement);
 
