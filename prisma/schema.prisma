@@ -148,6 +148,7 @@ model User {
   bookingsAssignedBy   Booking[]            @relation("BookingsAssignedBy")
   reviewedApplications WorkerApplication[]
   visitsAsStaff        Visit[]             @relation("VisitsAsStaff")
+  visitLogs            VisitLog[]
   visitEvents              VisitEvent[]
   conversationsAsStaff      Conversation[]        @relation("ConversationStaff")
   sentMessages              Message[]             @relation("MessageSender")
@@ -385,10 +386,31 @@ model Visit {
   createdAt         DateTime    @default(now()) @map("created_at")
   updatedAt         DateTime    @updatedAt @map("updated_at")
   events            VisitEvent[]
+  log               VisitLog?
 
   @@index([bookingId])
   @@index([staffId, status])
   @@map("visits")
+}
+
+model VisitLog {
+  id           String   @id @default(uuid())
+  visitId      String   @unique @map("visit_id")
+  visit        Visit    @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  staffId      String   @map("staff_id")
+  staff        User     @relation(fields: [staffId], references: [id])
+  visitTypes   Json     @default("[]") @map("visit_types")
+  otherService String   @default("") @map("other_service")
+  miles        Float    @default(0)
+  notes        String
+  signature    String
+  confirmed    Boolean  @default(false)
+  submittedAt  DateTime @default(now()) @map("submitted_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@index([staffId, submittedAt])
+  @@map("visit_logs")
 }
 
 model VisitEvent {

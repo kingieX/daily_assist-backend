@@ -7,6 +7,7 @@ import type {
   CancelVisitInput,
   CheckOutVisitInput,
   CreateVisitInput,
+  StaffVisitListQuery,
   ReassignVisitInput,
   UpdateVisitInput
 } from './visit.validation';
@@ -113,6 +114,16 @@ function apiVisitStatus(status: string) {
   return 'not-started';
 }
 
+function staffVisitStatus(status: string) {
+  if (status === VISIT_STATUS.COMPLETED) return 'completed';
+  if (status === VISIT_STATUS.IN_PROGRESS) return 'in-progress';
+  return 'not-started';
+}
+
+function formatDisplayTime(value: Date) {
+  return value.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'UTC' }).toLowerCase().replace(' ', '');
+}
+
 function visitTimeLabel(visit: any) {
   return `${visit.scheduledStartAt.toISOString().slice(11, 16)} - ${visit.scheduledEndAt.toISOString().slice(11, 16)}`;
 }
@@ -142,6 +153,43 @@ function serializeVisit(visit: any) {
     note: visit.adminNotes ?? snapshot.note ?? '',
     status: apiVisitStatus(visit.status),
     time: visitTimeLabel(visit)
+  };
+}
+
+function serializeStaffVisitListItem(visit: any) {
+  const full = serializeVisit(visit);
+  return {
+    id: visit.id,
+    clientName: full.clientName,
+    address: full.address,
+    task: full.selectedServiceTypes[0] ?? full.package,
+    date: full.date,
+    timeStart: formatDisplayTime(visit.scheduledStartAt),
+    timeEnd: formatDisplayTime(visit.scheduledEndAt),
+    status: staffVisitStatus(visit.status)
+  };
+}
+
+function serializeStaffVisitDetail(visit: any) {
+  const item = serializeStaffVisitListItem(visit);
+  return {
+    ...item,
+    additionalNote: visit.adminNotes ?? planSnapshot(visit).note ?? '',
+    checkInAt: visit.checkInAt ? visit.checkInAt.toISOString() : null,
+    checkOutAt: visit.checkOutAt ? visit.checkOutAt.toISOString() : null
+  };
+}
+
+function serializeVisitLog(log: any) {
+  return {
+    id: log.id,
+    visitTypes: Array.isArray(log.visitTypes) ? log.visitTypes : [],
+    otherService: log.otherService,
+    miles: log.miles,
+    notes: log.notes,
+    signature: log.signature,
+    confirmed: log.confirmed,
+    submittedAt: log.submittedAt.toISOString()
   };
 }
 
@@ -183,10 +231,7 @@ async function ensureFrontendBooking(tx: Prisma.TransactionClient, input: any) {
 }
 
 async function listAdminVisits(_query: AdminVisitListQuery) {
-  const start = new Date();
-  start.setUTCHours(0, 0, 0, 0);
-  const end = new Date(start);
-  end.setUTCDate(end.getUTCDate() + 1);
+  const { start, end } = dayBounds();
 
   const staff = await prisma.user.findMany({
     where: { role: Role.STAFF, status: UserStatus.ACTIVE },
@@ -278,7 +323,7 @@ async function cancelVisit(id: string, input: CancelVisitInput, actorUserId: str
   });
 }
 
-async function getStaffVisitOrThrow(visitId: string, staffUserId: string) {
+async function getStaffVisitOrThrowRaw(visitId: string, staffUserId: string) {
   const visit = await prisma.visit.findFirst({
     where: { id: visitId, staffId: staffUserId },
     include: visitInclude
@@ -291,41 +336,88 @@ async function getStaffVisitOrThrow(visitId: string, staffUserId: string) {
   return visit;
 }
 
-async function listStaffTodayVisits(staffUserId: string) {
+async function getStaffVisitOrThrow(visitId: string, staffUserId: string) {
+  return serializeStaffVisitDetail(await getStaffVisitOrThrowRaw(visitId, staffUserId));
+}
+
+function dayBounds(offsetDays = 0) {
   const start = new Date();
   start.setUTCHours(0, 0, 0, 0);
+  start.setUTCDate(start.getUTCDate() + offsetDays);
   const end = new Date(start);
   end.setUTCDate(end.getUTCDate() + 1);
+  return { start, end };
+}
 
-  return prisma.visit.findMany({
+function dateRangeWhere(query?: Partial<StaffVisitListQuery>) {
+  const range: Prisma.DateTimeFilter = {};
+  if (query?.startDate) range.gte = new Date(`${query.startDate}T00:00:00.000Z`);
+  if (query?.endDate) range.lt = new Date(`${query.endDate}T00:00:00.000Z`);
+  if (range.gte || range.lt) return range;
+  return undefined;
+}
+
+function dbStatuses(status?: string) {
+  if (status === 'completed') return [VISIT_STATUS.COMPLETED];
+  if (status === 'in-progress') return [VISIT_STATUS.IN_PROGRESS];
+  if (status === 'not-started') return [VISIT_STATUS.ASSIGNED, VISIT_STATUS.ACKNOWLEDGED];
+  return undefined;
+}
+
+async function listStaffTodayVisits(staffUserId: string) {
+  const { start, end } = dayBounds();
+
+  const visits = await prisma.visit.findMany({
     where: {
       staffId: staffUserId,
+      status: { not: VISIT_STATUS.CANCELLED },
       scheduledStartAt: { gte: start, lt: end }
     },
     include: visitInclude,
     orderBy: [{ scheduledStartAt: 'asc' }, { id: 'asc' }]
   });
+  return visits.map(serializeStaffVisitListItem);
 }
 
-async function listStaffVisitHistory(staffUserId: string, page: number, limit: number) {
+async function listStaffFutureVisits(staffUserId: string) {
+  const { end } = dayBounds();
+  const visits = await prisma.visit.findMany({ where: { staffId: staffUserId, status: { not: VISIT_STATUS.CANCELLED }, scheduledStartAt: { gte: end } }, include: visitInclude, orderBy: [{ scheduledStartAt: 'asc' }, { id: 'asc' }] });
+  return visits.map(serializeStaffVisitListItem);
+}
+
+async function listStaffVisits(staffUserId: string, query: StaffVisitListQuery) {
+  const skip = (query.page - 1) * query.limit;
+  const where: Prisma.VisitWhereInput = { staffId: staffUserId, status: { not: VISIT_STATUS.CANCELLED } };
+  const range = dateRangeWhere(query);
+  const statuses = dbStatuses(query.status);
+  if (range) where.scheduledStartAt = range;
+  if (statuses) where.status = { in: statuses };
+  const [total, items] = await Promise.all([prisma.visit.count({ where }), prisma.visit.findMany({ where, include: visitInclude, orderBy: [{ scheduledStartAt: query.sortOrder ?? 'asc' }, { id: 'asc' }], skip, take: query.limit })]);
+  return paginatedResult(items.map(serializeStaffVisitListItem), total, query.page, query.limit);
+}
+
+async function listStaffVisitHistory(staffUserId: string, page: number, limit: number, query?: StaffVisitListQuery) {
   const skip = (page - 1) * limit;
   const where: Prisma.VisitWhereInput = {
     staffId: staffUserId,
-    status: { in: [VISIT_STATUS.COMPLETED, VISIT_STATUS.CANCELLED, VISIT_STATUS.NO_SHOW] }
+    OR: [{ status: VISIT_STATUS.COMPLETED }, { scheduledStartAt: { lt: dayBounds().start } }],
+    status: { not: VISIT_STATUS.CANCELLED }
   };
+  const range = dateRangeWhere(query);
+  if (range) where.scheduledStartAt = range;
 
   const [total, items] = await Promise.all([
     prisma.visit.count({ where }),
     prisma.visit.findMany({
       where,
       include: visitInclude,
-      orderBy: [{ scheduledStartAt: 'desc' }, { id: 'asc' }],
+      orderBy: [{ scheduledStartAt: query?.sortOrder ?? 'desc' }, { id: 'asc' }],
       skip,
       take: limit
     })
   ]);
 
-  return paginatedResult(items, total, page, limit);
+  return paginatedResult(items.map(serializeStaffVisitListItem), total, page, limit);
 }
 
 async function acknowledgeVisit(visitId: string, staffUserId: string) {
@@ -350,7 +442,8 @@ async function checkInVisit(visitId: string, staffUserId: string) {
   const visit = await prisma.visit.findFirst({ where: { id: visitId, staffId: staffUserId } });
   if (!visit) throw new ApiError(404, 'Visit not found for current staff user');
 
-  assertTransition(visit.status, VISIT_STATUS.IN_PROGRESS);
+  if (visit.status === VISIT_STATUS.IN_PROGRESS || visit.status === VISIT_STATUS.COMPLETED) throw new ApiError(409, 'Visit is already in progress or completed');
+  if (![VISIT_STATUS.ASSIGNED, VISIT_STATUS.ACKNOWLEDGED].includes(visit.status as any)) throw new ApiError(409, 'Visit cannot be checked in');
 
   return prisma.$transaction(async (tx) => {
     const updated = await tx.visit.update({
@@ -360,7 +453,7 @@ async function checkInVisit(visitId: string, staffUserId: string) {
     });
 
     await addVisitEvent(tx, visitId, staffUserId, VISIT_EVENT.CHECKED_IN);
-    return updated;
+    return { id: updated.id, status: staffVisitStatus(updated.status), checkInAt: updated.checkInAt?.toISOString() ?? null };
   });
 }
 
@@ -368,25 +461,20 @@ async function checkOutVisit(visitId: string, staffUserId: string, input: CheckO
   const visit = await prisma.visit.findFirst({ where: { id: visitId, staffId: staffUserId } });
   if (!visit) throw new ApiError(404, 'Visit not found for current staff user');
 
-  assertTransition(visit.status, VISIT_STATUS.COMPLETED);
+  if (visit.status === VISIT_STATUS.COMPLETED) throw new ApiError(409, 'Visit is already completed');
+  if (visit.status !== VISIT_STATUS.IN_PROGRESS || !visit.checkInAt) throw new ApiError(409, 'Visit must be checked in before check-out');
 
   return prisma.$transaction(async (tx) => {
-    const updated = await tx.visit.update({
-      where: { id: visitId },
-      data: {
-        status: VISIT_STATUS.COMPLETED,
-        checkOutAt: new Date(),
-        completionSummary: input.completionSummary,
-        staffNotes: input.staffNotes
-      },
-      include: visitInclude
-    });
+    const now = new Date();
+    const updated = await tx.visit.update({ where: { id: visitId }, data: { status: VISIT_STATUS.COMPLETED, checkOutAt: now, completionSummary: input.notes, staffNotes: input.notes }, include: visitInclude });
+    const log = await (tx as any).visitLog.create({ data: { visitId, staffId: staffUserId, visitTypes: input.visitTypes, otherService: input.otherService, miles: input.miles, notes: input.notes, signature: input.signature, confirmed: input.confirmed, submittedAt: now } });
 
     await addVisitEvent(tx, visitId, staffUserId, VISIT_EVENT.CHECKED_OUT, {
-      completionSummaryProvided: Boolean(input.completionSummary)
+      completionSummaryProvided: Boolean(input.notes),
+      logId: log.id
     });
 
-    return updated;
+    return { id: updated.id, status: staffVisitStatus(updated.status), checkOutAt: updated.checkOutAt?.toISOString() ?? now.toISOString(), log: serializeVisitLog(log) };
   });
 }
 
@@ -401,6 +489,8 @@ export const visitService = {
   cancelVisit,
   listStaffTodayVisits,
   listStaffVisitHistory,
+  listStaffFutureVisits,
+  listStaffVisits,
   getStaffVisitOrThrow,
   acknowledgeVisit,
   checkInVisit,

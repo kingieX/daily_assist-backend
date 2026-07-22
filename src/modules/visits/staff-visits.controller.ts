@@ -17,8 +17,18 @@ const getTodayVisits = asyncHandler(async (req: Request, res: Response) => {
 const getHistoryVisits = asyncHandler(async (req: Request, res: Response) => {
   const page = Number(req.query.page ?? 1);
   const limit = Number(req.query.limit ?? 20);
-  const visits = await visitService.listStaffVisitHistory(staffUserId(req), page, limit);
+  const visits = await visitService.listStaffVisitHistory(staffUserId(req), page, limit, req.query as any);
   return sendSuccess(res, 200, 'Visit history retrieved', visits);
+});
+
+const getFutureVisits = asyncHandler(async (req: Request, res: Response) => {
+  const visits = await visitService.listStaffFutureVisits(staffUserId(req));
+  return sendSuccess(res, 200, 'Future visits retrieved', visits);
+});
+
+const getVisits = asyncHandler(async (req: Request, res: Response) => {
+  const visits = await visitService.listStaffVisits(staffUserId(req), req.query as any);
+  return sendSuccess(res, 200, 'Visits retrieved', visits);
 });
 
 const getVisitById = asyncHandler(async (req: Request, res: Response) => {
@@ -44,6 +54,8 @@ const checkOutVisit = asyncHandler(async (req: Request, res: Response) => {
 export const staffVisitsController = {
   getTodayVisits,
   getHistoryVisits,
+  getFutureVisits,
+  getVisits,
   getVisitById,
   acknowledgeVisit,
   checkInVisit,

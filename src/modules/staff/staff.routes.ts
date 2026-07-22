@@ -11,6 +11,9 @@ const staffRouter = Router();
 staffRouter.use(authenticate, authorizeRoles(Role.STAFF));
 
 staffRouter.get('/dashboard/summary', staffController.getDashboardSummary);
+staffRouter.get('/alerts', staffController.listAlerts);
+staffRouter.patch('/alerts/read-all', staffController.markAllAlertsRead);
+staffRouter.patch('/alerts/:id/read', staffController.markAlertRead);
 
 staffRouter.use('/visits', staffVisitsRouter);
 staffRouter.use('/', staffCommunicationsRouter);
