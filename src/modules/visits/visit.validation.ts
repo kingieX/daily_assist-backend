@@ -101,9 +101,20 @@ export const cancelVisitSchema = z.object({
 export const staffIdParamSchema = z.object({ staffId: z.string().uuid('Invalid staff ID') });
 export const staffTaskParamSchema = z.object({ staffId: z.string().uuid('Invalid staff ID'), taskId: z.string().uuid('Invalid task ID') });
 
+export const staffVisitListQuerySchema = paginationSchema.extend({
+  status: z.preprocess(emptyStringToUndefined, z.enum(['not-started', 'in-progress', 'completed']).optional()),
+  startDate: z.preprocess(emptyStringToUndefined, z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'startDate must be an ISO date').optional()),
+  endDate: z.preprocess(emptyStringToUndefined, z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'endDate must be an ISO date').optional()),
+  sortOrder: z.preprocess(emptyStringToUndefined, z.enum(['asc', 'desc']).optional())
+});
+
 export const checkOutVisitSchema = z.object({
-  completionSummary: z.string().trim().max(2000).optional(),
-  staffNotes: z.string().trim().max(2000).optional()
+  visitTypes: z.array(serviceTypeSchema).default([]),
+  otherService: z.string().trim().max(500).default(''),
+  miles: z.coerce.number().min(0).default(0),
+  notes: z.string().trim().min(1).max(4000),
+  signature: z.string().trim().min(1).max(200),
+  confirmed: z.literal(true, { error: 'confirmed must be true' })
 });
 
 export type AdminVisitListQuery = z.infer<typeof adminVisitListQuerySchema>;
@@ -111,4 +122,5 @@ export type CreateVisitInput = z.infer<typeof createVisitSchema>;
 export type UpdateVisitInput = z.infer<typeof updateVisitSchema>;
 export type ReassignVisitInput = z.infer<typeof reassignVisitSchema>;
 export type CancelVisitInput = z.infer<typeof cancelVisitSchema>;
+export type StaffVisitListQuery = z.infer<typeof staffVisitListQuerySchema>;
 export type CheckOutVisitInput = z.infer<typeof checkOutVisitSchema>;
