@@ -11,11 +11,29 @@ function getStaffUserId(req: Request): string {
   return req.user.id;
 }
 
+const listAlerts = asyncHandler(async (req: Request, res: Response) => {
+  const alerts = await staffService.listAlerts(getStaffUserId(req));
+  return sendSuccess(res, 200, 'Staff alerts retrieved', alerts);
+});
+
+const markAlertRead = asyncHandler(async (req: Request, res: Response) => {
+  const alert = await staffService.markAlertRead(req.params.id as string, getStaffUserId(req));
+  return sendSuccess(res, 200, 'Staff alert marked read', alert);
+});
+
+const markAllAlertsRead = asyncHandler(async (req: Request, res: Response) => {
+  const result = await staffService.markAllAlertsRead(getStaffUserId(req));
+  return sendSuccess(res, 200, 'Staff alerts marked read', result);
+});
+
 const getDashboardSummary = asyncHandler(async (req: Request, res: Response) => {
   const summary = await staffService.getDashboardSummary(getStaffUserId(req));
   return sendSuccess(res, 200, 'Staff dashboard summary retrieved', summary);
 });
 
 export const staffController = {
-  getDashboardSummary
+  getDashboardSummary,
+  listAlerts,
+  markAlertRead,
+  markAllAlertsRead
 };
