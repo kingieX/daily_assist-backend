@@ -141,6 +141,20 @@ const staffUpload = multer({
   }
 });
 
+export const uploadAdminPhoto: RequestHandler = (req, res, next) => {
+  staffUpload.single('photo')(req, res, (error: unknown) => {
+    if (error instanceof multer.MulterError) {
+      if (error.code === 'LIMIT_FILE_SIZE') {
+        next(new ApiError(400, 'Admin photo is too large. Maximum size is 5MB.'));
+        return;
+      }
+      next(new ApiError(400, `Invalid admin photo upload request: ${error.message}`));
+      return;
+    }
+    next(error);
+  });
+};
+
 export const uploadStaffFiles: RequestHandler = (req, res, next) => {
   staffUpload.fields([
     { name: 'photo', maxCount: 1 },

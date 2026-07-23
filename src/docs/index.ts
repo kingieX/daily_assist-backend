@@ -10,6 +10,7 @@ import { publicPaths } from './paths/public.paths';
 import { visitPaths } from './paths/visits.paths';
 import { communicationsPaths } from './paths/communications.paths';
 import { operationsPaths } from './paths/operations.paths';
+import { profileSettingsPaths } from './paths/profile-settings.paths';
 import { withEndpointGuides } from './utils';
 
 /**
@@ -139,6 +140,18 @@ export const openApiSpec: OpenAPIV3.Document = {
       description: 'Staff messaging, announcement reads, and notification actions'
     },
     {
+      name: 'Staff Profile', description: 'Authenticated staff profile view'
+    },
+    {
+      name: 'Admin Profile', description: 'Admin self-service profile and account deactivation'
+    },
+    {
+      name: 'Admin Settings', description: 'Admin notification settings and role permission references'
+    },
+    {
+      name: 'System Log', description: 'Admin system log filtering and export'
+    },
+    {
       name: 'Admin — Phase 6 Ops',
       description: 'Reports, system settings, and audit log operations'
     },
@@ -158,7 +171,8 @@ export const openApiSpec: OpenAPIV3.Document = {
     ...adminPaths,
     ...visitPaths,
     ...communicationsPaths,
-    ...operationsPaths
+    ...operationsPaths,
+    ...profileSettingsPaths
     // Phase 3+: spread additional path modules here
     // e.g. ...adminBookingPaths, ...adminClientPaths, ...staffPaths
   })
