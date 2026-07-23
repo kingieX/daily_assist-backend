@@ -3,6 +3,27 @@ import { prisma } from '../../config/prisma';
 import { ApiError } from '../../utils/api-error';
 import { visitService } from '../visits/visit.service';
 
+function deriveInitials(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('');
+}
+
+function statusLabel(status: string): string {
+  if (status === 'ACTIVE') return 'Active';
+  if (status === 'SUSPENDED') return 'Suspended';
+  return 'Deactivated';
+}
+
+function formatGender(sex?: string | null): string {
+  if (!sex) return '';
+  if (sex === 'PREFER_NOT_TO_SAY') return 'Prefer not to say';
+  return sex.charAt(0) + sex.slice(1).toLowerCase();
+}
+
 function dayBounds() {
   const start = new Date();
   start.setUTCHours(0, 0, 0, 0);
@@ -119,8 +140,36 @@ async function markAllAlertsRead(staffUserId: string) {
   return { read: true };
 }
 
+async function getProfile(staffUserId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: staffUserId },
+    include: { staffProfile: true }
+  });
+
+  if (!user || !user.staffProfile) {
+    throw new ApiError(404, 'Staff profile not found');
+  }
+
+  const name = [user.staffProfile.firstName, user.staffProfile.lastName].filter(Boolean).join(' ');
+
+  return {
+    name,
+    initials: deriveInitials(name),
+    role: user.staffProfile.staffRoleLabel ?? 'Support Worker',
+    email: user.businessEmail ?? user.email,
+    gender: formatGender(user.staffProfile.sex),
+    phone: user.staffProfile.phone,
+    dob: user.staffProfile.dateOfBirth?.toISOString().slice(0, 10) ?? user.staffProfile.dobText ?? '',
+    staffId: user.staffCode ?? user.id,
+    zone: user.staffProfile.zone ?? '',
+    accountStatus: statusLabel(user.status),
+    lastLoginAt: user.lastLoginAt?.toISOString() ?? user.updatedAt.toISOString()
+  };
+}
+
 export const staffService = {
   getDashboardSummary,
+  getProfile,
   listAlerts,
   markAlertRead,
   markAllAlertsRead

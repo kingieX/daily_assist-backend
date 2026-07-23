@@ -26,6 +26,11 @@ const markAllAlertsRead = asyncHandler(async (req: Request, res: Response) => {
   return sendSuccess(res, 200, 'Staff alerts marked read', result);
 });
 
+const getProfile = asyncHandler(async (req: Request, res: Response) => {
+  const profile = await staffService.getProfile(getStaffUserId(req));
+  return sendSuccess(res, 200, 'Staff profile retrieved', profile);
+});
+
 const getDashboardSummary = asyncHandler(async (req: Request, res: Response) => {
   const summary = await staffService.getDashboardSummary(getStaffUserId(req));
   return sendSuccess(res, 200, 'Staff dashboard summary retrieved', summary);
@@ -33,6 +38,7 @@ const getDashboardSummary = asyncHandler(async (req: Request, res: Response) => 
 
 export const staffController = {
   getDashboardSummary,
+  getProfile,
   listAlerts,
   markAlertRead,
   markAllAlertsRead
