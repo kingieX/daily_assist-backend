@@ -10,6 +10,8 @@ const staffRouter = Router();
 
 staffRouter.use(authenticate, authorizeRoles(Role.STAFF));
 
+staffRouter.get('/profile', staffController.getProfile);
+
 staffRouter.get('/dashboard/summary', staffController.getDashboardSummary);
 staffRouter.get('/alerts', staffController.listAlerts);
 staffRouter.patch('/alerts/read-all', staffController.markAllAlertsRead);

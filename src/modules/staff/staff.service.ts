@@ -119,8 +119,14 @@ async function markAllAlertsRead(staffUserId: string) {
   return { read: true };
 }
 
+async function getProfile(staffUserId: string) {
+  const { getStaffProfile } = await import('../admin/admin-settings.service');
+  return getStaffProfile(staffUserId);
+}
+
 export const staffService = {
   getDashboardSummary,
+  getProfile,
   listAlerts,
   markAlertRead,
   markAllAlertsRead

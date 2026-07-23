@@ -423,6 +423,27 @@ export const schemas: SchemasMap = {
     }
   },
 
+  StaffProfile: {
+    type: 'object',
+    properties: {
+      name: { type: 'string' }, initials: { type: 'string' }, role: { type: 'string' }, email: { type: 'string', format: 'email' },
+      gender: { type: 'string' }, phone: { type: 'string' }, dob: { type: 'string', format: 'date' }, staffId: { type: 'string' },
+      zone: { type: 'string' }, accountStatus: { type: 'string' }, lastLoginAt: { type: 'string', format: 'date-time' }
+    }
+  },
+  AdminProfile: {
+    type: 'object',
+    properties: { id: { type: 'string' }, firstName: { type: 'string' }, lastName: { type: 'string' }, email: { type: 'string', format: 'email' }, role: { type: 'string' }, photoUrl: { type: 'string', nullable: true } }
+  },
+  NotificationSetting: {
+    type: 'object',
+    properties: { key: { type: 'string', enum: ['bookingRequest','staffCheckin','staffCheckout','missedCheckin','missedCheckout'] }, label: { type: 'string' }, sub: { type: 'string' }, enabled: { type: 'boolean' } }
+  },
+  SystemLogEntry: {
+    type: 'object',
+    properties: { id: { type: 'string' }, time: { type: 'string', format: 'date-time' }, user: { type: 'string' }, action: { type: 'string' }, module: { type: 'string' }, affectedItem: { type: 'string' }, description: { type: 'string' }, ipAddress: { type: 'string' }, status: { type: 'string', enum: ['Success','Warning','Failed','Cancelled'] } }
+  },
+
   Application: {
     type: 'object',
     properties: {
