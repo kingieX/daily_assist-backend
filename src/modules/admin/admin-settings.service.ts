@@ -1,17 +1,39 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { Role, UserStatus } from '@prisma/client';
+import { AuditAction, Role, User, UserStatus } from '@prisma/client';
 import { prisma } from '../../config/prisma';
 import { ApiError } from '../../utils/api-error';
 import { recordAuditLog } from '../operations/audit-log.service';
 
 const notificationItems = [
-  { key: 'bookingRequest', label: 'Booking Request', sub: 'Notify me when a new booking request is submitted.' },
-  { key: 'staffCheckin', label: 'Staff Check-in', sub: 'Notify me when staff check in for visits.' },
-  { key: 'staffCheckout', label: 'Staff Checkout', sub: 'Notify me when staff check out from visits.' },
-  { key: 'missedCheckin', label: 'Missed Check-in', sub: 'Notify me when staff miss scheduled check-ins.' },
-  { key: 'missedCheckout', label: 'Missed Checkout', sub: 'Notify me when staff miss scheduled checkouts.' }
+  {
+    key: 'bookingRequest',
+    label: 'Booking Request',
+    sub: 'Notify me when a new booking request is submitted.'
+  },
+  {
+    key: 'staffCheckin',
+    label: 'Staff Check-in',
+    sub: 'Notify me when staff check in for visits.'
+  },
+  {
+    key: 'staffCheckout',
+    label: 'Staff Checkout',
+    sub: 'Notify me when staff check out from visits.'
+  },
+  {
+    key: 'missedCheckin',
+    label: 'Missed Check-in',
+    sub: 'Notify me when staff miss scheduled check-ins.'
+  },
+  {
+    key: 'missedCheckout',
+    label: 'Missed Checkout',
+    sub: 'Notify me when staff miss scheduled checkouts.'
+  }
 ] as const;
+
+const defaultNotificationValues = Object.fromEntries(notificationItems.map((item) => [item.key, true]));
 
 const rolesPermissions = {
   admin: [
@@ -33,38 +55,338 @@ const rolesPermissions = {
   ]
 };
 
-function initials(name: string) { return name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join(''); }
-function titleRole(role: Role) { return role === Role.SUPER_ADMIN ? 'Super Admin' : role === Role.ADMIN ? 'Admin' : 'Support Worker'; }
-function statusLabel(status: UserStatus) { return status === UserStatus.ACTIVE ? 'Active' : status === UserStatus.SUSPENDED ? 'Suspended' : 'Deactivated'; }
-function formatGender(sex?: string | null) { return sex ? sex.toLowerCase().replace(/(^|_)\w/g, (m) => m.replace('_', ' ').toUpperCase()).replace('Prefer Not To Say','Prefer not to say') : ''; }
-function adminProfile(user: any) { const firstName = user.firstName ?? user.staffProfile?.firstName ?? ''; const lastName = user.lastName ?? user.staffProfile?.lastName ?? ''; return { id: user.id, firstName, lastName, email: user.email, role: titleRole(user.role), photoUrl: user.photoUrl ?? user.staffProfile?.photoUrl ?? null }; }
+type AdminProfileUser = User & {
+  staffProfile?: { firstName: string; lastName: string; photoUrl: string | null } | null;
+};
 
-export async function getStaffProfile(userId: string) {
-  const user = await prisma.user.findUnique({ where: { id: userId }, include: { staffProfile: true } });
-  if (!user || !user.staffProfile) throw new ApiError(404, 'Staff profile not found');
-  const name = [user.staffProfile.firstName, user.staffProfile.lastName].filter(Boolean).join(' ');
-  return { name, initials: initials(name), role: user.staffProfile.staffRoleLabel ?? 'Support Worker', email: user.businessEmail ?? user.email, gender: formatGender(user.staffProfile.sex), phone: user.staffProfile.phone, dob: (user.staffProfile.dateOfBirth?.toISOString().slice(0, 10) ?? user.staffProfile.dobText ?? ''), staffId: user.staffCode ?? user.id, zone: user.staffProfile.zone ?? '', accountStatus: statusLabel(user.status), lastLoginAt: user.lastLoginAt?.toISOString() ?? user.updatedAt.toISOString() };
+type SystemLogQuery = {
+  user?: string;
+  action?: string;
+  module?: string;
+  dateRange?: string;
+  startDate?: Date;
+  endDate?: Date;
+  search?: string;
+  page: number;
+  pageSize: number;
+};
+
+function titleRole(role: Role): string {
+  if (role === Role.SUPER_ADMIN) return 'Super Admin';
+  if (role === Role.ADMIN) return 'Admin';
+  return 'Support Worker';
 }
 
-export async function getAdminProfile(userId: string) { const user = await prisma.user.findUnique({ where: { id: userId }, include: { staffProfile: true } }); if (!user) throw new ApiError(404, 'Admin profile not found'); return adminProfile(user); }
+function adminProfile(user: AdminProfileUser) {
+  return {
+    id: user.id,
+    firstName: user.firstName ?? user.staffProfile?.firstName ?? '',
+    lastName: user.lastName ?? user.staffProfile?.lastName ?? '',
+    email: user.email,
+    role: titleRole(user.role),
+    photoUrl: user.photoUrl ?? user.staffProfile?.photoUrl ?? null
+  };
+}
 
-async function saveBase64Photo(userId: string, value: string) { const m = value.match(/^data:(image\/(png|jpeg|jpg|webp|gif));base64,(.+)$/); if (!m) return value; const ext = m[2] === 'jpeg' ? 'jpg' : m[2]; const dir = path.resolve(process.cwd(), 'uploads', 'admin', 'photos'); await fs.mkdir(dir, { recursive: true }); const file = `admin-${userId}-${Date.now()}.${ext}`; await fs.writeFile(path.join(dir, file), Buffer.from(m[3], 'base64')); return `/uploads/admin/photos/${file}`; }
+function notificationSettingKey(userId: string): string {
+  return `adminNotificationSettings:${userId}`;
+}
 
-export async function updateAdminProfile(userId: string, data: any, filePhotoUrl?: string) {
-  const photoUrl = filePhotoUrl ?? (data.photo ? await saveBase64Photo(userId, data.photo) : undefined);
-  const user = await prisma.user.update({ where: { id: userId }, data: { ...(data.firstName !== undefined ? { firstName: data.firstName } : {}), ...(data.lastName !== undefined ? { lastName: data.lastName } : {}), ...(photoUrl !== undefined ? { photoUrl } : {}) }, include: { staffProfile: true } });
-  await recordAuditLog({ actorUserId: userId, action: 'SETTINGS_UPDATE', entity: 'Settings', entityId: userId, metadataJson: { displayAction: 'Updated', module: 'Settings', description: 'Admin profile settings updated.', status: 'Success' } });
+async function saveBase64Photo(userId: string, value: string): Promise<string> {
+  const match = value.match(/^data:image\/(png|jpeg|jpg|webp|gif);base64,([A-Za-z0-9+/=]+)$/);
+  if (!match) {
+    return value;
+  }
+
+  const extension = match[1] === 'jpeg' ? 'jpg' : match[1];
+  const directory = path.resolve(process.cwd(), 'uploads', 'admin', 'photos');
+  await fs.mkdir(directory, { recursive: true });
+
+  const filename = `admin-${userId}-${Date.now()}.${extension}`;
+  await fs.writeFile(path.join(directory, filename), Buffer.from(match[2], 'base64'));
+  return `/uploads/admin/photos/${filename}`;
+}
+
+async function getNotificationSettingRow(userId: string) {
+  return prisma.systemSetting.upsert({
+    where: { key: notificationSettingKey(userId) },
+    create: {
+      key: notificationSettingKey(userId),
+      valueJson: defaultNotificationValues,
+      updatedBy: userId
+    },
+    update: {}
+  });
+}
+
+export async function getAdminProfile(userId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: { staffProfile: true }
+  });
+
+  if (!user) {
+    throw new ApiError(404, 'Admin profile not found');
+  }
+
   return adminProfile(user);
 }
 
-export async function deactivateAdminAccount(userId: string) { await prisma.$transaction([prisma.refreshToken.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } }), prisma.user.update({ where: { id: userId }, data: { status: UserStatus.INACTIVE } })]); await recordAuditLog({ actorUserId: userId, action: 'STATUS_CHANGE', entity: 'Settings', entityId: userId, metadataJson: { displayAction: 'Deleted', module: 'Settings', description: 'Admin account deactivated.', status: 'Success' } }); }
+export async function updateAdminProfile(
+  userId: string,
+  data: { firstName?: string; lastName?: string; photo?: string },
+  filePhotoUrl?: string
+) {
+  const photoUrl = filePhotoUrl ?? (data.photo ? await saveBase64Photo(userId, data.photo) : undefined);
+  const user = await prisma.user.update({
+    where: { id: userId },
+    data: {
+      ...(data.firstName !== undefined ? { firstName: data.firstName } : {}),
+      ...(data.lastName !== undefined ? { lastName: data.lastName } : {}),
+      ...(photoUrl !== undefined ? { photoUrl } : {})
+    },
+    include: { staffProfile: true }
+  });
 
-async function pref(userId: string) { return (prisma as any).systemSetting.upsert({ where: { key: `adminNotificationSettings:${userId}` }, create: { key: `adminNotificationSettings:${userId}`, valueJson: Object.fromEntries(notificationItems.map(i => [i.key, true])), updatedBy: userId }, update: {} }); }
-export async function getNotificationSettings(userId: string) { const s = await pref(userId); const vals = s.valueJson as any; return notificationItems.map((i) => ({ ...i, enabled: vals[i.key] !== false })); }
-export async function updateNotificationSettings(userId: string, body: Record<string, boolean>) { const current = (await pref(userId)).valueJson as any; await (prisma as any).systemSetting.update({ where: { key: `adminNotificationSettings:${userId}` }, data: { valueJson: { ...current, ...body }, updatedBy: userId } }); await recordAuditLog({ actorUserId: userId, action: 'SETTINGS_UPDATE', entity: 'Settings', entityId: userId, metadataJson: { displayAction: 'Updated', module: 'Settings', description: 'Notification settings updated.', status: 'Success' } }); return getNotificationSettings(userId); }
+  await recordAuditLog({
+    actorUserId: userId,
+    action: 'SETTINGS_UPDATE',
+    entity: 'Settings',
+    entityId: userId,
+    metadataJson: {
+      displayAction: 'Updated',
+      module: 'Settings',
+      description: 'Admin profile settings updated.',
+      status: 'Success'
+    }
+  });
 
-function dateFilter(range?: string, startDate?: Date, endDate?: Date) { const now = new Date(); const start = new Date(now); start.setUTCHours(0,0,0,0); const end = new Date(start); end.setUTCDate(end.getUTCDate()+1); if (range==='Today') return { gte:start, lt:end }; if (range==='Yesterday') { const y=new Date(start); y.setUTCDate(y.getUTCDate()-1); return { gte:y, lt:start }; } if (range==='Last 7 Days') { const d=new Date(now); d.setUTCDate(d.getUTCDate()-7); return { gte:d }; } if (range==='Last 30 Days') { const d=new Date(now); d.setUTCDate(d.getUTCDate()-30); return { gte:d }; } if (range==='This Month') return { gte:new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)) }; if (range==='Custom Range') return { ...(startDate?{gte:startDate}:{}), ...(endDate?{lte:endDate}:{}) }; return undefined; }
-function logItem(log:any) { const m=log.metadataJson??{}; const actor=log.actorUser; const user=m.userCategory ?? (actor ? titleRole(actor.role) : 'System'); const actorName=actor ? [actor.firstName, actor.lastName].filter(Boolean).join(' ') || actor.email : 'System'; return { id: log.id, time: log.createdAt.toISOString(), user: m.user ?? (user==='System' ? 'System' : `${user} ${actorName}`.trim()), action: m.displayAction ?? ({CREATE:'Created',UPDATE:'Updated',DELETE:'Deleted',STATUS_CHANGE:'Updated',SETTINGS_UPDATE:'Updated',LOGIN:'Attempted',LOGOUT:'Attempted',REPORT_PROCESSING:'Approved'} as any)[log.action] ?? log.action, module: m.module ?? log.entity, affectedItem: m.affectedItem ?? (log.entityId ? `${log.entity}: ${log.entityId}` : log.entity), description: m.description ?? `${log.action} ${log.entity}`, ipAddress: m.ipAddress ?? '', status: m.status ?? 'Success' }; }
-export async function listSystemLog(q:any) { const createdAt=dateFilter(q.dateRange,q.startDate,q.endDate); const where:any={ ...(createdAt?{createdAt}:{}), ...(q.module?{ OR:[{entity:q.module},{metadataJson:{path:['module'],equals:q.module}}]}:{}) }; const all=(await (prisma as any).auditLog.findMany({ where, include:{ actorUser:true }, orderBy:[{createdAt:'desc'},{id:'desc'}] })).map(logItem).filter((x:any)=> (!q.user || x.user.includes(q.user)) && (!q.action || x.action===q.action) && (!q.module || x.module===q.module) && (!q.search || `${x.description} ${x.action}`.toLowerCase().includes(q.search.toLowerCase()))); const start=(q.page-1)*q.pageSize; return { items: all.slice(start,start+q.pageSize), page:q.page, pageSize:q.pageSize, total: all.length }; }
-export async function exportSystemLog(q:any) { const rows=(await listSystemLog({ ...q, page:1, pageSize:100000 })).items; if (q.format==='csv') return { contentType:'text/csv; charset=utf-8', filename:'system_log.csv', body: ['Time,User,Action,Module,Description,Status', ...rows.map((r:any)=>[r.time,r.user,r.action,r.module,r.description,r.status].map((v)=>`"${String(v).replace(/"/g,'""')}"`).join(','))].join('\n') }; const text = rows.map((r:any)=>`${r.time} | ${r.user} | ${r.action} | ${r.module} | ${r.description} | ${r.status}`).join('\n'); return { contentType:'application/pdf', filename:'system_log.pdf', body: Buffer.from(`%PDF-1.1\n1 0 obj <<>> stream\nSystem Log\n${text}\nendstream endobj\n%%EOF`) }; }
-export function getRolesPermissions() { return rolesPermissions; }
+  return adminProfile(user);
+}
+
+export async function deactivateAdminAccount(userId: string): Promise<void> {
+  await prisma.$transaction([
+    prisma.refreshToken.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() }
+    }),
+    prisma.user.update({
+      where: { id: userId },
+      data: { status: UserStatus.INACTIVE }
+    })
+  ]);
+
+  await recordAuditLog({
+    actorUserId: userId,
+    action: 'STATUS_CHANGE',
+    entity: 'Settings',
+    entityId: userId,
+    metadataJson: {
+      displayAction: 'Deleted',
+      module: 'Settings',
+      description: 'Admin account deactivated.',
+      status: 'Success'
+    }
+  });
+}
+
+export async function getNotificationSettings(userId: string) {
+  const setting = await getNotificationSettingRow(userId);
+  const values = setting.valueJson as Record<string, unknown>;
+
+  return notificationItems.map((item) => ({
+    key: item.key,
+    label: item.label,
+    sub: item.sub,
+    enabled: values[item.key] !== false
+  }));
+}
+
+export async function updateNotificationSettings(userId: string, body: Record<string, boolean>) {
+  const setting = await getNotificationSettingRow(userId);
+  const currentValues = setting.valueJson as Record<string, boolean>;
+
+  await prisma.systemSetting.update({
+    where: { key: notificationSettingKey(userId) },
+    data: {
+      valueJson: { ...currentValues, ...body },
+      updatedBy: userId
+    }
+  });
+
+  await recordAuditLog({
+    actorUserId: userId,
+    action: 'SETTINGS_UPDATE',
+    entity: 'Settings',
+    entityId: userId,
+    metadataJson: {
+      displayAction: 'Updated',
+      module: 'Settings',
+      description: 'Notification settings updated.',
+      status: 'Success'
+    }
+  });
+
+  return getNotificationSettings(userId);
+}
+
+function dateFilter(range?: string, startDate?: Date, endDate?: Date) {
+  const now = new Date();
+  const today = new Date(now);
+  today.setUTCHours(0, 0, 0, 0);
+
+  if (range === 'Today') {
+    const tomorrow = new Date(today);
+    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+    return { gte: today, lt: tomorrow };
+  }
+
+  if (range === 'Yesterday') {
+    const yesterday = new Date(today);
+    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+    return { gte: yesterday, lt: today };
+  }
+
+  if (range === 'Last 7 Days' || range === 'Last 30 Days') {
+    const days = range === 'Last 7 Days' ? 7 : 30;
+    const start = new Date(now);
+    start.setUTCDate(start.getUTCDate() - days);
+    return { gte: start };
+  }
+
+  if (range === 'This Month') {
+    return { gte: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)) };
+  }
+
+  if (range === 'Custom Range') {
+    return {
+      ...(startDate ? { gte: startDate } : {}),
+      ...(endDate ? { lte: endDate } : {})
+    };
+  }
+
+  return undefined;
+}
+
+function displayAction(action: AuditAction): string {
+  const mapping: Record<AuditAction, string> = {
+    CREATE: 'Created',
+    UPDATE: 'Updated',
+    DELETE: 'Deleted',
+    LOGIN: 'Attempted',
+    LOGOUT: 'Attempted',
+    STATUS_CHANGE: 'Updated',
+    SETTINGS_UPDATE: 'Updated',
+    REPORT_PROCESSING: 'Approved'
+  };
+  return mapping[action];
+}
+
+function serializeSystemLogEntry(log: any) {
+  const metadata = (log.metadataJson ?? {}) as Record<string, string>;
+  const actor = log.actorUser as AdminProfileUser | null;
+  const userCategory = metadata.userCategory ?? (actor ? titleRole(actor.role) : 'System');
+  const actorName = actor ? [actor.firstName, actor.lastName].filter(Boolean).join(' ') || actor.email : 'System';
+
+  return {
+    id: log.id,
+    time: log.createdAt.toISOString(),
+    user: metadata.user ?? (userCategory === 'System' ? 'System' : `${userCategory} ${actorName}`.trim()),
+    action: metadata.displayAction ?? displayAction(log.action),
+    module: metadata.module ?? log.entity,
+    affectedItem: metadata.affectedItem ?? (log.entityId ? `${log.entity}: ${log.entityId}` : log.entity),
+    description: metadata.description ?? `${displayAction(log.action)} ${log.entity}`,
+    ipAddress: metadata.ipAddress ?? '',
+    status: metadata.status ?? 'Success'
+  };
+}
+
+function matchesSystemLogFilters(entry: ReturnType<typeof serializeSystemLogEntry>, query: SystemLogQuery): boolean {
+  const search = query.search?.toLowerCase();
+  return (
+    (!query.user || entry.user.includes(query.user)) &&
+    (!query.action || entry.action === query.action) &&
+    (!query.module || entry.module === query.module) &&
+    (!search || `${entry.description} ${entry.action}`.toLowerCase().includes(search))
+  );
+}
+
+export async function listSystemLog(query: SystemLogQuery) {
+  const createdAt = dateFilter(query.dateRange, query.startDate, query.endDate);
+  const where = createdAt ? { createdAt } : {};
+  const entries = await prisma.auditLog.findMany({
+    where,
+    include: { actorUser: true },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }]
+  });
+
+  const filtered = entries.map(serializeSystemLogEntry).filter((entry) => matchesSystemLogFilters(entry, query));
+  const offset = (query.page - 1) * query.pageSize;
+
+  return {
+    items: filtered.slice(offset, offset + query.pageSize),
+    page: query.page,
+    pageSize: query.pageSize,
+    total: filtered.length
+  };
+}
+
+function csvEscape(value: unknown): string {
+  return `"${String(value ?? '').replace(/"/g, '""')}"`;
+}
+
+function buildMinimalPdf(lines: string[]): Buffer {
+  const content = `BT /F1 10 Tf 40 760 Td ${lines
+    .slice(0, 80)
+    .map((line, index) => `${index === 0 ? '' : '0 -14 Td '}(${line.replace(/[()\\]/g, '\\$&')}) Tj`)
+    .join(' ')} ET`;
+  const objects = [
+    '1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj',
+    '2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj',
+    '3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >> endobj',
+    '4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj',
+    `5 0 obj << /Length ${Buffer.byteLength(content)} >> stream\n${content}\nendstream endobj`
+  ];
+  const header = '%PDF-1.4\n';
+  const offsets: number[] = [];
+  let body = '';
+  for (const object of objects) {
+    offsets.push(Buffer.byteLength(header + body));
+    body += `${object}\n`;
+  }
+  const xrefOffset = Buffer.byteLength(header + body);
+  const xref = `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n${offsets
+    .map((offset) => `${String(offset).padStart(10, '0')} 00000 n `)
+    .join('\n')}\ntrailer << /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  return Buffer.from(header + body + xref);
+}
+
+export async function exportSystemLog(query: Omit<SystemLogQuery, 'page' | 'pageSize'> & { format: 'csv' | 'pdf' }) {
+  const rows = (await listSystemLog({ ...query, page: 1, pageSize: 100_000 })).items;
+
+  if (query.format === 'csv') {
+    return {
+      contentType: 'text/csv; charset=utf-8',
+      filename: 'system_log.csv',
+      body: [
+        'Time,User,Action,Module,Description,Status',
+        ...rows.map((row) =>
+          [row.time, row.user, row.action, row.module, row.description, row.status].map(csvEscape).join(',')
+        )
+      ].join('\n')
+    };
+  }
+
+  return {
+    contentType: 'application/pdf',
+    filename: 'system_log.pdf',
+    body: buildMinimalPdf([
+      'System Log',
+      ...rows.map((row) => `${row.time} | ${row.user} | ${row.action} | ${row.module} | ${row.description} | ${row.status}`)
+    ])
+  };
+}
+
+export function getRolesPermissions() {
+  return rolesPermissions;
+}

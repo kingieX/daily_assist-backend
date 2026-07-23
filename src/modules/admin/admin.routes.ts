@@ -31,18 +31,32 @@ import {
   updateStaffSchema
 } from './admin.validation';
 import { adminSettingsController } from './admin-settings.controller';
-import { deleteAdminAccountSchema, notificationSettingsSchema, systemLogExportQuerySchema, systemLogQuerySchema, updateAdminProfileSchema } from './admin-settings.validation';
+import {
+  deleteAdminAccountSchema,
+  notificationSettingsSchema,
+  systemLogExportQuerySchema,
+  systemLogQuerySchema,
+  updateAdminProfileSchema
+} from './admin-settings.validation';
 
 const adminRouter = Router();
 
 adminRouter.use(authenticate, authorizeRoles(Role.ADMIN, Role.SUPER_ADMIN));
 
-
 adminRouter.get('/profile', adminSettingsController.getAdminProfile);
-adminRouter.patch('/profile', uploadAdminPhoto, validate({ body: updateAdminProfileSchema }), adminSettingsController.updateAdminProfile);
+adminRouter.patch(
+  '/profile',
+  uploadAdminPhoto,
+  validate({ body: updateAdminProfileSchema }),
+  adminSettingsController.updateAdminProfile
+);
 adminRouter.delete('/account', validate({ body: deleteAdminAccountSchema }), adminSettingsController.deactivateAdminAccount);
 adminRouter.get('/notification-settings', adminSettingsController.getNotificationSettings);
-adminRouter.patch('/notification-settings', validate({ body: notificationSettingsSchema }), adminSettingsController.updateNotificationSettings);
+adminRouter.patch(
+  '/notification-settings',
+  validate({ body: notificationSettingsSchema }),
+  adminSettingsController.updateNotificationSettings
+);
 adminRouter.get('/system-log', validate({ query: systemLogQuerySchema }), adminSettingsController.listSystemLog);
 adminRouter.get('/system-log/export', validate({ query: systemLogExportQuerySchema }), adminSettingsController.exportSystemLog);
 adminRouter.get('/roles-permissions', authorizeRoles(Role.SUPER_ADMIN), adminSettingsController.getRolesPermissions);

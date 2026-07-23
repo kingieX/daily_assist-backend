@@ -425,23 +425,125 @@ export const schemas: SchemasMap = {
 
   StaffProfile: {
     type: 'object',
+    required: ['name', 'initials', 'role', 'email', 'gender', 'phone', 'dob', 'staffId', 'zone', 'accountStatus', 'lastLoginAt'],
     properties: {
-      name: { type: 'string' }, initials: { type: 'string' }, role: { type: 'string' }, email: { type: 'string', format: 'email' },
-      gender: { type: 'string' }, phone: { type: 'string' }, dob: { type: 'string', format: 'date' }, staffId: { type: 'string' },
-      zone: { type: 'string' }, accountStatus: { type: 'string' }, lastLoginAt: { type: 'string', format: 'date-time' }
+      name: { type: 'string', example: 'Sarah Johnson' },
+      initials: { type: 'string', example: 'SJ', description: 'Derived server-side from the first letter of the first two name words.' },
+      role: { type: 'string', example: 'Support Worker' },
+      email: { type: 'string', format: 'email' },
+      gender: { type: 'string', example: 'Female' },
+      phone: { type: 'string' },
+      dob: { type: 'string', format: 'date' },
+      staffId: { type: 'string' },
+      zone: { type: 'string' },
+      accountStatus: { type: 'string', example: 'Active' },
+      lastLoginAt: { type: 'string', format: 'date-time' }
     }
   },
+
   AdminProfile: {
     type: 'object',
-    properties: { id: { type: 'string' }, firstName: { type: 'string' }, lastName: { type: 'string' }, email: { type: 'string', format: 'email' }, role: { type: 'string' }, photoUrl: { type: 'string', nullable: true } }
+    required: ['id', 'firstName', 'lastName', 'email', 'role', 'photoUrl'],
+    properties: {
+      id: { type: 'string', format: 'uuid' },
+      firstName: { type: 'string' },
+      lastName: { type: 'string' },
+      email: { type: 'string', format: 'email', readOnly: true },
+      role: { type: 'string', readOnly: true, example: 'Admin' },
+      photoUrl: { type: 'string', nullable: true }
+    }
   },
+
+  AdminProfileUpdateRequest: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      firstName: { type: 'string' },
+      lastName: { type: 'string' },
+      photo: { type: 'string', description: 'Base64 data URL for JSON requests, or binary file for multipart/form-data.' }
+    }
+  },
+
+  AdminAccountDeactivateRequest: {
+    type: 'object',
+    required: ['confirm'],
+    properties: {
+      confirm: { type: 'boolean', enum: [true] }
+    }
+  },
+
   NotificationSetting: {
     type: 'object',
-    properties: { key: { type: 'string', enum: ['bookingRequest','staffCheckin','staffCheckout','missedCheckin','missedCheckout'] }, label: { type: 'string' }, sub: { type: 'string' }, enabled: { type: 'boolean' } }
+    required: ['key', 'label', 'sub', 'enabled'],
+    properties: {
+      key: { type: 'string', enum: ['bookingRequest', 'staffCheckin', 'staffCheckout', 'missedCheckin', 'missedCheckout'] },
+      label: { type: 'string' },
+      sub: { type: 'string' },
+      enabled: { type: 'boolean' }
+    }
   },
+
+  NotificationSettingsList: {
+    type: 'array',
+    items: { $ref: '#/components/schemas/NotificationSetting' }
+  },
+
+  NotificationSettingsUpdateRequest: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      bookingRequest: { type: 'boolean' },
+      staffCheckin: { type: 'boolean' },
+      staffCheckout: { type: 'boolean' },
+      missedCheckin: { type: 'boolean' },
+      missedCheckout: { type: 'boolean' }
+    }
+  },
+
+  PermissionSetting: {
+    type: 'object',
+    required: ['key', 'label', 'value'],
+    properties: {
+      key: { type: 'string' },
+      label: { type: 'string' },
+      value: { type: 'boolean' }
+    }
+  },
+
+  RolesPermissionsResponse: {
+    type: 'object',
+    required: ['admin', 'staff'],
+    properties: {
+      admin: { type: 'array', items: { $ref: '#/components/schemas/PermissionSetting' } },
+      staff: { type: 'array', items: { $ref: '#/components/schemas/PermissionSetting' } }
+    }
+  },
+
   SystemLogEntry: {
     type: 'object',
-    properties: { id: { type: 'string' }, time: { type: 'string', format: 'date-time' }, user: { type: 'string' }, action: { type: 'string' }, module: { type: 'string' }, affectedItem: { type: 'string' }, description: { type: 'string' }, ipAddress: { type: 'string' }, status: { type: 'string', enum: ['Success','Warning','Failed','Cancelled'] } }
+    required: ['id', 'time', 'user', 'action', 'module', 'affectedItem', 'description', 'ipAddress', 'status'],
+    properties: {
+      id: { type: 'string' },
+      time: { type: 'string', format: 'date-time' },
+      user: { type: 'string' },
+      action: { type: 'string', enum: ['Created', 'Updated', 'Deleted', 'Assigned', 'Approved', 'Triggered', 'Submitted', 'Attempted', 'Sent', 'Cancelled'] },
+      module: { type: 'string' },
+      affectedItem: { type: 'string' },
+      description: { type: 'string' },
+      ipAddress: { type: 'string' },
+      status: { type: 'string', enum: ['Success', 'Warning', 'Failed', 'Cancelled'] }
+    }
+  },
+
+  SystemLogListResponse: {
+    type: 'object',
+    required: ['items', 'page', 'pageSize', 'total'],
+    properties: {
+      items: { type: 'array', items: { $ref: '#/components/schemas/SystemLogEntry' } },
+      page: { type: 'integer' },
+      pageSize: { type: 'integer' },
+      total: { type: 'integer' }
+    }
   },
 
   Application: {

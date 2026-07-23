@@ -3,18 +3,72 @@ import path from 'path';
 import { ApiError } from '../../utils/api-error';
 import { sendSuccess } from '../../utils/api-response';
 import { asyncHandler } from '../../utils/async-handler';
-import * as svc from './admin-settings.service';
+import * as adminSettingsService from './admin-settings.service';
 
-function userId(req: Request) { if (!req.user) throw new ApiError(401, 'Authentication required'); return req.user.id; }
-function adminPhotoUrl(req: Request) { const file = req.file as Express.Multer.File | undefined; return file ? `/uploads/staff/photos/${path.basename(file.path)}` : undefined; }
+function getAuthenticatedUserId(req: Request): string {
+  if (!req.user) {
+    throw new ApiError(401, 'Authentication required');
+  }
+  return req.user.id;
+}
+
+function uploadedAdminPhotoUrl(req: Request): string | undefined {
+  const file = req.file as Express.Multer.File | undefined;
+  return file ? `/uploads/staff/photos/${path.basename(file.path)}` : undefined;
+}
+
+const getAdminProfile = asyncHandler(async (req: Request, res: Response) => {
+  const profile = await adminSettingsService.getAdminProfile(getAuthenticatedUserId(req));
+  return sendSuccess(res, 200, 'Admin profile retrieved', profile);
+});
+
+const updateAdminProfile = asyncHandler(async (req: Request, res: Response) => {
+  const profile = await adminSettingsService.updateAdminProfile(
+    getAuthenticatedUserId(req),
+    req.body,
+    uploadedAdminPhotoUrl(req)
+  );
+  return sendSuccess(res, 200, 'Admin profile updated', profile);
+});
+
+const deactivateAdminAccount = asyncHandler(async (req: Request, res: Response) => {
+  await adminSettingsService.deactivateAdminAccount(getAuthenticatedUserId(req));
+  return res.status(204).send();
+});
+
+const getNotificationSettings = asyncHandler(async (req: Request, res: Response) => {
+  const settings = await adminSettingsService.getNotificationSettings(getAuthenticatedUserId(req));
+  return sendSuccess(res, 200, 'Notification settings retrieved', settings);
+});
+
+const updateNotificationSettings = asyncHandler(async (req: Request, res: Response) => {
+  const settings = await adminSettingsService.updateNotificationSettings(getAuthenticatedUserId(req), req.body);
+  return sendSuccess(res, 200, 'Notification settings updated', settings);
+});
+
+const listSystemLog = asyncHandler(async (req: Request, res: Response) => {
+  const result = await adminSettingsService.listSystemLog(req.query as any);
+  return sendSuccess(res, 200, 'System log retrieved', result);
+});
+
+const exportSystemLog = asyncHandler(async (req: Request, res: Response) => {
+  const exported = await adminSettingsService.exportSystemLog(req.query as any);
+  res.setHeader('Content-Type', exported.contentType);
+  res.setHeader('Content-Disposition', `attachment; filename="${exported.filename}"`);
+  return res.status(200).send(exported.body);
+});
+
+const getRolesPermissions = asyncHandler(async (_req: Request, res: Response) => {
+  return sendSuccess(res, 200, 'Roles and permissions retrieved', adminSettingsService.getRolesPermissions());
+});
 
 export const adminSettingsController = {
-  getAdminProfile: asyncHandler(async (req, res) => sendSuccess(res, 200, 'Admin profile retrieved', await svc.getAdminProfile(userId(req)))),
-  updateAdminProfile: asyncHandler(async (req, res) => sendSuccess(res, 200, 'Admin profile updated', await svc.updateAdminProfile(userId(req), req.body, adminPhotoUrl(req)))),
-  deactivateAdminAccount: asyncHandler(async (req, res) => { await svc.deactivateAdminAccount(userId(req)); return res.status(204).send(); }),
-  getNotificationSettings: asyncHandler(async (req, res) => sendSuccess(res, 200, 'Notification settings retrieved', await svc.getNotificationSettings(userId(req)))),
-  updateNotificationSettings: asyncHandler(async (req, res) => sendSuccess(res, 200, 'Notification settings updated', await svc.updateNotificationSettings(userId(req), req.body))),
-  listSystemLog: asyncHandler(async (req, res) => sendSuccess(res, 200, 'System log retrieved', await svc.listSystemLog(req.query))),
-  exportSystemLog: asyncHandler(async (req: Request, res: Response) => { const out = await svc.exportSystemLog(req.query); res.setHeader('Content-Type', out.contentType); res.setHeader('Content-Disposition', `attachment; filename="${out.filename}"`); return res.status(200).send(out.body); }),
-  getRolesPermissions: asyncHandler(async (_req, res) => sendSuccess(res, 200, 'Roles and permissions retrieved', svc.getRolesPermissions()))
+  getAdminProfile,
+  updateAdminProfile,
+  deactivateAdminAccount,
+  getNotificationSettings,
+  updateNotificationSettings,
+  listSystemLog,
+  exportSystemLog,
+  getRolesPermissions
 };
