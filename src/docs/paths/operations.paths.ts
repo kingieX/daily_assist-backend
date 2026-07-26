@@ -78,6 +78,15 @@ export const operationsPaths: OpenAPIV3.PathsObject = {
       parameters: [idParam],
       responses: { '200': { description: 'Report retrieved' }, '404': { $ref: '#/components/responses/NotFound' } }
     },
+    patch: {
+      tags: ['Reports'],
+      summary: 'Update report review workflow',
+      description: 'Updates a visit/incident report status and reason from the admin message report modal. Product confirmation is still needed on whether this report is the staff checkout visit log escalated for review or a separate incident/review record.',
+      security: secured,
+      parameters: [idParam],
+      requestBody: jsonBody({ type: 'object', required: ['status', 'reasonForAction'], properties: { status: { type: 'string', enum: ['pending', 'reviewed', 'under_review', 'flagged', 'resolved'] }, reasonForAction: { type: 'string' } } }, { status: 'under_review', reasonForAction: 'Needs manager follow-up.' }),
+      responses: { '200': { description: 'Report updated' }, '404': { $ref: '#/components/responses/NotFound' } }
+    },
     delete: {
       tags: ['Admin — Phase 6 Ops'],
       summary: 'Delete report',

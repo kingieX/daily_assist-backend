@@ -131,6 +131,9 @@ export const openApiSpec: OpenAPIV3.Document = {
       name: 'Staff — Visits',
       description: 'Staff visit lifecycle actions: acknowledge, check-in, check-out, history'
     },
+    { name: 'Reports', description: 'Visit and incident report review workflow' },
+    { name: 'Visit Reassignment', description: 'Visit reassignment operations used from missed check-in flows' },
+    { name: 'Messages', description: 'Unified admin/staff inbox read models and direct chat operations' },
     {
       name: 'Admin — Communications',
       description: 'Admin messaging, announcements, and notification history operations'

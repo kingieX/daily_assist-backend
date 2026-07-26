@@ -10,6 +10,41 @@ function currentUser(req: Request): { id: string; role: Role } {
   return { id: req.user.id, role: req.user.role };
 }
 
+
+const listInbox = asyncHandler(async (req: Request, res: Response) => {
+  const result = await communicationsService.listAdminInbox(req.query as any);
+  return sendSuccess(res, 200, 'Messages retrieved', result);
+});
+
+const getInboxDetail = asyncHandler(async (req: Request, res: Response) => {
+  const result = await communicationsService.getAdminInboxDetail(req.params.id as string);
+  return sendSuccess(res, 200, 'Message retrieved', result);
+});
+
+const startDirectMessage = asyncHandler(async (req: Request, res: Response) => {
+  const user = currentUser(req);
+  const result = await communicationsService.startAdminMessage(req.body, user.id);
+  return sendSuccess(res, 201, 'Message sent', result);
+});
+
+const replyToMessage = asyncHandler(async (req: Request, res: Response) => {
+  const user = currentUser(req);
+  const result = await communicationsService.replyToConversation(req.params.id as string, req.body.text, user.role, user.id);
+  return sendSuccess(res, 201, 'Reply sent', result);
+});
+
+const bulkDeleteInbox = asyncHandler(async (req: Request, res: Response) => {
+  const user = currentUser(req);
+  const items = await Promise.all(req.body.ids.map((id: string) => communicationsService.deleteInboxItem(id, user.id, user.role)));
+  return sendSuccess(res, 200, 'Messages deleted', { items });
+});
+
+const deleteInbox = asyncHandler(async (req: Request, res: Response) => {
+  const user = currentUser(req);
+  const result = await communicationsService.deleteInboxItem(req.params.id as string, user.id, user.role);
+  return sendSuccess(res, 200, 'Message deleted', result);
+});
+
 const createThread = asyncHandler(async (req: Request, res: Response) => {
   const user = currentUser(req);
   const result = await communicationsService.createThread(req.body, user.role, user.id);
@@ -87,6 +122,12 @@ const updateNotificationPreferences = asyncHandler(async (req: Request, res: Res
 });
 
 export const adminCommunicationsController = {
+  listInbox,
+  getInboxDetail,
+  startDirectMessage,
+  replyToMessage,
+  bulkDeleteInbox,
+  deleteInbox,
   createThread,
   listThreads,
   getThreadMessages,
