@@ -97,6 +97,11 @@ export const schemas: SchemasMap = {
     }
   },
 
+
+  AdminChangePasswordRequest: { type: 'object', required: ['currentPassword', 'newPassword', 'confirmPassword'], properties: { currentPassword: { type: 'string' }, newPassword: { type: 'string', minLength: 8 }, confirmPassword: { type: 'string' } } },
+  SuperAdminNotificationSettingsList: { type: 'array', items: { type: 'object', properties: { key: { type: 'string', enum: ['accountSignin', 'accountInfoChanges', 'bookingRequest', 'staffCheckin', 'staffCheckout', 'missedCheckin', 'missedCheckout'] }, label: { type: 'string' }, sub: { type: 'string' }, email: { type: 'boolean' }, dashboard: { type: 'boolean' } } } },
+  SuperAdminNotificationSettingsUpdateRequest: { type: 'object', additionalProperties: { type: 'object', properties: { email: { type: 'boolean' }, dashboard: { type: 'boolean' } }, additionalProperties: false } },
+  RolesPermissionsUpdateRequest: { type: 'object', properties: { admin: { type: 'object', additionalProperties: { type: 'boolean' } }, staff: { type: 'object', additionalProperties: { type: 'boolean' } } }, additionalProperties: false },
   ErrorResponse: {
     type: 'object',
     properties: {

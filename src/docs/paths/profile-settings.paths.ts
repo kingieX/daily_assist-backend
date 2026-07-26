@@ -222,6 +222,16 @@ export const profileSettingsPaths: OpenAPIV3.PathsObject = {
       }
     }
   },
+  '/admin/change-password': {
+    post: {
+      tags: ['Admin Settings'],
+      summary: 'Change authenticated admin password',
+      description: 'Available to both Admin and Super Admin users. Verifies currentPassword, enforces a minimum 8-character newPassword, requires confirmPassword to match, and revokes active refresh-token sessions after success.',
+      security: secured,
+      requestBody: { required: true, content: { 'application/json': { schema: { $ref: '#/components/schemas/AdminChangePasswordRequest' }, example: { currentPassword: 'OldPass123', newPassword: 'NewPass123', confirmPassword: 'NewPass123' } } } },
+      responses: { '200': { description: 'Password changed successfully; no sensitive data is returned.' }, ...standardErrors }
+    }
+  },
   '/admin/account': {
     delete: {
       tags: ['Admin Profile'],
@@ -249,20 +259,20 @@ export const profileSettingsPaths: OpenAPIV3.PathsObject = {
       summary: 'Get admin notification settings',
       security: secured,
       responses: {
-        '200': jsonEnvelope('#/components/schemas/NotificationSettingsList', notificationSettingsExample),
+        '200': { description: 'Notification settings. Shape varies by authenticated role: regular admins receive enabled booleans; super admins receive email/dashboard channel booleans.', content: { 'application/json': { schema: { type: 'object', properties: { success: { type: 'boolean' }, message: { type: 'string' }, data: { oneOf: [{ $ref: '#/components/schemas/NotificationSettingsList' }, { $ref: '#/components/schemas/SuperAdminNotificationSettingsList' }] } } } } } },
         ...standardErrors
       }
     },
     patch: {
       tags: ['Admin Settings'],
       summary: 'Update admin notification settings',
-      description: 'All keys are optional; omitted keys keep their current value.',
+      description: 'All keys are optional; omitted keys keep their current value. Regular admins send boolean toggles for the 5 operational items. Super admins may send nested { email, dashboard } channel toggles for the 7-item super-admin set.',
       security: secured,
       requestBody: {
         required: true,
         content: {
           'application/json': {
-            schema: { $ref: '#/components/schemas/NotificationSettingsUpdateRequest' },
+            schema: { oneOf: [{ $ref: '#/components/schemas/NotificationSettingsUpdateRequest' }, { $ref: '#/components/schemas/SuperAdminNotificationSettingsUpdateRequest' }] },
             example: {
               bookingRequest: true,
               staffCheckin: true,
@@ -274,7 +284,7 @@ export const profileSettingsPaths: OpenAPIV3.PathsObject = {
         }
       },
       responses: {
-        '200': jsonEnvelope('#/components/schemas/NotificationSettingsList', notificationSettingsExample),
+        '200': { description: 'Notification settings. Shape varies by authenticated role: regular admins receive enabled booleans; super admins receive email/dashboard channel booleans.', content: { 'application/json': { schema: { type: 'object', properties: { success: { type: 'boolean' }, message: { type: 'string' }, data: { oneOf: [{ $ref: '#/components/schemas/NotificationSettingsList' }, { $ref: '#/components/schemas/SuperAdminNotificationSettingsList' }] } } } } } },
         ...standardErrors
       }
     }
@@ -327,7 +337,7 @@ export const profileSettingsPaths: OpenAPIV3.PathsObject = {
     get: {
       tags: ['Admin Settings'],
       summary: 'Get role permission sets',
-      description: 'Super Admin only; no PATCH endpoint is exposed until the frontend defines the edit request shape.',
+      description: 'Super Admin only. Returns the complete Admin and Staff permission sets.',
       security: secured,
       responses: {
         '200': jsonEnvelope('#/components/schemas/RolesPermissionsResponse', {
@@ -336,6 +346,14 @@ export const profileSettingsPaths: OpenAPIV3.PathsObject = {
         }),
         ...standardErrors
       }
+    },
+    patch: {
+      tags: ['Admin Settings'],
+      summary: 'Update role permission sets',
+      description: 'Super Admin only. Top-level admin and staff keys are optional; only provided permission keys are updated. Returns the full updated permission object.',
+      security: secured,
+      requestBody: { required: true, content: { 'application/json': { schema: { $ref: '#/components/schemas/RolesPermissionsUpdateRequest' }, example: { admin: { addOtherAdmin: true }, staff: { manageClients: false } } } } },
+      responses: { '200': jsonEnvelope('#/components/schemas/RolesPermissionsResponse', rolesPermissionsExample), ...standardErrors }
     }
   }
 };

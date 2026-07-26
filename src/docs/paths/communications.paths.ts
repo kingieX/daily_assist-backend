@@ -72,6 +72,16 @@ const markReadBody = jsonBody(
 );
 
 export const communicationsPaths: OpenAPIV3.PathsObject = {
+  '/admin/messages': {
+    get: { tags: ['Messages'], summary: 'List admin unified inbox', description: 'Read model over direct chats, announcements, and notifications. Supports tab=all|announcement|notification, search by name, page, and pageSize. Direct replies are intended to create a notification for the opposite side so inboxes update when messages are sent; deployments may additionally use polling or a worker/WebSocket bridge.', security: secured, parameters: [{ name: 'tab', in: 'query', schema: { type: 'string', enum: ['all', 'announcement', 'notification'] } }, { name: 'search', in: 'query', schema: { type: 'string' } }, { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } }, { name: 'pageSize', in: 'query', schema: { type: 'integer', default: 20 } }], responses: { '200': { description: 'Messages retrieved' } } },
+    post: { tags: ['Messages'], summary: 'Start a direct staff chat', security: secured, requestBody: jsonBody({ type: 'object', required: ['staffId', 'message'], properties: { staffId: { type: 'string', format: 'uuid' }, message: { type: 'string' } } }, { staffId: '00000000-0000-0000-0000-000000000000', message: 'Hello Sarah' }), responses: { '201': { description: 'Conversation created or reused and first message appended' } } },
+    delete: { tags: ['Messages'], summary: 'Bulk delete admin inbox items', security: secured, requestBody: jsonBody({ type: 'object', required: ['ids'], properties: { ids: { type: 'array', items: { type: 'string', format: 'uuid' } } } }, { ids: ['00000000-0000-0000-0000-000000000000'] }), responses: { '200': { description: 'Messages deleted' } } }
+  },
+  '/admin/messages/{id}': { get: { tags: ['Messages'], summary: 'Get admin inbox item detail', description: 'Returns oneOf announcement detail, notification detail, or direct chat detail depending on the underlying source.', security: secured, parameters: [idParam], responses: { '200': { description: 'Message detail retrieved' } } }, delete: { tags: ['Messages'], summary: 'Delete one admin inbox item', security: secured, parameters: [idParam], responses: { '200': { description: 'Message deleted' } } } },
+  '/admin/messages/{id}/reply': { post: { tags: ['Messages'], summary: 'Reply to direct chat as admin', security: secured, parameters: [idParam], requestBody: jsonBody({ type: 'object', required: ['text'], properties: { text: { type: 'string' } } }, { text: 'Thanks for the update.' }), responses: { '201': { description: 'Reply sent' } } } },
+  '/staff/messages': { get: { tags: ['Messages'], summary: 'List staff unified inbox', description: 'Returns chat, reminder, rota, and generic message entries scoped to the authenticated staff member.', security: secured, parameters: [{ name: 'page', in: 'query', schema: { type: 'integer', default: 1 } }, { name: 'pageSize', in: 'query', schema: { type: 'integer', default: 20 } }], responses: { '200': { description: 'Messages retrieved' } } } },
+  '/staff/messages/{id}': { get: { tags: ['Messages'], summary: 'Get staff inbox item detail', description: 'Returns chat, reminder, rota, or message detail. Fetching announcement-backed entries clears the staff isNew/read flag.', security: secured, parameters: [idParam], responses: { '200': { description: 'Message retrieved' } } }, delete: { tags: ['Messages'], summary: 'Delete current staff message', security: secured, parameters: [idParam], responses: { '200': { description: 'Message deleted' } } } },
+  '/staff/messages/{id}/reply': { post: { tags: ['Messages'], summary: 'Reply to direct chat as staff', security: secured, parameters: [idParam], requestBody: jsonBody({ type: 'object', required: ['text'], properties: { text: { type: 'string' } } }, { text: 'I have received this.' }), responses: { '201': { description: 'Reply sent' } } } },
   '/admin/messages/threads': {
     post: {
       tags: ['Admin — Communications'],
@@ -107,16 +117,6 @@ export const communicationsPaths: OpenAPIV3.PathsObject = {
       parameters: [idParam],
       requestBody: postMessageBody,
       responses: { '201': { description: 'Message sent' } }
-    }
-  },
-  '/admin/messages/{id}': {
-    delete: {
-      tags: ['Admin — Communications'],
-      summary: 'Soft-delete message',
-      description: 'Soft-deletes a message so it no longer appears in active message views.',
-      security: secured,
-      parameters: [idParam],
-      responses: { '200': { description: 'Message deleted' } }
     }
   },
   '/admin/announcements': {
@@ -243,16 +243,6 @@ export const communicationsPaths: OpenAPIV3.PathsObject = {
       parameters: [idParam],
       requestBody: postMessageBody,
       responses: { '201': { description: 'Message sent' } }
-    }
-  },
-  '/staff/messages/{id}': {
-    delete: {
-      tags: ['Staff — Communications'],
-      summary: 'Soft-delete staff message',
-      description: 'Soft-deletes a message owned by the authenticated staff member.',
-      security: secured,
-      parameters: [idParam],
-      responses: { '200': { description: 'Message deleted' } }
     }
   },
   '/staff/announcements': {

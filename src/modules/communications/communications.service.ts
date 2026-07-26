@@ -562,7 +562,90 @@ async function updateNotificationPreferences(userId: string, input: UpdateNotifi
   });
 }
 
+async function listAdminInbox(query: any) {
+  const page = query.page ?? 1;
+  const limit = query.pageSize ?? 20;
+  const search = String(query.search ?? '').toLowerCase();
+  const tab = query.tab ?? 'all';
+  const items: any[] = [];
+
+  if (tab === 'all') {
+    const threads = await listThreads({ page, limit, staffId: undefined } as any, Role.ADMIN, '');
+    items.push(...threads.items.map((thread: any) => ({ id: thread.id, tab: 'all', name: staffName(thread.staff), icon: null, avatar: thread.staff?.staffProfile?.photoUrl ?? null, lastMessage: thread.messages?.[0]?.body ?? '', time: (thread.messages?.[0]?.createdAt ?? thread.updatedAt).toISOString(), unread: false })));
+  } else if (tab === 'announcement') {
+    const result = await listAnnouncements(Role.ADMIN, '', { page, pageSize: limit } as any);
+    items.push(...result.items.map((item: any) => ({ id: item.id, tab: 'announcement', name: item.title, icon: item.icon, avatar: null, lastMessage: item.message, time: item.sentAt, unread: false })));
+  } else if (tab === 'notification') {
+    const result = await db.notification.findMany({ orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: limit, skip: (page - 1) * limit });
+    items.push(...result.map((n: any) => ({ id: n.id, tab: 'notification', name: n.title, icon: 'bell', avatar: null, lastMessage: n.body, time: n.createdAt.toISOString(), unread: !n.readAt })));
+  }
+  const filtered = search ? items.filter((item) => item.name.toLowerCase().includes(search)) : items;
+  return paginated(filtered, filtered.length, page, limit);
+}
+
+async function getAdminInboxDetail(id: string) {
+  const conversation = await db.conversation.findUnique({ where: { id }, include: { staff: { include: { staffProfile: true } }, messages: { where: { deletedAt: null }, orderBy: { createdAt: 'asc' } } } });
+  if (conversation) return { id, tab: 'all', name: staffName(conversation.staff), avatar: conversation.staff?.staffProfile?.photoUrl ?? null, messages: conversation.messages.map((m: any) => ({ id: m.id, sender: m.senderUserId === conversation.staffId ? 'staff' : 'admin', text: m.body, time: m.createdAt.toISOString(), read: Boolean(m.readAt) })) };
+  const announcement = await db.announcement.findUnique({ where: { id }, include: { recipients: { include: { staff: { include: { staffProfile: true } } } } } });
+  if (announcement) return { tab: 'announcement', ...adminAnnouncementResponse(announcement) };
+  const notification = await db.notification.findUnique({ where: { id } });
+  if (notification) return { id, tab: 'notification', name: notification.title, from: 'System', received: notification.createdAt.toISOString(), body: notification.body, actions: [], notificationType: String(notification.type).toLowerCase(), embeddedCard: notification.metadataJson ?? null, visitDetails: notification.metadataJson ?? null };
+  throw new ApiError(404, 'Message not found');
+}
+
+async function startAdminMessage(input: any, userId: string) {
+  const thread = await createThread({ staffId: input.staffId }, Role.ADMIN, userId);
+  await postMessage(thread.id, { body: input.message }, Role.ADMIN, userId);
+  return getAdminInboxDetail(thread.id);
+}
+
+async function replyToConversation(id: string, text: string, role: Role, userId: string) {
+  const created = await postMessage(id, { body: text }, role, userId);
+  return { id: created.id, text: created.body, time: created.createdAt.toISOString() };
+}
+
+async function deleteInboxItem(id: string, userId: string, role: Role) {
+  const conversation = await db.conversation.findUnique({ where: { id }, select: { id: true, staffId: true } });
+  if (conversation) {
+    if (role === Role.STAFF && conversation.staffId !== userId) throw new ApiError(403, 'Forbidden for this conversation');
+    await db.message.updateMany({ where: { conversationId: id }, data: { deletedAt: new Date() } });
+    return { id, deleted: true };
+  }
+  const notification = await db.notification.findUnique({ where: { id }, select: { id: true, userId: true } });
+  if (notification) return deleteNotification(id, notification.userId);
+  if (role !== Role.STAFF) return deleteAnnouncement(id);
+  throw new ApiError(404, 'Message not found');
+}
+
+async function listStaffInbox(userId: string, query: any = {}) {
+  const page = query.page ?? 1; const limit = query.pageSize ?? 20;
+  const [threads, announcements, notifications] = await Promise.all([listThreads({ page: 1, limit: 100 } as any, Role.STAFF, userId), listAnnouncements(Role.STAFF, userId), listNotifications({ page: 1, limit: 100 } as any, userId)]);
+  const items = [
+    ...threads.items.map((t: any) => ({ id: t.id, type: 'chat', sender: 'Manager', subject: staffName(t.staff), time: (t.messages?.[0]?.createdAt ?? t.updatedAt).toISOString(), isNew: false })),
+    ...announcements.map((a: any) => ({ id: a.id, type: a.visitsCard ? 'rota' : 'message', sender: a.from, subject: a.subject, time: a.sent, isNew: a.isNew })),
+    ...notifications.items.map((n: any) => ({ id: n.id, type: 'reminder', sender: 'System', subject: n.title, time: n.createdAt.toISOString(), isNew: !n.readAt }))
+  ].sort((a,b) => b.time.localeCompare(a.time));
+  return paginated(items.slice((page-1)*limit, page*limit), items.length, page, limit);
+}
+
+async function getStaffInboxDetail(id: string, userId: string) {
+  const conversation = await db.conversation.findUnique({ where: { id }, include: { messages: { where: { deletedAt: null }, orderBy: { createdAt: 'asc' } } } });
+  if (conversation) return { id, type: 'chat', sender: 'Manager', chatMessages: conversation.messages.map((m: any) => ({ id: m.id, from: m.senderUserId === userId ? 'staff' : 'manager', sender: m.senderUserId === userId ? 'You' : 'Manager', time: m.createdAt.toISOString(), paragraphs: [m.body] })) };
+  const recipient = await db.announcementRecipient.findFirst({ where: { announcementId: id, staffId: userId }, include: { announcement: true } });
+  if (recipient) { await markAnnouncementRead(id, userId); return staffAnnouncementResponse({ ...recipient, readAt: new Date() }); }
+  const notification = await markNotificationRead(id, userId).catch(() => null);
+  if (notification) { const n = await db.notification.findUnique({ where: { id } }); return { id, type: 'reminder', subject: n.title, from: 'System', sent: n.createdAt.toISOString(), icon: 'bell', body: n.body }; }
+  throw new ApiError(404, 'Message not found');
+}
+
 export const communicationsService = {
+  listAdminInbox,
+  getAdminInboxDetail,
+  startAdminMessage,
+  replyToConversation,
+  deleteInboxItem,
+  listStaffInbox,
+  getStaffInboxDetail,
   createThread,
   listThreads,
   getThreadMessages,

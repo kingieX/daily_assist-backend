@@ -10,6 +10,25 @@ function currentUser(req: Request): { id: string; role: Role } {
   return { id: req.user.id, role: req.user.role };
 }
 
+
+const listInbox = asyncHandler(async (req: Request, res: Response) => {
+  const user = currentUser(req);
+  const result = await communicationsService.listStaffInbox(user.id, req.query as any);
+  return sendSuccess(res, 200, 'Messages retrieved', result);
+});
+
+const getInboxDetail = asyncHandler(async (req: Request, res: Response) => {
+  const user = currentUser(req);
+  const result = await communicationsService.getStaffInboxDetail(req.params.id as string, user.id);
+  return sendSuccess(res, 200, 'Message retrieved', result);
+});
+
+const replyToMessage = asyncHandler(async (req: Request, res: Response) => {
+  const user = currentUser(req);
+  const result = await communicationsService.replyToConversation(req.params.id as string, req.body.text, user.role, user.id);
+  return sendSuccess(res, 201, 'Reply sent', result);
+});
+
 const createThread = asyncHandler(async (req: Request, res: Response) => {
   const user = currentUser(req);
   const result = await communicationsService.createThread(req.body, user.role, user.id);
@@ -42,6 +61,12 @@ const postMessage = asyncHandler(async (req: Request, res: Response) => {
 const deleteMessage = asyncHandler(async (req: Request, res: Response) => {
   const user = currentUser(req);
   const result = await communicationsService.deleteMessage(req.params.id as string, user.role, user.id);
+  return sendSuccess(res, 200, 'Message deleted', result);
+});
+
+const deleteInbox = asyncHandler(async (req: Request, res: Response) => {
+  const user = currentUser(req);
+  const result = await communicationsService.deleteInboxItem(req.params.id as string, user.id, user.role);
   return sendSuccess(res, 200, 'Message deleted', result);
 });
 
@@ -88,11 +113,15 @@ const updateNotificationPreferences = asyncHandler(async (req: Request, res: Res
 });
 
 export const staffCommunicationsController = {
+  listInbox,
+  getInboxDetail,
+  replyToMessage,
   createThread,
   listThreads,
   getThreadMessages,
   postMessage,
   deleteMessage,
+  deleteInbox,
   listAnnouncements,
   markAnnouncementRead,
   acknowledgeAnnouncement,
