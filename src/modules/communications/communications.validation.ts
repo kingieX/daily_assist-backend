@@ -33,6 +33,17 @@ const COMM_NOTIFICATION_TYPE = {
   SYSTEM: 'SYSTEM'
 } as const;
 
+export const inboxQuerySchema = z.object({
+  tab: z.preprocess(emptyStringToUndefined, z.enum(['all', 'announcement', 'notification']).default('all')),
+  search: z.preprocess(emptyStringToUndefined, z.string().trim().optional()),
+  page: queryPage(),
+  pageSize: queryLimit()
+});
+
+export const newDirectMessageSchema = z.object({ staffId: z.string().uuid('Invalid staff ID'), message: z.string().trim().min(1).max(4000) });
+export const replyMessageSchema = z.object({ text: z.string().trim().min(1).max(4000) });
+export const bulkDeleteMessagesSchema = z.object({ ids: z.array(z.string().uuid()).min(1) });
+
 export const listThreadsQuerySchema = paginationSchema.extend({
   staffId: optionalQueryUuid()
 });
@@ -134,6 +145,9 @@ export const markAnnouncementReadSchema = z.object({
 
 export const ensureStaffRole = (role: Role): boolean => role === Role.STAFF;
 
+export type InboxQuery = z.infer<typeof inboxQuerySchema>;
+export type NewDirectMessageInput = z.infer<typeof newDirectMessageSchema>;
+export type ReplyMessageInput = z.infer<typeof replyMessageSchema>;
 export type ListThreadsQuery = z.infer<typeof listThreadsQuerySchema>;
 export type CreateThreadInput = z.infer<typeof createThreadSchema>;
 export type PostMessageInput = z.infer<typeof postMessageSchema>;
