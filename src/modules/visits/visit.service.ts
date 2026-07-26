@@ -230,25 +230,59 @@ async function ensureFrontendBooking(tx: Prisma.TransactionClient, input: any) {
   return booking.id;
 }
 
-async function listAdminVisits(_query: AdminVisitListQuery) {
-  const { start, end } = dayBounds();
+function parseDashboardDate(date?: string) {
+  if (!date) return dayBounds();
+  const start = new Date(`${date}T00:00:00.000Z`);
+  const end = new Date(start);
+  end.setUTCDate(end.getUTCDate() + 1);
+  return { start, end };
+}
 
-  const staff = await prisma.user.findMany({
-    where: { role: Role.STAFF, status: UserStatus.ACTIVE },
-    include: { staffProfile: true, visitsAsStaff: { where: { status: { not: VISIT_STATUS.CANCELLED }, scheduledStartAt: { gte: start, lt: end } } } },
-    orderBy: { createdAt: 'asc' }
-  });
+function adminTableVisitStatus(visit: any, now = new Date()) {
+  if (visit.status === VISIT_STATUS.COMPLETED) return 'completed';
+  if (visit.status === VISIT_STATUS.IN_PROGRESS || visit.checkInAt) return 'in-progress';
+  if (visit.status === VISIT_STATUS.NO_SHOW || (visit.scheduledStartAt < now && !visit.checkInAt)) return 'late';
+  return 'not-started';
+}
 
-  return staff.map((member: any) => ({
-    id: member.id,
-    name: staffName(member),
-    status: String(member.status).toLowerCase(),
-    phone: member.staffProfile?.phone ?? '',
-    email: member.email,
-    photo: member.staffProfile?.photoUrl ?? null,
-    tasksDone: member.visitsAsStaff.filter((visit: any) => visit.status === VISIT_STATUS.COMPLETED).length,
-    tasksTotal: member.visitsAsStaff.length
-  }));
+function adminTableVisit(visit: any) {
+  const full = serializeVisit(visit);
+  return {
+    id: visit.id,
+    clientName: full.clientName,
+    address: full.address,
+    staffName: full.staffName,
+    time: `${formatDisplayTime(visit.scheduledStartAt)} - ${formatDisplayTime(visit.scheduledEndAt)}`,
+    status: adminTableVisitStatus(visit)
+  };
+}
+
+async function listAdminVisits(query: AdminVisitListQuery) {
+  const page = query.page;
+  const limit = query.limit;
+  const skip = (page - 1) * limit;
+  const { start, end } = parseDashboardDate((query as any).date);
+  const dbStatusMap: Record<string, string | undefined> = {
+    completed: VISIT_STATUS.COMPLETED,
+    'in-progress': VISIT_STATUS.IN_PROGRESS,
+    'not-started': undefined,
+    late: undefined
+  };
+  const where: any = {
+    status: { not: VISIT_STATUS.CANCELLED },
+    scheduledStartAt: { gte: start, lt: end },
+    ...((query as any).staffId ? { staffId: (query as any).staffId } : {}),
+    ...((query as any).bookingId ? { bookingId: (query as any).bookingId } : {}),
+    ...((query as any).clientId ? { booking: { clientId: (query as any).clientId } } : {})
+  };
+  const requestedStatus = (query as any).status;
+  const frontendStatusRequested = ['not-started', 'in-progress', 'completed', 'late'].includes(requestedStatus);
+  if (requestedStatus && dbStatusMap[requestedStatus]) where.status = dbStatusMap[requestedStatus];
+  if (requestedStatus && !frontendStatusRequested) where.status = requestedStatus;
+
+  const rows = await prisma.visit.findMany({ where, include: visitInclude, orderBy: [{ scheduledStartAt: 'asc' }, { id: 'asc' }] });
+  const projected = rows.map(adminTableVisit).filter((visit: any) => !frontendStatusRequested || visit.status === requestedStatus);
+  return paginatedResult(projected.slice(skip, skip + limit), projected.length, page, limit);
 }
 
 async function getVisitById(id: string) {

@@ -38,6 +38,19 @@ async function createReport(input: { title: string; description: string; type: s
   return report;
 }
 
+function serializeDashboardReport(report: any) {
+  return {
+    id: report.id,
+    additionalNote: report.description,
+    createdAt: report.createdAt.toISOString(),
+    clientName: (report.metadataJson && report.metadataJson.clientName) || report.clientName || '',
+    title: report.title,
+    description: report.description,
+    status: report.status,
+    type: report.type
+  };
+}
+
 async function listReports(query: ReportListQuery) {
   const page = query.page;
   const limit = query.limit;
@@ -57,7 +70,7 @@ async function listReports(query: ReportListQuery) {
     })
   ]);
 
-  return paginated(items, total, page, limit);
+  return paginated(items.map(serializeDashboardReport), total, page, limit);
 }
 
 async function getReportById(id: string) {

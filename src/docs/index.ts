@@ -96,7 +96,7 @@ export const openApiSpec: OpenAPIV3.Document = {
       description: 'Public form submissions: booking requests and worker applications (no auth, rate-limited)'
     },
     {
-      name: 'Admin — Dashboard',
+      name: 'Admin Dashboard',
       description: 'Admin dashboard summary, charts, and alert widgets'
     },
     {

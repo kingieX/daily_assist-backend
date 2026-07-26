@@ -23,10 +23,10 @@ const jsonBody = (schema: OpenAPIV3.SchemaObject, example?: Record<string, unkno
 export const operationsPaths: OpenAPIV3.PathsObject = {
   '/admin/reports': {
     get: {
-      tags: ['Admin — Phase 6 Ops'],
-      summary: 'List reports',
+      tags: ['Admin Dashboard'],
+      summary: 'List dashboard reports',
       description:
-        'Returns paginated operational reports. Example request: `GET /api/v1/admin/reports?page=1&limit=10`. Query values are accepted as URL strings and coerced to integers during validation.',
+        'Returns paginated submitted visit/incident reports for the AdminDashboard ReportPanel. List items include id, additionalNote, createdAt, and clientName; product still needs to confirm whether reports are standalone review records or escalated visit checkout logs. Example request: `GET /api/v1/admin/reports?page=1&limit=10`.',
       security: secured,
       parameters: [
         ...paginationParameters,

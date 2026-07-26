@@ -444,66 +444,103 @@ const bookingInclude = {
   }
 } satisfies Prisma.BookingInclude;
 
+function dayBoundsFor(date = new Date()) {
+  const start = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const end = new Date(start);
+  end.setUTCDate(end.getUTCDate() + 1);
+  return { start, end };
+}
+
+function formatDashboardTime(value: Date) {
+  return value.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'UTC' }).toLowerCase().replace(' ', '');
+}
+
+function staffName(staff: any) {
+  return [staff?.staffProfile?.firstName, staff?.staffProfile?.lastName].filter(Boolean).join(' ') || staff?.email || '';
+}
+
+function dashboardVisitStatus(visit: any, now = new Date()) {
+  if (visit.status === VisitStatus.COMPLETED) return 'completed';
+  if (visit.status === VisitStatus.IN_PROGRESS || visit.checkInAt) return 'in-progress';
+  if (visit.status === VisitStatus.NO_SHOW || (visit.scheduledStartAt < now && !visit.checkInAt)) return 'late';
+  return 'not-started';
+}
+
+function dashboardClientName(booking: any) {
+  const snapshot = (booking?.selectedPlanSnapshot && typeof booking.selectedPlanSnapshot === 'object') ? booking.selectedPlanSnapshot as any : {};
+  return snapshot.clientName || [booking?.client?.firstName, booking?.client?.lastName].filter(Boolean).join(' ') || '';
+}
+
+function dashboardAddress(booking: any) {
+  const snapshot = (booking?.selectedPlanSnapshot && typeof booking.selectedPlanSnapshot === 'object') ? booking.selectedPlanSnapshot as any : {};
+  return snapshot.address ?? booking?.client?.address ?? '';
+}
+
+function dashboardVisitItem(visit: any) {
+  return {
+    id: visit.id,
+    clientName: dashboardClientName(visit.booking),
+    address: dashboardAddress(visit.booking),
+    staffName: staffName(visit.staff),
+    time: `${formatDashboardTime(visit.scheduledStartAt)} - ${formatDashboardTime(visit.scheduledEndAt)}`,
+    status: dashboardVisitStatus(visit)
+  };
+}
+
+function dashboardAlertBooking(booking: any) {
+  return { id: booking.id, clientName: dashboardClientName(booking), requestedAt: booking.createdAt.toISOString() };
+}
+
 async function getDashboardSummary() {
-  const [requestedBookings, assignedBookings, activeClients, activeStaff, pendingApplications] =
-    await Promise.all([
-      db.booking.count({ where: { status: BookingStatus.REQUESTED } }),
-      db.booking.count({ where: { status: BookingStatus.ASSIGNED } }),
-      db.client.count({ where: { status: ClientStatus.ACTIVE } }),
-      db.user.count({ where: { role: Role.STAFF, status: UserStatus.ACTIVE } }),
-      db.workerApplication.count({ where: { status: ApplicationStatus.PENDING } })
-    ]);
+  const { start, end } = dayBoundsFor();
+  const todaysVisits = await db.visit.findMany({
+    where: { scheduledStartAt: { gte: start, lt: end }, status: { not: VisitStatus.CANCELLED } },
+    select: { id: true, staffId: true, status: true, scheduledStartAt: true, checkInAt: true }
+  });
+  const staffIds = new Set(todaysVisits.map((visit: any) => visit.staffId).filter(Boolean));
 
   return {
-    requestedBookings,
-    assignedBookings,
-    activeClients,
-    activeStaff,
-    pendingApplications
+    visitsToday: todaysVisits.length,
+    staffOnDuty: staffIds.size,
+    completed: todaysVisits.filter((visit: any) => visit.status === VisitStatus.COMPLETED).length,
+    pendingOrLate: todaysVisits.filter((visit: any) => dashboardVisitStatus(visit) === 'late').length
   };
 }
 
 async function getDashboardCharts() {
-  const [bookingsByStatus, applicationsByStatus] = await Promise.all([
-    db.booking.groupBy({ by: ['status'], _count: { status: true } }),
-    db.workerApplication.groupBy({ by: ['status'], _count: { status: true } })
-  ]);
-
-  return {
-    bookingsByStatus: bookingsByStatus.map((entry: any) => ({
-      status: entry.status,
-      count: entry._count.status
-    })),
-    recruitmentByStatus: applicationsByStatus.map((entry: any) => ({
-      status: entry.status,
-      count: entry._count.status
-    }))
-  };
+  const now = new Date();
+  const weekStart = new Date(now); weekStart.setUTCDate(now.getUTCDate() - 6); weekStart.setUTCHours(0, 0, 0, 0);
+  const monthStart = new Date(now); monthStart.setUTCDate(now.getUTCDate() - 27); monthStart.setUTCHours(0, 0, 0, 0);
+  const yearStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 11, 1));
+  const visits = await db.visit.findMany({ where: { scheduledStartAt: { gte: yearStart }, status: { not: VisitStatus.CANCELLED } }, select: { scheduledStartAt: true } });
+  const clamp = (value: number) => Math.min(value, 220);
+  const week = Array.from({ length: 7 }, (_, index) => {
+    const day = new Date(weekStart); day.setUTCDate(weekStart.getUTCDate() + index);
+    const next = new Date(day); next.setUTCDate(day.getUTCDate() + 1);
+    return { label: day.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' }), value: clamp(visits.filter((visit: any) => visit.scheduledStartAt >= day && visit.scheduledStartAt < next).length) };
+  });
+  const month = Array.from({ length: 4 }, (_, index) => {
+    const start = new Date(monthStart); start.setUTCDate(monthStart.getUTCDate() + (index * 7));
+    const end = new Date(start); end.setUTCDate(start.getUTCDate() + 7);
+    return { label: `Week ${index + 1}`, value: clamp(visits.filter((visit: any) => visit.scheduledStartAt >= start && visit.scheduledStartAt < end).length) };
+  });
+  const year = Array.from({ length: 12 }, (_, index) => {
+    const start = new Date(Date.UTC(yearStart.getUTCFullYear(), yearStart.getUTCMonth() + index, 1));
+    const end = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 1));
+    return { label: start.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' }), value: clamp(visits.filter((visit: any) => visit.scheduledStartAt >= start && visit.scheduledStartAt < end).length) };
+  });
+  const bookingsByStatus = await db.booking.groupBy({ by: ['status'], _count: { status: true } });
+  return { week, month, year, bookingsByStatus: bookingsByStatus.map((entry: any) => ({ status: String(entry.status).replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase()), count: entry._count.status })) };
 }
 
 async function getDashboardAlerts() {
+  const overdueBefore = new Date(); overdueBefore.setUTCDate(overdueBefore.getUTCDate() - 3);
+  const where = { status: BookingStatus.REQUESTED, assignedStaffId: null };
   const [unassigned, overdueRequested] = await Promise.all([
-    db.booking.findMany({
-      where: { status: BookingStatus.REQUESTED },
-      orderBy: [{ createdAt: 'asc' }],
-      take: 5,
-      select: { id: true, createdAt: true, preferredDate: true }
-    }),
-    db.booking.findMany({
-      where: {
-        status: BookingStatus.REQUESTED,
-        preferredDate: { lt: new Date() }
-      },
-      orderBy: [{ preferredDate: 'asc' }],
-      take: 5,
-      select: { id: true, preferredDate: true, createdAt: true }
-    })
+    db.booking.findMany({ where, include: { client: true }, orderBy: [{ createdAt: 'asc' }], take: 10 }),
+    db.booking.findMany({ where: { ...where, createdAt: { lt: overdueBefore } }, include: { client: true }, orderBy: [{ createdAt: 'asc' }], take: 10 })
   ]);
-
-  return {
-    unassignedRequestedBookings: unassigned,
-    overdueRequestedBookings: overdueRequested
-  };
+  return { unassignedRequestedBookings: unassigned.map(dashboardAlertBooking), overdueRequestedBookings: overdueRequested.map(dashboardAlertBooking) };
 }
 
 async function listBookings(filters: BookingListQuery) {
@@ -1120,26 +1157,50 @@ function buildStaffProfileData(input: StaffInputWithUploads): Record<string, unk
 }
 
 async function listStaff(filters: StaffListQuery = {}) {
+  const page = filters.page ?? 1;
+  const limit = filters.limit ?? 20;
+  const skip = (page - 1) * limit;
+  const { start, end } = dayBoundsFor();
   const where: Prisma.UserWhereInput = {
     role: Role.STAFF,
     status: frontendStatusToUserStatus(filters.status as string | undefined)
   };
 
-  const items = await db.user.findMany({
-    where,
-    orderBy: [{ [filters.sortBy ?? 'createdAt']: filters.sortOrder ?? 'desc' }, { id: 'asc' }],
-    select: {
-      id: true,
-      staffCode: true,
-      email: true,
-      status: true,
-      createdAt: true,
-      updatedAt: true,
-      staffProfile: true
-    }
-  });
+  const [total, items] = await Promise.all([
+    db.user.count({ where }),
+    db.user.findMany({
+      where,
+      orderBy: [{ [filters.sortBy ?? 'createdAt']: filters.sortOrder ?? 'desc' }, { id: 'asc' }],
+      skip,
+      take: limit,
+      select: {
+        id: true,
+        staffCode: true,
+        email: true,
+        status: true,
+        createdAt: true,
+        updatedAt: true,
+        staffProfile: true,
+        visitsAsStaff: {
+          where: { status: { not: VisitStatus.CANCELLED }, scheduledStartAt: { gte: start, lt: end } },
+          orderBy: [{ scheduledStartAt: 'asc' }],
+          select: { scheduledStartAt: true, scheduledEndAt: true, status: true, checkInAt: true, checkOutAt: true }
+        }
+      }
+    })
+  ]);
 
-  return items.map(serializeStaff);
+  return buildPaginatedResult(items.map((user: any) => {
+    const base = serializeStaff(user);
+    const first = user.visitsAsStaff[0];
+    const last = user.visitsAsStaff[user.visitsAsStaff.length - 1];
+    return {
+      ...base,
+      id: user.id,
+      time: first && last ? `${formatDashboardTime(first.scheduledStartAt)} - ${formatDashboardTime(last.scheduledEndAt)}` : 'No visits today',
+      status: user.visitsAsStaff.length > 0 ? 'available' : 'unavailable'
+    };
+  }), total, page, limit);
 }
 
 async function createStaff(input: CreateStaffInput) {

@@ -147,9 +147,10 @@ export const visitPaths: OpenAPIV3.PathsObject = {
   },
   '/admin/visits': {
     get: {
-      tags: ['Admin — Visits'], summary: 'List staff visit summaries', security: adminSecurity,
-      description: 'Returns all active staff enriched with today’s visit counts for the staff-card schedule view. Current period is today (UTC). Cancelled visits are excluded so task counts drop after cancellation.',
-      responses: { '200': { description: 'Visits retrieved', content: { 'application/json': { schema: { allOf: [{ $ref: '#/components/schemas/SuccessResponse' }, { type: 'object', properties: { data: { type: 'array', items: { $ref: '#/components/schemas/StaffVisitSummary' } } } }] } } } } }
+      tags: ['Admin Dashboard'], summary: 'List admin dashboard visits', security: adminSecurity,
+      description: 'Paginated all-staff visit table for the AdminDashboard. Defaults to today when date is omitted; supports date, status, staffId, and clientId filters. Computes the admin-only late status when the scheduled start has passed without check-in; confirm whether staff-facing endpoints should also surface late.',
+      parameters: [{ name: 'page', in: 'query', schema: { type: 'integer', default: 1 } }, { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } }, { name: 'date', in: 'query', schema: { type: 'string', format: 'date' } }, { name: 'status', in: 'query', schema: { type: 'string', enum: ['not-started', 'in-progress', 'completed', 'late'] } }, { name: 'staffId', in: 'query', schema: { type: 'string', format: 'uuid' } }, { name: 'clientId', in: 'query', schema: { type: 'string', format: 'uuid' } }],
+      responses: { '200': { description: 'Visits retrieved', content: { 'application/json': { schema: { allOf: [{ $ref: '#/components/schemas/SuccessResponse' }, { type: 'object', properties: { data: { type: 'object', properties: { items: { type: 'array', items: { $ref: '#/components/schemas/AdminDashboardVisit' } }, pagination: { $ref: '#/components/schemas/PaginationMeta' } } } } }] } } } } }
     },
     post: {
       tags: ['Admin — Visits'], summary: 'Assign a new visit', security: adminSecurity,
