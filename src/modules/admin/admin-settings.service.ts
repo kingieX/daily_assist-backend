@@ -3,9 +3,10 @@ import path from 'path';
 import { AuditAction, Role, User, UserStatus } from '@prisma/client';
 import { prisma } from '../../config/prisma';
 import { ApiError } from '../../utils/api-error';
+import { comparePassword, hashPassword } from '../../utils/password';
 import { recordAuditLog } from '../operations/audit-log.service';
 
-const notificationItems = [
+const adminNotificationItems = [
   {
     key: 'bookingRequest',
     label: 'Booking Request',
@@ -33,7 +34,14 @@ const notificationItems = [
   }
 ] as const;
 
-const defaultNotificationValues = Object.fromEntries(notificationItems.map((item) => [item.key, true]));
+const superAdminNotificationItems = [
+  { key: 'accountSignin', label: 'Account Sign-in', sub: 'Notify me when an admin account signs in.' },
+  { key: 'accountInfoChanges', label: 'Account Information Changes', sub: 'Notify me when account information changes.' },
+  ...adminNotificationItems
+] as const;
+
+const defaultNotificationValues = Object.fromEntries(adminNotificationItems.map((item) => [item.key, true]));
+const defaultSuperAdminNotificationValues = Object.fromEntries(superAdminNotificationItems.map((item) => [item.key, { email: true, dashboard: true }]));
 
 const rolesPermissions = {
   admin: [
@@ -107,12 +115,12 @@ async function saveBase64Photo(userId: string, value: string): Promise<string> {
   return `/uploads/admin/photos/${filename}`;
 }
 
-async function getNotificationSettingRow(userId: string) {
+async function getNotificationSettingRow(userId: string, role: Role) {
   return prisma.systemSetting.upsert({
     where: { key: notificationSettingKey(userId) },
     create: {
       key: notificationSettingKey(userId),
-      valueJson: defaultNotificationValues,
+      valueJson: role === Role.SUPER_ADMIN ? defaultSuperAdminNotificationValues : defaultNotificationValues,
       updatedBy: userId
     },
     update: {}
@@ -190,26 +198,28 @@ export async function deactivateAdminAccount(userId: string): Promise<void> {
   });
 }
 
-export async function getNotificationSettings(userId: string) {
-  const setting = await getNotificationSettingRow(userId);
+export async function getNotificationSettings(userId: string, role: Role) {
+  const setting = await getNotificationSettingRow(userId, role);
   const values = setting.valueJson as Record<string, unknown>;
 
-  return notificationItems.map((item) => ({
-    key: item.key,
-    label: item.label,
-    sub: item.sub,
-    enabled: values[item.key] !== false
-  }));
+  if (role === Role.SUPER_ADMIN) {
+    return superAdminNotificationItems.map((item) => {
+      const value = values[item.key] as { email?: boolean; dashboard?: boolean } | undefined;
+      return { key: item.key, label: item.label, sub: item.sub, email: value?.email !== false, dashboard: value?.dashboard !== false };
+    });
+  }
+
+  return adminNotificationItems.map((item) => ({ key: item.key, label: item.label, sub: item.sub, enabled: values[item.key] !== false }));
 }
 
-export async function updateNotificationSettings(userId: string, body: Record<string, boolean>) {
-  const setting = await getNotificationSettingRow(userId);
-  const currentValues = setting.valueJson as Record<string, boolean>;
+export async function updateNotificationSettings(userId: string, role: Role, body: Record<string, boolean | { email?: boolean; dashboard?: boolean }>) {
+  const setting = await getNotificationSettingRow(userId, role);
+  const currentValues = setting.valueJson as Record<string, unknown>;
 
   await prisma.systemSetting.update({
     where: { key: notificationSettingKey(userId) },
     data: {
-      valueJson: { ...currentValues, ...body },
+      valueJson: { ...currentValues, ...body } as any,
       updatedBy: userId
     }
   });
@@ -227,7 +237,7 @@ export async function updateNotificationSettings(userId: string, body: Record<st
     }
   });
 
-  return getNotificationSettings(userId);
+  return getNotificationSettings(userId, role);
 }
 
 function dateFilter(range?: string, startDate?: Date, endDate?: Date) {
@@ -387,6 +397,29 @@ export async function exportSystemLog(query: Omit<SystemLogQuery, 'page' | 'page
   };
 }
 
-export function getRolesPermissions() {
+export async function changeAdminPassword(userId: string, data: { currentPassword: string; newPassword: string; confirmPassword: string }) {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, passwordHash: true } });
+  if (!user) throw new ApiError(404, 'Admin account not found');
+  if (!(await comparePassword(data.currentPassword, user.passwordHash))) throw new ApiError(401, 'Current password is incorrect');
+
+  const passwordHash = await hashPassword(data.newPassword);
+  await prisma.$transaction([
+    prisma.user.update({ where: { id: userId }, data: { passwordHash } }),
+    prisma.refreshToken.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } })
+  ]);
+
+  await recordAuditLog({ actorUserId: userId, action: 'SETTINGS_UPDATE', entity: 'Settings', entityId: userId, metadataJson: { displayAction: 'Updated', module: 'Settings', description: 'Admin password changed and active sessions invalidated.', status: 'Success' } });
+}
+
+export function getRolesPermissions() { return rolesPermissions; }
+
+export function updateRolesPermissions(input: { admin?: Record<string, boolean>; staff?: Record<string, boolean> }) {
+  for (const role of ['admin', 'staff'] as const) {
+    const updates = input[role];
+    if (!updates) continue;
+    for (const permission of rolesPermissions[role]) {
+      if (Object.prototype.hasOwnProperty.call(updates, permission.key)) permission.value = Boolean(updates[permission.key]);
+    }
+  }
   return rolesPermissions;
 }

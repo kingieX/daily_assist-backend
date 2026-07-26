@@ -32,11 +32,13 @@ import {
 } from './admin.validation';
 import { adminSettingsController } from './admin-settings.controller';
 import {
+  changePasswordSchema,
   deleteAdminAccountSchema,
   notificationSettingsSchema,
   systemLogExportQuerySchema,
   systemLogQuerySchema,
-  updateAdminProfileSchema
+  updateAdminProfileSchema,
+  rolesPermissionsUpdateSchema
 } from './admin-settings.validation';
 
 const adminRouter = Router();
@@ -50,6 +52,7 @@ adminRouter.patch(
   validate({ body: updateAdminProfileSchema }),
   adminSettingsController.updateAdminProfile
 );
+adminRouter.post('/change-password', validate({ body: changePasswordSchema }), adminSettingsController.changeAdminPassword);
 adminRouter.delete('/account', validate({ body: deleteAdminAccountSchema }), adminSettingsController.deactivateAdminAccount);
 adminRouter.get('/notification-settings', adminSettingsController.getNotificationSettings);
 adminRouter.patch(
@@ -60,6 +63,7 @@ adminRouter.patch(
 adminRouter.get('/system-log', validate({ query: systemLogQuerySchema }), adminSettingsController.listSystemLog);
 adminRouter.get('/system-log/export', validate({ query: systemLogExportQuerySchema }), adminSettingsController.exportSystemLog);
 adminRouter.get('/roles-permissions', authorizeRoles(Role.SUPER_ADMIN), adminSettingsController.getRolesPermissions);
+adminRouter.patch('/roles-permissions', authorizeRoles(Role.SUPER_ADMIN), validate({ body: rolesPermissionsUpdateSchema }), adminSettingsController.updateRolesPermissions);
 
 adminRouter.get('/dashboard/summary', adminController.getDashboardSummary);
 adminRouter.get('/dashboard/charts', adminController.getDashboardCharts);

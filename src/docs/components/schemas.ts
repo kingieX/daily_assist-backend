@@ -97,6 +97,15 @@ export const schemas: SchemasMap = {
     }
   },
 
+
+
+  PaginationMeta: { type: 'object', properties: { page: { type: 'integer' }, limit: { type: 'integer' }, total: { type: 'integer' }, totalPages: { type: 'integer' } } },
+  AdminDashboardVisit: { type: 'object', required: ['id', 'clientName', 'address', 'staffName', 'time', 'status'], properties: { id: { type: 'string', format: 'uuid' }, clientName: { type: 'string' }, address: { type: 'string' }, staffName: { type: 'string' }, time: { type: 'string', example: '1:00pm - 2:00pm' }, status: { type: 'string', enum: ['not-started', 'in-progress', 'completed', 'late'] } } },
+  DashboardReport: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, additionalNote: { type: 'string' }, createdAt: { type: 'string', format: 'date-time' }, clientName: { type: 'string' }, title: { type: 'string' }, description: { type: 'string' }, status: { type: 'string' }, type: { type: 'string' } } },
+  AdminChangePasswordRequest: { type: 'object', required: ['currentPassword', 'newPassword', 'confirmPassword'], properties: { currentPassword: { type: 'string' }, newPassword: { type: 'string', minLength: 8 }, confirmPassword: { type: 'string' } } },
+  SuperAdminNotificationSettingsList: { type: 'array', items: { type: 'object', properties: { key: { type: 'string', enum: ['accountSignin', 'accountInfoChanges', 'bookingRequest', 'staffCheckin', 'staffCheckout', 'missedCheckin', 'missedCheckout'] }, label: { type: 'string' }, sub: { type: 'string' }, email: { type: 'boolean' }, dashboard: { type: 'boolean' } } } },
+  SuperAdminNotificationSettingsUpdateRequest: { type: 'object', additionalProperties: { type: 'object', properties: { email: { type: 'boolean' }, dashboard: { type: 'boolean' } }, additionalProperties: false } },
+  RolesPermissionsUpdateRequest: { type: 'object', properties: { admin: { type: 'object', additionalProperties: { type: 'boolean' } }, staff: { type: 'object', additionalProperties: { type: 'boolean' } } }, additionalProperties: false },
   ErrorResponse: {
     type: 'object',
     properties: {

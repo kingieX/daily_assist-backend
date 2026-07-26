@@ -39,13 +39,19 @@ const visitStatusSchema = z.enum([
   VISIT_STATUS.IN_PROGRESS,
   VISIT_STATUS.COMPLETED,
   VISIT_STATUS.CANCELLED,
-  VISIT_STATUS.NO_SHOW
+  VISIT_STATUS.NO_SHOW,
+  'not-started',
+  'in-progress',
+  'completed',
+  'late'
 ]);
 
 export const adminVisitListQuerySchema = paginationSchema.extend({
   status: z.preprocess(emptyStringToUndefined, visitStatusSchema.optional()),
   staffId: optionalQueryUuid('Invalid staff ID'),
+  clientId: optionalQueryUuid('Invalid client ID'),
   bookingId: optionalQueryUuid('Invalid booking ID'),
+  date: z.preprocess(emptyStringToUndefined, z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date must be an ISO date').optional()),
   sortBy: z.preprocess(
     emptyStringToUndefined,
     z.enum(['scheduledStartAt', 'createdAt', 'updatedAt']).default('scheduledStartAt')

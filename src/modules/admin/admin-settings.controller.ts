@@ -5,6 +5,11 @@ import { sendSuccess } from '../../utils/api-response';
 import { asyncHandler } from '../../utils/async-handler';
 import * as adminSettingsService from './admin-settings.service';
 
+function getAuthenticatedUser(req: Request) {
+  if (!req.user) throw new ApiError(401, 'Authentication required');
+  return req.user;
+}
+
 function getAuthenticatedUserId(req: Request): string {
   if (!req.user) {
     throw new ApiError(401, 'Authentication required');
@@ -37,12 +42,14 @@ const deactivateAdminAccount = asyncHandler(async (req: Request, res: Response) 
 });
 
 const getNotificationSettings = asyncHandler(async (req: Request, res: Response) => {
-  const settings = await adminSettingsService.getNotificationSettings(getAuthenticatedUserId(req));
+  const user = getAuthenticatedUser(req);
+  const settings = await adminSettingsService.getNotificationSettings(user.id, user.role);
   return sendSuccess(res, 200, 'Notification settings retrieved', settings);
 });
 
 const updateNotificationSettings = asyncHandler(async (req: Request, res: Response) => {
-  const settings = await adminSettingsService.updateNotificationSettings(getAuthenticatedUserId(req), req.body);
+  const user = getAuthenticatedUser(req);
+  const settings = await adminSettingsService.updateNotificationSettings(user.id, user.role, req.body);
   return sendSuccess(res, 200, 'Notification settings updated', settings);
 });
 
@@ -58,8 +65,17 @@ const exportSystemLog = asyncHandler(async (req: Request, res: Response) => {
   return res.status(200).send(exported.body);
 });
 
+const changeAdminPassword = asyncHandler(async (req: Request, res: Response) => {
+  await adminSettingsService.changeAdminPassword(getAuthenticatedUserId(req), req.body);
+  return sendSuccess(res, 200, 'Password changed successfully');
+});
+
 const getRolesPermissions = asyncHandler(async (_req: Request, res: Response) => {
   return sendSuccess(res, 200, 'Roles and permissions retrieved', adminSettingsService.getRolesPermissions());
+});
+
+const updateRolesPermissions = asyncHandler(async (req: Request, res: Response) => {
+  return sendSuccess(res, 200, 'Roles and permissions updated', adminSettingsService.updateRolesPermissions(req.body));
 });
 
 export const adminSettingsController = {
@@ -68,7 +84,9 @@ export const adminSettingsController = {
   deactivateAdminAccount,
   getNotificationSettings,
   updateNotificationSettings,
+  changeAdminPassword,
   listSystemLog,
   exportSystemLog,
-  getRolesPermissions
+  getRolesPermissions,
+  updateRolesPermissions
 };

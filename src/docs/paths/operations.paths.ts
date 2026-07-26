@@ -23,10 +23,10 @@ const jsonBody = (schema: OpenAPIV3.SchemaObject, example?: Record<string, unkno
 export const operationsPaths: OpenAPIV3.PathsObject = {
   '/admin/reports': {
     get: {
-      tags: ['Admin — Phase 6 Ops'],
-      summary: 'List reports',
+      tags: ['Admin Dashboard'],
+      summary: 'List dashboard reports',
       description:
-        'Returns paginated operational reports. Example request: `GET /api/v1/admin/reports?page=1&limit=10`. Query values are accepted as URL strings and coerced to integers during validation.',
+        'Returns paginated submitted visit/incident reports for the AdminDashboard ReportPanel. List items include id, additionalNote, createdAt, and clientName; product still needs to confirm whether reports are standalone review records or escalated visit checkout logs. Example request: `GET /api/v1/admin/reports?page=1&limit=10`.',
       security: secured,
       parameters: [
         ...paginationParameters,
@@ -77,6 +77,15 @@ export const operationsPaths: OpenAPIV3.PathsObject = {
       security: secured,
       parameters: [idParam],
       responses: { '200': { description: 'Report retrieved' }, '404': { $ref: '#/components/responses/NotFound' } }
+    },
+    patch: {
+      tags: ['Reports'],
+      summary: 'Update report review workflow',
+      description: 'Updates a visit/incident report status and reason from the admin message report modal. Product confirmation is still needed on whether this report is the staff checkout visit log escalated for review or a separate incident/review record.',
+      security: secured,
+      parameters: [idParam],
+      requestBody: jsonBody({ type: 'object', required: ['status', 'reasonForAction'], properties: { status: { type: 'string', enum: ['pending', 'reviewed', 'under_review', 'flagged', 'resolved'] }, reasonForAction: { type: 'string' } } }, { status: 'under_review', reasonForAction: 'Needs manager follow-up.' }),
+      responses: { '200': { description: 'Report updated' }, '404': { $ref: '#/components/responses/NotFound' } }
     },
     delete: {
       tags: ['Admin — Phase 6 Ops'],

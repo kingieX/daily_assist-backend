@@ -7,6 +7,7 @@ import {
   idParamSchema,
   reportListQuerySchema,
   updateReportStatusSchema,
+  updateReportWorkflowSchema,
   upsertSystemSettingSchema
 } from './admin-ops.validation';
 
@@ -15,6 +16,7 @@ const adminOpsRouter = Router();
 adminOpsRouter.post('/reports', validate({ body: createReportSchema }), adminOpsController.createReport);
 adminOpsRouter.get('/reports', validate({ query: reportListQuerySchema }), adminOpsController.listReports);
 adminOpsRouter.get('/reports/:id', validate({ params: idParamSchema }), adminOpsController.getReportById);
+adminOpsRouter.patch('/reports/:id', validate({ params: idParamSchema, body: updateReportWorkflowSchema }), adminOpsController.updateReportStatus);
 adminOpsRouter.patch('/reports/:id/status', validate({ params: idParamSchema, body: updateReportStatusSchema }), adminOpsController.updateReportStatus);
 adminOpsRouter.delete('/reports/:id', validate({ params: idParamSchema }), adminOpsController.deleteReport);
 

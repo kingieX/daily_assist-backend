@@ -27,6 +27,14 @@ export const createReportSchema = z.object({
   type: z.enum(['INCIDENT', 'VISIT_QUALITY', 'STAFF_PERFORMANCE', 'SYSTEM'])
 });
 
+export const updateReportWorkflowSchema = z.object({
+  status: z.enum(['pending', 'reviewed', 'under_review', 'flagged', 'resolved']),
+  reasonForAction: z.string().trim().min(1).max(1000)
+}).transform((data) => ({
+  status: ({ pending: 'NEW', reviewed: 'APPROVED', under_review: 'IN_REVIEW', flagged: 'REJECTED', resolved: 'BILLED' } as const)[data.status],
+  reasonForAction: data.reasonForAction
+}));
+
 export const updateReportStatusSchema = z.object({
   status: z.enum(['NEW', 'IN_REVIEW', 'APPROVED', 'REJECTED', 'BILLED']).optional(),
   billingProcessed: z.boolean().optional()
