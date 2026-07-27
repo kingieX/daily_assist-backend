@@ -191,9 +191,7 @@ export const clientListQuerySchema = z
   .object({
     status: z.preprocess(emptyStringToUndefined, z.nativeEnum(ClientStatus).optional()),
     sortBy: z.preprocess(emptyStringToUndefined, clientSortBySchema.optional()),
-    sortOrder: sortOrderSchema.optional(),
-    page: queryPage(),
-    limit: queryLimit()
+    sortOrder: sortOrderSchema.optional()
   })
   .partial()
   .default({});
@@ -229,9 +227,7 @@ export const staffListQuerySchema = z
       z.union([z.nativeEnum(UserStatus), frontendStaffStatusSchema]).optional()
     ),
     sortBy: z.preprocess(emptyStringToUndefined, staffSortBySchema.optional()),
-    sortOrder: sortOrderSchema.optional(),
-    page: queryPage(),
-    limit: queryLimit()
+    sortOrder: sortOrderSchema.optional()
   })
   .partial()
   .default({});

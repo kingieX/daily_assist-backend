@@ -232,9 +232,8 @@ export const adminPaths: OpenAPIV3.PathsObject = {
   },
   '/admin/dashboard/summary': {
     get: {
-      tags: ['Admin Dashboard'],
-      summary: 'Get dashboard summary cards',
-      description: 'Returns visitsToday, staffOnDuty, completed, and pendingOrLate for the current UTC day. staffOnDuty currently means staff with at least one scheduled visit today; confirm if product wants currently checked-in staff instead.',
+      tags: ['Admin — Dashboard'],
+      summary: 'Get dashboard summary',
       security: adminSecurity,
       responses: {
         '200': { description: 'Dashboard summary retrieved' },
@@ -245,9 +244,8 @@ export const adminPaths: OpenAPIV3.PathsObject = {
   },
   '/admin/dashboard/charts': {
     get: {
-      tags: ['Admin Dashboard'],
-      summary: 'Get dashboard activity chart data',
-      description: 'Returns week, month, year, and bookingsByStatus datasets in one response. The chart metric is scheduled visit volume and values are capped at 220 to match the current hardcoded frontend chart scale until the product metric/axis is confirmed.',
+      tags: ['Admin — Dashboard'],
+      summary: 'Get dashboard chart aggregates',
       security: adminSecurity,
       responses: {
         '200': { description: 'Dashboard charts retrieved' },
@@ -258,9 +256,8 @@ export const adminPaths: OpenAPIV3.PathsObject = {
   },
   '/admin/dashboard/alerts': {
     get: {
-      tags: ['Admin Dashboard'],
-      summary: 'Get dashboard booking alerts',
-      description: 'Returns booking-centric alert buckets: unassignedRequestedBookings and overdueRequestedBookings. Overdue currently means an unassigned REQUESTED booking older than 3 days; confirm the threshold with product.',
+      tags: ['Admin — Dashboard'],
+      summary: 'Get dashboard operational alerts',
       security: adminSecurity,
       responses: {
         '200': { description: 'Dashboard alerts retrieved' },
@@ -495,9 +492,9 @@ export const adminPaths: OpenAPIV3.PathsObject = {
   },
   '/admin/staff': {
     get: {
-      tags: ['Admin Dashboard'],
-      summary: 'List staff schedule projection',
-      description: 'Paginated staff roster projection for StaffSchedule. Includes id, name, time, and available/unavailable status based on whether the staff member has visits scheduled today, while preserving existing staff-management fields.',
+      tags: ['Admin — Staff'],
+      summary: 'List staff',
+      description: 'Returns all staff in the frontend-friendly shape. The staff management UI performs search and available/unavailable filtering client-side.',
       security: adminSecurity,
       responses: {
         '200': {
@@ -509,7 +506,7 @@ export const adminPaths: OpenAPIV3.PathsObject = {
                 properties: {
                   success: { type: 'boolean' },
                   message: { type: 'string' },
-                  data: { type: 'object', properties: { items: { type: 'array', items: staffSchema }, pagination: { $ref: '#/components/schemas/PaginationMeta' } } }
+                  data: { type: 'array', items: staffSchema }
                 }
               }
             }
