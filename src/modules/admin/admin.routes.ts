@@ -70,6 +70,7 @@ adminRouter.get('/dashboard/summary', adminController.getDashboardSummary);
 adminRouter.get('/dashboard/activity', adminController.getDashboardActivity);
 adminRouter.get('/staff/schedule', adminController.getStaffSchedule);
 adminRouter.get('/dashboard/alerts', adminController.getDashboardAlerts);
+adminRouter.patch('/dashboard/alerts/read-all', adminController.markDashboardAlertsRead);
 adminRouter.get('/dashboard/visits-today', adminController.getDashboardVisitsToday);
 adminRouter.get('/dashboard/reports-today', validate({ query: dashboardReportsTodayQuerySchema }), adminController.getDashboardReportsToday);
 

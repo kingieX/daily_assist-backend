@@ -530,13 +530,9 @@ async function getDashboardActivity() {
   return { week, month, year };
 }
 
-async function getDashboardAlerts() {
-  const adminUsers = await db.user.findMany({ where: { role: { in: [Role.ADMIN, Role.SUPER_ADMIN] } }, select: { id: true } });
-  const adminIds = adminUsers.map((user: any) => user.id);
-  if (!adminIds.length) return [];
-
+async function getDashboardAlerts(adminUserId: string) {
   const notifications = await db.notification.findMany({
-    where: { userId: { in: adminIds } },
+    where: { userId: adminUserId },
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     take: 50
   });
@@ -548,6 +544,15 @@ async function getDashboardAlerts() {
     createdAt: notification.createdAt.toISOString(),
     read: Boolean(notification.readAt)
   }));
+}
+
+async function markDashboardAlertsRead(adminUserId: string) {
+  const result = await db.notification.updateMany({
+    where: { userId: adminUserId, readAt: null },
+    data: { readAt: new Date() }
+  });
+
+  return { read: true, updated: result.count };
 }
 
 async function getStaffSchedule() {
@@ -1769,6 +1774,7 @@ export const adminService = {
   getDashboardVisitsToday,
   getDashboardReportsToday,
   getDashboardAlerts,
+  markDashboardAlertsRead,
   listJobPosts,
   createJobPost,
   updateJobPost,

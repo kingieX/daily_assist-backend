@@ -282,6 +282,19 @@ export const adminPaths: OpenAPIV3.PathsObject = {
       }
     }
   },
+  '/admin/dashboard/alerts/read-all': {
+    patch: {
+      tags: ['Admin — Dashboard'],
+      summary: 'Mark dashboard alerts as read',
+      description: 'Marks all unread dashboard alert notifications for the authenticated admin as read when the admin opens the alerts panel. Uses the same shared notifications table that backs GET /admin/dashboard/alerts.',
+      security: adminSecurity,
+      responses: {
+        '200': { description: 'Dashboard alerts marked read', content: { 'application/json': { example: { success: true, message: 'Dashboard alerts marked read', data: { read: true, updated: 3 } } } } },
+        '401': { $ref: '#/components/responses/UnauthorizedError' },
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+      }
+    }
+  },
   '/admin/dashboard/visits-today': {
     get: {
       tags: ['Admin — Dashboard'],

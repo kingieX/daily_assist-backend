@@ -341,6 +341,7 @@ Each controller should delegate business logic to service layer classes and keep
 - `GET /admin/dashboard/activity`
 - `GET /admin/staff/schedule`
 - `GET /admin/dashboard/alerts`
+- `PATCH /admin/dashboard/alerts/read-all`
 - `GET /admin/dashboard/visits-today`
 - `GET /admin/dashboard/reports-today`
 
