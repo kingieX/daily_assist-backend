@@ -338,8 +338,11 @@ Each controller should delegate business logic to service layer classes and keep
 
 ## 8.3 Admin Dashboard
 - `GET /admin/dashboard/summary`
-- `GET /admin/dashboard/charts`
+- `GET /admin/dashboard/activity`
+- `GET /admin/staff/schedule`
 - `GET /admin/dashboard/alerts`
+- `GET /admin/dashboard/visits-today`
+- `GET /admin/dashboard/reports-today`
 
 ## 8.4 Admin Bookings
 - `GET /admin/bookings`

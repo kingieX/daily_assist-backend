@@ -1,4 +1,4 @@
-import { NotificationType, VisitStatus } from '@prisma/client';
+import { NotificationType } from '@prisma/client';
 import { prisma } from '../../config/prisma';
 import { ApiError } from '../../utils/api-error';
 import { visitService } from '../visits/visit.service';
@@ -90,45 +90,17 @@ function alertFromNotification(notification: any) {
   };
 }
 
-function reminderAlert(visit: any) {
-  return {
-    id: `visit-reminder:${visit.id}`,
-    type: 'visit_reminder',
-    title: 'Visit starting soon',
-    message: `${visit.clientName} is scheduled at ${visit.timeStart}.`,
-    relatedVisitId: visit.id,
-    relatedAnnouncementId: null,
-    createdAt: new Date().toISOString(),
-    read: false
-  };
-}
-
 async function listAlerts(staffUserId: string) {
-  const now = new Date();
-  const reminderWindowEnd = new Date(now.getTime() + 30 * 60 * 1000);
-  const [notifications, reminderVisits] = await Promise.all([
-    prisma.notification.findMany({
-      where: { userId: staffUserId, type: { in: [NotificationType.VISIT, NotificationType.ANNOUNCEMENT] } },
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      take: 50
-    }),
-    prisma.visit.findMany({
-      where: { staffId: staffUserId, status: { in: [VisitStatus.ASSIGNED, VisitStatus.ACKNOWLEDGED] }, checkInAt: null, scheduledStartAt: { gte: now, lte: reminderWindowEnd } },
-      include: { booking: { include: { bookingServices: true, client: true, package: true } }, staff: { include: { staffProfile: true } } },
-      orderBy: [{ scheduledStartAt: 'asc' }, { id: 'asc' }]
-    })
-  ]);
+  const notifications = await prisma.notification.findMany({
+    where: { userId: staffUserId, type: { in: [NotificationType.VISIT, NotificationType.ANNOUNCEMENT, NotificationType.MESSAGE, NotificationType.SYSTEM] } },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    take: 50
+  });
 
-  const alerts = [...reminderVisits.map((visit) => reminderAlert((visitService as any).serializeStaffVisitListItem?.(visit) ?? {
-    id: visit.id,
-    clientName: visit.booking?.client ? [visit.booking.client.firstName, visit.booking.client.lastName].filter(Boolean).join(' ') : 'Your client',
-    timeStart: visit.scheduledStartAt.toISOString().slice(11, 16)
-  })), ...notifications.map(alertFromNotification)];
-  return alerts.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return notifications.map(alertFromNotification);
 }
 
 async function markAlertRead(alertId: string, staffUserId: string) {
-  if (alertId.startsWith('visit-reminder:')) return { id: alertId, read: true };
   const notification = await prisma.notification.findFirst({ where: { id: alertId, userId: staffUserId } });
   if (!notification) throw new ApiError(404, 'Alert not found');
   const updated = notification.readAt ? notification : await prisma.notification.update({ where: { id: alertId }, data: { readAt: new Date() } });

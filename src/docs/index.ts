@@ -97,7 +97,7 @@ export const openApiSpec: OpenAPIV3.Document = {
     },
     {
       name: 'Admin — Dashboard',
-      description: 'Admin dashboard summary, charts, and alert widgets'
+      description: 'Admin dashboard widget projections for summary, activity, schedule, alerts, visits, and reports'
     },
     {
       name: 'Admin — Job Posts',
