@@ -400,13 +400,11 @@ Each controller should delegate business logic to service layer classes and keep
 - `DELETE /admin/job-posts/:id`
 - `GET /admin/reports`
 - `GET /admin/reports/:id`
-- `POST /admin/reports/:id/process-billing`
+- `GET /admin/reports/filters`
+- `PATCH /admin/reports/:id/status`
 - `GET /admin/reports/export`
 - `GET /admin/settings/profile`
 - `PATCH /admin/settings/profile`
-- `GET /admin/settings/system`
-- `PATCH /admin/settings/system`
-- `GET /admin/settings/audit-logs`
 
 ## 8.11 Staff Routes (Authenticated)
 - `GET /staff/me`

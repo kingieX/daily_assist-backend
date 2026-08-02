@@ -16,10 +16,10 @@ test('admin visits list accepts documented pagination defaults from query string
 });
 
 test('admin reports list accepts documented pagination query strings', () => {
-  const parsed = reportListQuerySchema.parse({ page: '1', limit: '10' });
+  const parsed = reportListQuerySchema.parse({ page: '1', pageSize: '10' });
 
   assert.equal(parsed.page, 1);
-  assert.equal(parsed.limit, 10);
+  assert.equal(parsed.pageSize, 10);
 });
 
 test('validation errors are serializable and include field details', () => {

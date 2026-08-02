@@ -7,13 +7,20 @@ const idParam: OpenAPIV3.ParameterObject = {
   in: 'path',
   required: true,
   schema: { type: 'string', format: 'uuid' },
-  description: 'Resource UUID.'
+  description: 'Visit log report UUID.'
 };
 
-const paginationParameters: OpenAPIV3.ParameterObject[] = [
-  { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 }, description: 'Page number.', example: 1 },
-  { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 }, description: 'Page size.', example: 10 }
+const reportFilters: OpenAPIV3.ParameterObject[] = [
+  { name: 'staff', in: 'query', schema: { type: 'string' }, description: "Exact match against the assigned staff member's name." },
+  { name: 'client', in: 'query', schema: { type: 'string' }, description: "Exact match against the client's name." },
+  { name: 'service', in: 'query', schema: { type: 'string' }, description: 'Exact match against the service/visit type.' },
+  { name: 'dateRange', in: 'query', schema: { type: 'string', enum: ['Today', 'Yesterday', 'Last 7 Days', 'Last 30 Days', 'This Month', 'Custom Range'] } },
+  { name: 'startDate', in: 'query', schema: { type: 'string', format: 'date' }, description: 'Custom Range start date.' },
+  { name: 'endDate', in: 'query', schema: { type: 'string', format: 'date' }, description: 'Custom Range end date.' },
+  { name: 'search', in: 'query', schema: { type: 'string' }, description: 'Free-text match against staff name, client name, and service.' }
 ];
+
+const statusSchema: OpenAPIV3.SchemaObject = { type: 'string', enum: ['pending', 'reviewed', 'under_review', 'flagged', 'resolved'] };
 
 const jsonBody = (schema: OpenAPIV3.SchemaObject, example?: Record<string, unknown>): OpenAPIV3.RequestBodyObject => ({
   required: true,
@@ -23,148 +30,63 @@ const jsonBody = (schema: OpenAPIV3.SchemaObject, example?: Record<string, unkno
 export const operationsPaths: OpenAPIV3.PathsObject = {
   '/admin/reports': {
     get: {
-      tags: ['Admin — Phase 6 Ops'],
-      summary: 'List reports',
+      tags: ['Admin — Reports'],
+      summary: 'List admin reports from staff check-out visit logs',
       description:
-        'Returns paginated operational reports. Example request: `GET /api/v1/admin/reports?page=1&limit=10`. Query values are accepted as URL strings and coerced to integers during validation.',
+        'Returns paginated report summary rows for ReportsPage. These reports are the same underlying visit log records created by POST /staff/visits/{id}/check-out; they are not independently authored report resources.',
       security: secured,
       parameters: [
-        ...paginationParameters,
-        { name: 'status', in: 'query', schema: { type: 'string', enum: ['NEW', 'IN_REVIEW', 'APPROVED', 'REJECTED', 'BILLED'] } },
-        { name: 'type', in: 'query', schema: { type: 'string', enum: ['INCIDENT', 'VISIT_QUALITY', 'STAFF_PERFORMANCE', 'SYSTEM'] } }
+        ...reportFilters,
+        { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
+        { name: 'pageSize', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 10 } }
       ],
       responses: {
         '200': {
           description: 'Reports retrieved',
-          content: {
-            'application/json': {
-              example: {
-                success: true,
-                message: 'Reports retrieved',
-                data: { items: [], meta: { page: 1, limit: 10, total: 0, totalPages: 1 } }
-              }
-            }
-          }
+          content: { 'application/json': { example: { success: true, message: 'Reports retrieved', data: { items: [{ id: 'rpt-1023', date: '22 Jul 2026', staff: 'Sarah Johnson', client: 'Mrs. Alan', service: 'Meal Prep', visitTime: '1:00pm - 2:00pm', status: 'pending' }], page: 1, pageSize: 10, total: 143 } } } }
         },
         '400': { $ref: '#/components/responses/ValidationError' }
       }
-    },
-    post: {
-      tags: ['Admin — Phase 6 Ops'],
-      summary: 'Create report',
-      description: 'Creates an operational report. The authenticated admin is stored as creator.',
+    }
+  },
+  '/admin/reports/filters': {
+    get: {
+      tags: ['Admin — Reports'],
+      summary: 'List report filter options',
+      description: 'Returns distinct staff, client, and service values present across all check-out visit log reports.',
       security: secured,
-      requestBody: jsonBody(
-        {
-          type: 'object',
-          required: ['title', 'description', 'type'],
-          properties: {
-            title: { type: 'string', minLength: 1, maxLength: 200 },
-            description: { type: 'string', minLength: 1, maxLength: 6000 },
-            type: { type: 'string', enum: ['INCIDENT', 'VISIT_QUALITY', 'STAFF_PERFORMANCE', 'SYSTEM'] }
-          }
-        },
-        { title: 'Late visit follow-up', description: 'Client reported a delayed arrival.', type: 'INCIDENT' }
-      ),
-      responses: { '201': { description: 'Report created' } }
+      responses: { '200': { description: 'Report filters retrieved', content: { 'application/json': { example: { success: true, message: 'Report filters retrieved', data: { staff: ['Sarah Johnson', 'Mark Reid'], clients: ['Mrs. Alan'], services: ['Meal Prep'] } } } } } }
     }
   },
   '/admin/reports/{id}': {
     get: {
-      tags: ['Admin — Phase 6 Ops'],
-      summary: 'Get report by id',
-      description: 'Returns one operational report by UUID.',
+      tags: ['Admin — Reports'],
+      summary: 'Get report detail from a staff check-out visit log',
+      description: 'Returns ReportDetailsModal fields for one visit log created by POST /staff/visits/{id}/check-out.',
       security: secured,
       parameters: [idParam],
       responses: { '200': { description: 'Report retrieved' }, '404': { $ref: '#/components/responses/NotFound' } }
-    },
-    patch: {
-      tags: ['Reports'],
-      summary: 'Update report review workflow',
-      description: 'Updates a visit/incident report status and reason from the admin message report modal. Product confirmation is still needed on whether this report is the staff checkout visit log escalated for review or a separate incident/review record.',
-      security: secured,
-      parameters: [idParam],
-      requestBody: jsonBody({ type: 'object', required: ['status', 'reasonForAction'], properties: { status: { type: 'string', enum: ['pending', 'reviewed', 'under_review', 'flagged', 'resolved'] }, reasonForAction: { type: 'string' } } }, { status: 'under_review', reasonForAction: 'Needs manager follow-up.' }),
-      responses: { '200': { description: 'Report updated' }, '404': { $ref: '#/components/responses/NotFound' } }
-    },
-    delete: {
-      tags: ['Admin — Phase 6 Ops'],
-      summary: 'Delete report',
-      description: 'Deletes one operational report by UUID.',
-      security: secured,
-      parameters: [idParam],
-      responses: { '200': { description: 'Report deleted' }, '404': { $ref: '#/components/responses/NotFound' } }
     }
   },
   '/admin/reports/{id}/status': {
     patch: {
-      tags: ['Admin — Phase 6 Ops'],
-      summary: 'Update report status and billing flag',
-      description: 'Updates the workflow status and/or billingProcessed flag for a report. At least one field should be sent.',
+      tags: ['Admin — Reports'],
+      summary: 'Update report status and reason',
+      description: 'Updates the review status and reasonForAction stored on the check-out visit log report.',
       security: secured,
       parameters: [idParam],
-      requestBody: jsonBody(
-        {
-          type: 'object',
-          properties: {
-            status: { type: 'string', enum: ['NEW', 'IN_REVIEW', 'APPROVED', 'REJECTED', 'BILLED'] },
-            billingProcessed: { type: 'boolean' }
-          }
-        },
-        { status: 'IN_REVIEW', billingProcessed: false }
-      ),
+      requestBody: jsonBody({ type: 'object', required: ['status'], properties: { status: statusSchema, reasonForAction: { type: 'string', maxLength: 1000 } } }, { status: 'under_review', reasonForAction: 'Needs manager follow-up.' }),
       responses: { '200': { description: 'Report updated' }, '404': { $ref: '#/components/responses/NotFound' } }
     }
   },
-  '/admin/settings/system': {
+  '/admin/reports/export': {
     get: {
-      tags: ['Admin — Phase 6 Ops'],
-      summary: 'List system settings',
-      description: 'Returns all stored system settings as key/value JSON entries.',
+      tags: ['Admin — Reports'],
+      summary: 'Export filtered reports',
+      description: 'Exports the full filtered check-out visit log report set as CSV or PDF. PDF clients should download this response instead of using window.print().',
       security: secured,
-      responses: { '200': { description: 'System settings retrieved' } }
-    },
-    put: {
-      tags: ['Admin — Phase 6 Ops'],
-      summary: 'Upsert one system setting',
-      description: 'Creates or updates a system setting by key. valueJson must be a JSON object.',
-      security: secured,
-      requestBody: jsonBody(
-        {
-          type: 'object',
-          required: ['key', 'valueJson'],
-          properties: {
-            key: { type: 'string', minLength: 1, maxLength: 120 },
-            valueJson: { type: 'object', additionalProperties: true }
-          }
-        },
-        { key: 'publicBooking.enabled', valueJson: { enabled: true } }
-      ),
-      responses: { '200': { description: 'System setting upserted' } }
-    }
-  },
-  '/admin/settings/system/{id}': {
-    delete: {
-      tags: ['Admin — Phase 6 Ops'],
-      summary: 'Delete system setting',
-      description: 'Deletes one system setting by UUID.',
-      security: secured,
-      parameters: [idParam],
-      responses: { '200': { description: 'System setting deleted' }, '404': { $ref: '#/components/responses/NotFound' } }
-    }
-  },
-  '/admin/audit-logs': {
-    get: {
-      tags: ['Admin — Phase 6 Ops'],
-      summary: 'List audit logs',
-      description: 'Returns paginated audit trail entries. Use action/entity filters for admin activity views.',
-      security: secured,
-      parameters: [
-        ...paginationParameters,
-        { name: 'action', in: 'query', schema: { type: 'string', enum: ['CREATE', 'UPDATE', 'DELETE', 'LOGIN', 'LOGOUT', 'STATUS_CHANGE', 'SETTINGS_UPDATE', 'REPORT_PROCESSING'] } },
-        { name: 'entity', in: 'query', schema: { type: 'string', maxLength: 100 } }
-      ],
-      responses: { '200': { description: 'Audit logs retrieved' } }
+      parameters: [...reportFilters, { name: 'format', in: 'query', required: true, schema: { type: 'string', enum: ['csv', 'pdf'] } }],
+      responses: { '200': { description: 'Downloadable reports file', headers: { 'Content-Disposition': { schema: { type: 'string' } } }, content: { 'text/csv': { schema: { type: 'string' } }, 'application/pdf': { schema: { type: 'string', format: 'binary' } } } }, '400': { $ref: '#/components/responses/ValidationError' } }
     }
   }
 };
