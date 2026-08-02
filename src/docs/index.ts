@@ -28,7 +28,7 @@ import { withEndpointGuides } from './utils';
  *  ✅ Phase 3 — Admin operations (dashboard, bookings, clients, staff, recruitment conversion)
  *  ✅ Phase 4 — Visits admin/staff lifecycle endpoints, event logging, and staff dashboard summary
  *  ✅ Phase 5 — communications routes (messages, announcements, notifications + close-out controls)
- *  🚧 Phase 6 started — reports, system settings, and audit log endpoints
+ *  🚧 Phase 6 started — admin report endpoints
  */
 export const openApiSpec: OpenAPIV3.Document = {
   openapi: '3.0.0',
@@ -97,7 +97,7 @@ export const openApiSpec: OpenAPIV3.Document = {
     },
     {
       name: 'Admin — Dashboard',
-      description: 'Admin dashboard summary, charts, and alert widgets'
+      description: 'Admin dashboard widget projections for summary, activity, schedule, alerts, visits, and reports'
     },
     {
       name: 'Admin — Job Posts',
@@ -155,8 +155,8 @@ export const openApiSpec: OpenAPIV3.Document = {
       name: 'System Log', description: 'Admin system log filtering and export'
     },
     {
-      name: 'Admin — Phase 6 Ops',
-      description: 'Reports, system settings, and audit log operations'
+      name: 'Admin — Reports',
+      description: 'Admin report triage over staff check-out visit logs'
     },
   ],
 

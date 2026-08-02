@@ -262,6 +262,10 @@ export const resetStaffPasswordSchema = z.object({
 
 export const updateStaffSchema = staffFormSchema.partial();
 
+export const dashboardReportsTodayQuerySchema = z.object({
+  limit: queryLimit(3)
+});
+
 export const recruitmentListQuerySchema = paginationSchema.extend({
   status: z.preprocess(emptyStringToUndefined, z.nativeEnum(ApplicationStatus).optional()),
   sortBy: z.preprocess(
@@ -313,6 +317,7 @@ export type CreateStaffInput = z.infer<typeof createStaffSchema>;
 export type ProvisionStaffCredentialsInput = z.infer<typeof provisionStaffCredentialsSchema>;
 export type ResetStaffPasswordInput = z.infer<typeof resetStaffPasswordSchema>;
 export type UpdateStaffInput = z.infer<typeof updateStaffSchema>;
+export type DashboardReportsTodayQuery = z.infer<typeof dashboardReportsTodayQuerySchema>;
 export type RecruitmentListQuery = z.infer<typeof recruitmentListQuerySchema>;
 export type UpdateRecruitmentStatusInput = z.infer<typeof updateRecruitmentStatusSchema>;
 export type ConvertApplicationInput = z.infer<typeof convertApplicationSchema>;

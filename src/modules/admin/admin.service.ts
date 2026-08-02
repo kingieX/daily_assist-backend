@@ -22,6 +22,7 @@ import { recordAuditLog } from '../operations/audit-log.service';
 import type {
   AssignBookingInput,
   BookingListQuery,
+  DashboardReportsTodayQuery,
   CancelBookingInput,
   ClientListQuery,
   CompleteBookingInput,
@@ -444,66 +445,168 @@ const bookingInclude = {
   }
 } satisfies Prisma.BookingInclude;
 
-async function getDashboardSummary() {
-  const [requestedBookings, assignedBookings, activeClients, activeStaff, pendingApplications] =
-    await Promise.all([
-      db.booking.count({ where: { status: BookingStatus.REQUESTED } }),
-      db.booking.count({ where: { status: BookingStatus.ASSIGNED } }),
-      db.client.count({ where: { status: ClientStatus.ACTIVE } }),
-      db.user.count({ where: { role: Role.STAFF, status: UserStatus.ACTIVE } }),
-      db.workerApplication.count({ where: { status: ApplicationStatus.PENDING } })
-    ]);
 
-  return {
-    requestedBookings,
-    assignedBookings,
-    activeClients,
-    activeStaff,
-    pendingApplications
-  };
+function todayRange() {
+  const now = new Date();
+  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const end = new Date(start);
+  end.setUTCDate(end.getUTCDate() + 1);
+  return { start, end, now };
 }
 
-async function getDashboardCharts() {
-  const [bookingsByStatus, applicationsByStatus] = await Promise.all([
-    db.booking.groupBy({ by: ['status'], _count: { status: true } }),
-    db.workerApplication.groupBy({ by: ['status'], _count: { status: true } })
+function clientDisplayName(client: any): string {
+  return [client?.title, client?.firstName, client?.lastName].filter(Boolean).join(' ').trim();
+}
+
+function dashboardVisitStatus(visit: any, now = new Date()): 'not-started' | 'in-progress' | 'completed' | 'late' {
+  if (visit.status === VisitStatus.COMPLETED) return 'completed';
+  if (visit.status === VisitStatus.IN_PROGRESS) return 'in-progress';
+  if (new Date(visit.scheduledStartAt) < now) return 'late';
+  return 'not-started';
+}
+
+function dashboardTimeWindow(visit: any): string {
+  return `${formatVisitTime(visit.scheduledStartAt)} - ${formatVisitTime(visit.scheduledEndAt)}`;
+}
+
+const dashboardVisitInclude = {
+  booking: { select: { client: { select: { firstName: true, lastName: true, title: true, address: true } } } },
+  staff: { select: { email: true, firstName: true, lastName: true, staffProfile: { select: { firstName: true, lastName: true } } } }
+};
+
+async function getDashboardSummary() {
+  const { start, end } = todayRange();
+  const todayWhere = { scheduledStartAt: { gte: start, lt: end } };
+  const [visitsToday, staffOnDutyRows, completed, pendingOrLate] = await Promise.all([
+    db.visit.count({ where: todayWhere }),
+    db.visit.findMany({ where: { status: VisitStatus.IN_PROGRESS }, distinct: ['staffId'], select: { staffId: true } }),
+    db.visit.count({ where: { ...todayWhere, status: VisitStatus.COMPLETED } }),
+    db.visit.count({ where: { ...todayWhere, status: { notIn: [VisitStatus.IN_PROGRESS, VisitStatus.COMPLETED] } } })
   ]);
 
-  return {
-    bookingsByStatus: bookingsByStatus.map((entry: any) => ({
-      status: entry.status,
-      count: entry._count.status
-    })),
-    recruitmentByStatus: applicationsByStatus.map((entry: any) => ({
-      status: entry.status,
-      count: entry._count.status
-    }))
-  };
+  return { visitsToday, staffOnDuty: staffOnDutyRows.length, completed, pendingOrLate };
+}
+
+async function countBookingsByRange(start: Date, end: Date) {
+  return db.booking.count({ where: { createdAt: { gte: start, lt: end } } });
+}
+
+async function getDashboardActivity() {
+  const { now } = todayRange();
+  const dayLabels = ['SUN', 'MON', 'TUES', 'WED', 'THUR', 'FRI', 'SAT'];
+  const weekStarts = Array.from({ length: 7 }, (_, index) => {
+    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    start.setUTCDate(start.getUTCDate() - (6 - index));
+    const end = new Date(start);
+    end.setUTCDate(end.getUTCDate() + 1);
+    return { start, end, label: dayLabels[start.getUTCDay()] };
+  });
+
+  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const nextMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+  const monthRanges: { start: Date; end: Date; label: string }[] = [];
+  for (let cursor = new Date(monthStart), week = 1; cursor < nextMonthStart; week += 1) {
+    const rangeStart = new Date(cursor);
+    const rangeEnd = new Date(cursor);
+    rangeEnd.setUTCDate(rangeEnd.getUTCDate() + (7 - rangeEnd.getUTCDay()));
+    if (rangeEnd > nextMonthStart) rangeEnd.setTime(nextMonthStart.getTime());
+    monthRanges.push({ start: rangeStart, end: rangeEnd, label: `WEEK ${week}` });
+    cursor = new Date(rangeEnd);
+  }
+
+  const monthLabels = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+  const yearRanges = Array.from({ length: 12 }, (_, index) => {
+    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 11 + index, 1));
+    const end = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 1));
+    return { start, end, label: monthLabels[start.getUTCMonth()] };
+  });
+
+  const [week, month, year] = await Promise.all([
+    Promise.all(weekStarts.map(async (range) => ({ label: range.label, value: await countBookingsByRange(range.start, range.end) }))),
+    Promise.all(monthRanges.map(async (range) => ({ label: range.label, value: await countBookingsByRange(range.start, range.end) }))),
+    Promise.all(yearRanges.map(async (range) => ({ label: range.label, value: await countBookingsByRange(range.start, range.end) })))
+  ]);
+
+  return { week, month, year };
 }
 
 async function getDashboardAlerts() {
-  const [unassigned, overdueRequested] = await Promise.all([
-    db.booking.findMany({
-      where: { status: BookingStatus.REQUESTED },
-      orderBy: [{ createdAt: 'asc' }],
-      take: 5,
-      select: { id: true, createdAt: true, preferredDate: true }
-    }),
-    db.booking.findMany({
-      where: {
-        status: BookingStatus.REQUESTED,
-        preferredDate: { lt: new Date() }
-      },
-      orderBy: [{ preferredDate: 'asc' }],
-      take: 5,
-      select: { id: true, preferredDate: true, createdAt: true }
-    })
-  ]);
+  const adminUsers = await db.user.findMany({ where: { role: { in: [Role.ADMIN, Role.SUPER_ADMIN] } }, select: { id: true } });
+  const adminIds = adminUsers.map((user: any) => user.id);
+  if (!adminIds.length) return [];
 
-  return {
-    unassignedRequestedBookings: unassigned,
-    overdueRequestedBookings: overdueRequested
-  };
+  const notifications = await db.notification.findMany({
+    where: { userId: { in: adminIds } },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    take: 50
+  });
+
+  return notifications.map((notification: any) => ({
+    id: notification.id,
+    type: notification.type === 'VISIT' ? 'warning' : notification.type === 'MESSAGE' ? 'info' : 'yellow',
+    text: [notification.title, notification.body].filter(Boolean).join(' - '),
+    createdAt: notification.createdAt.toISOString(),
+    read: Boolean(notification.readAt)
+  }));
+}
+
+async function getStaffSchedule() {
+  const { start, end } = todayRange();
+  const staff = await db.user.findMany({
+    where: { role: Role.STAFF, status: UserStatus.ACTIVE },
+    include: {
+      staffProfile: true,
+      visitsAsStaff: { where: { scheduledStartAt: { gte: start, lt: end } }, orderBy: [{ scheduledStartAt: 'asc' }, { id: 'asc' }] }
+    },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }]
+  });
+
+  return staff.map((user: any) => ({
+    id: user.id,
+    name: staffDisplayName(user) ?? '',
+    time: user.visitsAsStaff.length ? user.visitsAsStaff.map(dashboardTimeWindow).join(', ') : '',
+    status: user.visitsAsStaff.length ? 'unavailable' : 'available'
+  }));
+}
+
+async function getDashboardVisitsToday() {
+  const { start, end, now } = todayRange();
+  const visits = await db.visit.findMany({
+    where: { scheduledStartAt: { gte: start, lt: end } },
+    include: dashboardVisitInclude,
+    orderBy: [{ scheduledStartAt: 'asc' }, { id: 'asc' }]
+  });
+
+  return visits.map((visit: any) => ({
+    id: visit.id,
+    client: clientDisplayName(visit.booking?.client),
+    address: visit.booking?.client?.address ?? '',
+    staff: staffDisplayName(visit.staff) ?? '',
+    time: dashboardTimeWindow(visit),
+    status: dashboardVisitStatus(visit, now)
+  }));
+}
+
+function relativeTime(date: Date) {
+  const seconds = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
+  if (seconds < 60) return 'Just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'} ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} ${days === 1 ? 'day' : 'days'} ago`;
+}
+
+async function getDashboardReportsToday(query: DashboardReportsTodayQuery) {
+  const { start, end } = todayRange();
+  const logs = await db.visitLog.findMany({
+    where: { submittedAt: { gte: start, lt: end } },
+    orderBy: [{ submittedAt: 'desc' }, { id: 'desc' }],
+    take: query.limit
+  });
+
+  return logs.map((log: any) => ({ id: log.id, text: log.notes, time: relativeTime(log.submittedAt) }));
 }
 
 async function listBookings(filters: BookingListQuery) {
@@ -1661,7 +1764,10 @@ async function convertApplicationToStaff(
 
 export const adminService = {
   getDashboardSummary,
-  getDashboardCharts,
+  getDashboardActivity,
+  getStaffSchedule,
+  getDashboardVisitsToday,
+  getDashboardReportsToday,
   getDashboardAlerts,
   listJobPosts,
   createJobPost,

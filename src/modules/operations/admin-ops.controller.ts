@@ -9,14 +9,14 @@ function currentUserId(req: Request): string {
   return req.user.id;
 }
 
-const createReport = asyncHandler(async (req: Request, res: Response) => {
-  const result = await adminOpsService.createReport(req.body, currentUserId(req));
-  return sendSuccess(res, 201, 'Report created', result);
-});
-
 const listReports = asyncHandler(async (req: Request, res: Response) => {
   const result = await adminOpsService.listReports(req.query as any);
   return sendSuccess(res, 200, 'Reports retrieved', result);
+});
+
+const listReportFilters = asyncHandler(async (_req: Request, res: Response) => {
+  const result = await adminOpsService.listReportFilters();
+  return sendSuccess(res, 200, 'Report filters retrieved', result);
 });
 
 const getReportById = asyncHandler(async (req: Request, res: Response) => {
@@ -30,41 +30,17 @@ const updateReportStatus = asyncHandler(async (req: Request, res: Response) => {
   return sendSuccess(res, 200, 'Report updated', result);
 });
 
-
-const deleteReport = asyncHandler(async (req: Request, res: Response) => {
-  const result = await adminOpsService.deleteReport(req.params.id as string, currentUserId(req));
-  return sendSuccess(res, 200, 'Report deleted', result);
-});
-
-const listSystemSettings = asyncHandler(async (_req: Request, res: Response) => {
-  const result = await adminOpsService.listSystemSettings();
-  return sendSuccess(res, 200, 'System settings retrieved', result);
-});
-
-const upsertSystemSetting = asyncHandler(async (req: Request, res: Response) => {
-  const result = await adminOpsService.upsertSystemSetting(req.body, currentUserId(req));
-  return sendSuccess(res, 200, 'System setting upserted', result);
-});
-
-
-const deleteSystemSetting = asyncHandler(async (req: Request, res: Response) => {
-  const result = await adminOpsService.deleteSystemSetting(req.params.id as string, currentUserId(req));
-  return sendSuccess(res, 200, 'System setting deleted', result);
-});
-
-const listAuditLogs = asyncHandler(async (req: Request, res: Response) => {
-  const result = await adminOpsService.listAuditLogs(req.query as any);
-  return sendSuccess(res, 200, 'Audit logs retrieved', result);
+const exportReports = asyncHandler(async (req: Request, res: Response) => {
+  const result = await adminOpsService.exportReports(req.query as any);
+  res.setHeader('Content-Type', result.contentType);
+  res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
+  return res.status(200).send(result.body);
 });
 
 export const adminOpsController = {
-  createReport,
   listReports,
+  listReportFilters,
   getReportById,
   updateReportStatus,
-  deleteReport,
-  listSystemSettings,
-  upsertSystemSetting,
-  deleteSystemSetting,
-  listAuditLogs
+  exportReports
 };

@@ -10,6 +10,7 @@ import { uploadAdminPhoto, uploadClientProofOfAddress, uploadStaffFiles } from '
 import { adminController } from './admin.controller';
 import {
   bookingListQuerySchema,
+  dashboardReportsTodayQuerySchema,
   clientIdParamSchema,
   clientListQuerySchema,
   convertApplicationSchema,
@@ -66,8 +67,11 @@ adminRouter.get('/roles-permissions', authorizeRoles(Role.SUPER_ADMIN), adminSet
 adminRouter.patch('/roles-permissions', authorizeRoles(Role.SUPER_ADMIN), validate({ body: rolesPermissionsUpdateSchema }), adminSettingsController.updateRolesPermissions);
 
 adminRouter.get('/dashboard/summary', adminController.getDashboardSummary);
-adminRouter.get('/dashboard/charts', adminController.getDashboardCharts);
+adminRouter.get('/dashboard/activity', adminController.getDashboardActivity);
+adminRouter.get('/staff/schedule', adminController.getStaffSchedule);
 adminRouter.get('/dashboard/alerts', adminController.getDashboardAlerts);
+adminRouter.get('/dashboard/visits-today', adminController.getDashboardVisitsToday);
+adminRouter.get('/dashboard/reports-today', validate({ query: dashboardReportsTodayQuerySchema }), adminController.getDashboardReportsToday);
 
 adminRouter.use('/visits', adminVisitsRouter);
 adminRouter.use('/', adminCommunicationsRouter);
