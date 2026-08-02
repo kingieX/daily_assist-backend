@@ -184,6 +184,16 @@ const listStaffVisits = asyncHandler(async (req: Request, res: Response) => {
   return sendSuccess(res, 200, 'Staff visits retrieved', visits);
 });
 
+const listStaffVisitHistory = asyncHandler(async (req: Request, res: Response) => {
+  const history = await adminService.listStaffVisitHistory(req.params.id as string, req.query as any);
+  return sendSuccess(res, 200, 'Staff visit history retrieved', history);
+});
+
+const getStaffInfoCard = asyncHandler(async (req: Request, res: Response) => {
+  const infoCard = await adminService.getStaffInfoCard(req.params.id as string);
+  return sendSuccess(res, 200, 'Staff info card retrieved', infoCard);
+});
+
 const listStaff = asyncHandler(async (req: Request, res: Response) => {
   const staff = await adminService.listStaff(req.query as any);
   return sendSuccess(res, 200, 'Staff list retrieved', staff);
@@ -290,6 +300,8 @@ export const adminController = {
   deleteClient,
   listClientHistory,
   listStaffVisits,
+  listStaffVisitHistory,
+  getStaffInfoCard,
   listStaff,
   createStaff,
   getStaffById,
