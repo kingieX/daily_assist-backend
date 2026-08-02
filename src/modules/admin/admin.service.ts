@@ -546,6 +546,23 @@ async function getDashboardAlerts(adminUserId: string) {
   }));
 }
 
+async function markDashboardAlertRead(alertId: string, adminUserId: string) {
+  const notification = await db.notification.findFirst({ where: { id: alertId, userId: adminUserId } });
+  if (!notification) throw new ApiError(404, 'Alert not found');
+
+  const updated = notification.readAt
+    ? notification
+    : await db.notification.update({ where: { id: alertId }, data: { readAt: new Date() } });
+
+  return {
+    id: updated.id,
+    type: updated.type === 'VISIT' ? 'warning' : updated.type === 'MESSAGE' ? 'info' : 'yellow',
+    text: [updated.title, updated.body].filter(Boolean).join(' - '),
+    createdAt: updated.createdAt.toISOString(),
+    read: true
+  };
+}
+
 async function markDashboardAlertsRead(adminUserId: string) {
   const result = await db.notification.updateMany({
     where: { userId: adminUserId, readAt: null },
@@ -1774,6 +1791,7 @@ export const adminService = {
   getDashboardVisitsToday,
   getDashboardReportsToday,
   getDashboardAlerts,
+  markDashboardAlertRead,
   markDashboardAlertsRead,
   listJobPosts,
   createJobPost,

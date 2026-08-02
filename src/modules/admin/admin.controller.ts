@@ -59,6 +59,11 @@ const getDashboardAlerts = asyncHandler(async (req: Request, res: Response) => {
   return sendSuccess(res, 200, 'Dashboard alerts retrieved', alerts);
 });
 
+const markDashboardAlertRead = asyncHandler(async (req: Request, res: Response) => {
+  const alert = await adminService.markDashboardAlertRead(req.params.id as string, getActorUserId(req));
+  return sendSuccess(res, 200, 'Dashboard alert marked read', alert);
+});
+
 const markDashboardAlertsRead = asyncHandler(async (req: Request, res: Response) => {
   const result = await adminService.markDashboardAlertsRead(getActorUserId(req));
   return sendSuccess(res, 200, 'Dashboard alerts marked read', result);
@@ -259,6 +264,7 @@ export const adminController = {
   getDashboardActivity,
   getStaffSchedule,
   getDashboardAlerts,
+  markDashboardAlertRead,
   markDashboardAlertsRead,
   getDashboardVisitsToday,
   getDashboardReportsToday,
