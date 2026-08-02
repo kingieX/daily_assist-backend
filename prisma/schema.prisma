@@ -408,11 +408,14 @@ model VisitLog {
   notes        String
   signature    String
   confirmed    Boolean  @default(false)
+  status       String   @default("pending")
+  reasonForAction String @default("") @map("reason_for_action")
   submittedAt  DateTime @default(now()) @map("submitted_at")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   @@index([staffId, submittedAt])
+  @@index([status, submittedAt])
   @@map("visit_logs")
 }
 

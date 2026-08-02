@@ -34,14 +34,34 @@ const getDashboardSummary = asyncHandler(async (_req: Request, res: Response) =>
   return sendSuccess(res, 200, 'Dashboard summary retrieved', summary);
 });
 
-const getDashboardCharts = asyncHandler(async (_req: Request, res: Response) => {
-  const charts = await adminService.getDashboardCharts();
-  return sendSuccess(res, 200, 'Dashboard charts retrieved', charts);
+const getDashboardActivity = asyncHandler(async (_req: Request, res: Response) => {
+  const activity = await adminService.getDashboardActivity();
+  return sendSuccess(res, 200, 'Dashboard activity retrieved', activity);
 });
 
-const getDashboardAlerts = asyncHandler(async (_req: Request, res: Response) => {
-  const alerts = await adminService.getDashboardAlerts();
+const getStaffSchedule = asyncHandler(async (_req: Request, res: Response) => {
+  const schedule = await adminService.getStaffSchedule();
+  return sendSuccess(res, 200, 'Staff schedule retrieved', schedule);
+});
+
+const getDashboardVisitsToday = asyncHandler(async (_req: Request, res: Response) => {
+  const visits = await adminService.getDashboardVisitsToday();
+  return sendSuccess(res, 200, 'Dashboard visits today retrieved', visits);
+});
+
+const getDashboardReportsToday = asyncHandler(async (req: Request, res: Response) => {
+  const reports = await adminService.getDashboardReportsToday(req.query as any);
+  return sendSuccess(res, 200, 'Dashboard reports today retrieved', reports);
+});
+
+const getDashboardAlerts = asyncHandler(async (req: Request, res: Response) => {
+  const alerts = await adminService.getDashboardAlerts(getActorUserId(req));
   return sendSuccess(res, 200, 'Dashboard alerts retrieved', alerts);
+});
+
+const markDashboardAlertsRead = asyncHandler(async (req: Request, res: Response) => {
+  const result = await adminService.markDashboardAlertsRead(getActorUserId(req));
+  return sendSuccess(res, 200, 'Dashboard alerts marked read', result);
 });
 
 const listJobPosts = asyncHandler(async (_req: Request, res: Response) => {
@@ -236,8 +256,12 @@ const convertApplicationToStaff = asyncHandler(async (req: Request, res: Respons
 
 export const adminController = {
   getDashboardSummary,
-  getDashboardCharts,
+  getDashboardActivity,
+  getStaffSchedule,
   getDashboardAlerts,
+  markDashboardAlertsRead,
+  getDashboardVisitsToday,
+  getDashboardReportsToday,
   listJobPosts,
   createJobPost,
   updateJobPost,

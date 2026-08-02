@@ -233,22 +233,37 @@ export const adminPaths: OpenAPIV3.PathsObject = {
   '/admin/dashboard/summary': {
     get: {
       tags: ['Admin — Dashboard'],
-      summary: 'Get dashboard summary',
+      summary: 'Get dashboard summary cards',
+      description: 'Dashboard-specific projection over today\'s visit records. Returns visitsToday, staffOnDuty, completed, and pendingOrLate; frontend AdminDashboard should destructure those fields instead of activeClients/activeStaff/assignedBookings/pendingApplications.',
       security: adminSecurity,
       responses: {
-        '200': { description: 'Dashboard summary retrieved' },
+        '200': { description: 'Dashboard summary retrieved', content: { 'application/json': { example: { success: true, message: 'Dashboard summary retrieved', data: { visitsToday: 12, staffOnDuty: 4, completed: 6, pendingOrLate: 2 } } } } },
         '401': { $ref: '#/components/responses/UnauthorizedError' },
         '403': { $ref: '#/components/responses/ForbiddenError' }
       }
     }
   },
-  '/admin/dashboard/charts': {
+  '/admin/dashboard/activity': {
     get: {
       tags: ['Admin — Dashboard'],
-      summary: 'Get dashboard chart aggregates',
+      summary: 'Get booking creation activity chart data',
+      description: 'Dashboard-specific projection over booking creation timestamps. Returns week, month, and year arrays in one response. Week covers the last 7 days ending today; note the frontend sample only shows MON-SAT (6 entries), so the frontend team should confirm whether Sunday should be included and keep the bar layout aligned with this 7-entry response. If real booking counts regularly exceed the current 0-220 chart MAX_VALUE, the frontend axis should be made dynamic.',
       security: adminSecurity,
       responses: {
-        '200': { description: 'Dashboard charts retrieved' },
+        '200': { description: 'Dashboard activity retrieved', content: { 'application/json': { example: { success: true, message: 'Dashboard activity retrieved', data: { week: [{ label: 'MON', value: 50 }], month: [{ label: 'WEEK 1', value: 100 }], year: [{ label: 'JAN', value: 50 }] } } } } },
+        '401': { $ref: '#/components/responses/UnauthorizedError' },
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+      }
+    }
+  },
+  '/admin/staff/schedule': {
+    get: {
+      tags: ['Admin — Dashboard'],
+      summary: 'Get today\'s staff schedule widget roster',
+      description: 'Dashboard-specific staff roster projection. A staff member is unavailable when they have any visit assigned today, otherwise available. Frontend StaffSchedule should call this endpoint instead of receiving dashboard visits as staffData.',
+      security: adminSecurity,
+      responses: {
+        '200': { description: 'Staff schedule retrieved', content: { 'application/json': { example: { success: true, message: 'Staff schedule retrieved', data: [{ id: 'uuid', name: 'Sarah Johnson', time: '9:00am - 12:00pm', status: 'unavailable' }] } } } },
         '401': { $ref: '#/components/responses/UnauthorizedError' },
         '403': { $ref: '#/components/responses/ForbiddenError' }
       }
@@ -257,10 +272,51 @@ export const adminPaths: OpenAPIV3.PathsObject = {
   '/admin/dashboard/alerts': {
     get: {
       tags: ['Admin — Dashboard'],
-      summary: 'Get dashboard operational alerts',
+      summary: 'Get dashboard alerts feed',
+      description: 'Dashboard-specific flat projection over the shared notifications/alerts table used by admin and staff alert feeds. This endpoint reads generated alert records; visit-status, staff-message, and reminder alerts should be produced by event/scheduled workers so admin and staff feeds stay consistent.',
       security: adminSecurity,
       responses: {
-        '200': { description: 'Dashboard alerts retrieved' },
+        '200': { description: 'Dashboard alerts retrieved', content: { 'application/json': { example: { success: true, message: 'Dashboard alerts retrieved', data: [{ id: 'uuid', type: 'warning', text: '1 Missed Check-In for Mr Grant', createdAt: '2026-08-02T09:00:00.000Z', read: false }] } } } },
+        '401': { $ref: '#/components/responses/UnauthorizedError' },
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+      }
+    }
+  },
+  '/admin/dashboard/alerts/read-all': {
+    patch: {
+      tags: ['Admin — Dashboard'],
+      summary: 'Mark dashboard alerts as read',
+      description: 'Marks all unread dashboard alert notifications for the authenticated admin as read when the admin opens the alerts panel. Uses the same shared notifications table that backs GET /admin/dashboard/alerts.',
+      security: adminSecurity,
+      responses: {
+        '200': { description: 'Dashboard alerts marked read', content: { 'application/json': { example: { success: true, message: 'Dashboard alerts marked read', data: { read: true, updated: 3 } } } } },
+        '401': { $ref: '#/components/responses/UnauthorizedError' },
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+      }
+    }
+  },
+  '/admin/dashboard/visits-today': {
+    get: {
+      tags: ['Admin — Dashboard'],
+      summary: 'Get today\'s visits dashboard table',
+      description: 'Narrow dashboard-specific projection over the same visit records exposed by the fuller admin visits endpoints, with widget statuses not-started, in-progress, completed, and late.',
+      security: adminSecurity,
+      responses: {
+        '200': { description: 'Dashboard visits today retrieved', content: { 'application/json': { example: { success: true, message: 'Dashboard visits today retrieved', data: [{ id: 'uuid', client: 'Mrs. Alan', address: '1 Main St', staff: 'Sarah Johnson', time: '9:00am - 10:00am', status: 'not-started' }] } } } },
+        '401': { $ref: '#/components/responses/UnauthorizedError' },
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+      }
+    }
+  },
+  '/admin/dashboard/reports-today': {
+    get: {
+      tags: ['Admin — Dashboard'],
+      summary: 'Get today\'s report panel preview',
+      description: 'Narrow dashboard-specific projection over the same visit log report records exposed by the fuller admin reports endpoints. Returns compact text/time rows for ReportPanel without coupling the dashboard to report-list pagination.',
+      security: adminSecurity,
+      parameters: [{ name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 3 } }],
+      responses: {
+        '200': { description: 'Dashboard reports today retrieved', content: { 'application/json': { example: { success: true, message: 'Dashboard reports today retrieved', data: [{ id: 'uuid', text: 'Client requested follow-up.', time: 'Just now' }] } } } },
         '401': { $ref: '#/components/responses/UnauthorizedError' },
         '403': { $ref: '#/components/responses/ForbiddenError' }
       }

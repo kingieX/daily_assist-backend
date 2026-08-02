@@ -338,8 +338,12 @@ Each controller should delegate business logic to service layer classes and keep
 
 ## 8.3 Admin Dashboard
 - `GET /admin/dashboard/summary`
-- `GET /admin/dashboard/charts`
+- `GET /admin/dashboard/activity`
+- `GET /admin/staff/schedule`
 - `GET /admin/dashboard/alerts`
+- `PATCH /admin/dashboard/alerts/read-all`
+- `GET /admin/dashboard/visits-today`
+- `GET /admin/dashboard/reports-today`
 
 ## 8.4 Admin Bookings
 - `GET /admin/bookings`
@@ -400,13 +404,11 @@ Each controller should delegate business logic to service layer classes and keep
 - `DELETE /admin/job-posts/:id`
 - `GET /admin/reports`
 - `GET /admin/reports/:id`
-- `POST /admin/reports/:id/process-billing`
+- `GET /admin/reports/filters`
+- `PATCH /admin/reports/:id/status`
 - `GET /admin/reports/export`
 - `GET /admin/settings/profile`
 - `PATCH /admin/settings/profile`
-- `GET /admin/settings/system`
-- `PATCH /admin/settings/system`
-- `GET /admin/settings/audit-logs`
 
 ## 8.11 Staff Routes (Authenticated)
 - `GET /staff/me`
