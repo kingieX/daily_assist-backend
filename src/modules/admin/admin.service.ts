@@ -8,6 +8,7 @@ import {
   ClientStatus,
   Prisma,
   Role,
+  ServiceType,
   UserStatus,
   VisitStatus
 } from '@prisma/client';
@@ -36,6 +37,7 @@ import type {
   RecruitmentListQuery,
   ResetStaffPasswordInput,
   StaffListQuery,
+  StaffVisitHistoryQuery,
   UpdateBookingInput,
   UpdateClientInput,
   UpdateJobPostInput,
@@ -953,6 +955,9 @@ const visitHistoryInclude = {
   booking: {
     select: {
       clientId: true,
+      package: { select: { name: true } },
+      bookingServices: { select: { serviceNameSnapshot: true, serviceType: true } },
+      selectedPlanSnapshot: true,
       client: {
         select: {
           id: true,
@@ -1075,6 +1080,151 @@ async function listClientHistory(id: string) {
   });
 
   return visits.map(serializeVisit);
+}
+
+
+function historyDateRange(query: StaffVisitHistoryQuery): Prisma.DateTimeFilter | undefined {
+  const range: Prisma.DateTimeFilter = {};
+  if (query.startDate) range.gte = new Date(`${query.startDate}T00:00:00.000Z`);
+  if (query.endDate) range.lt = new Date(`${query.endDate}T00:00:00.000Z`);
+  if (range.lt instanceof Date) range.lt.setUTCDate(range.lt.getUTCDate() + 1);
+  return Object.keys(range).length ? range : undefined;
+}
+
+function historyStatusWhere(status?: string): Prisma.VisitWhereInput | undefined {
+  if (status === 'completed') return { status: VisitStatus.COMPLETED };
+  if (status === 'in-progress') return { status: VisitStatus.IN_PROGRESS };
+  if (status === 'not-started') return { status: { in: [VisitStatus.ASSIGNED, VisitStatus.ACKNOWLEDGED] }, scheduledStartAt: { gte: new Date() } };
+  if (status === 'late') return { status: { in: [VisitStatus.ASSIGNED, VisitStatus.ACKNOWLEDGED, VisitStatus.NO_SHOW] }, scheduledStartAt: { lt: new Date() } };
+  return undefined;
+}
+
+function serializeStaffHistoryVisit(visit: any) {
+  const full = serializeVisit(visit);
+  const selected = (visit.booking?.bookingServices ?? []).filter((service: any) => service.serviceType === ServiceType.SELECTED).map((service: any) => service.serviceNameSnapshot);
+  const snapshot = visit.booking?.selectedPlanSnapshot && typeof visit.booking.selectedPlanSnapshot === 'object' ? visit.booking.selectedPlanSnapshot as any : {};
+  const task = selected[0] ?? snapshot.selectedServiceTypes?.[0] ?? visit.booking?.package?.name ?? snapshot.package ?? '';
+  return {
+    id: visit.id,
+    clientName: full.clientName,
+    address: full.address,
+    task,
+    date: full.date,
+    timeStart: formatVisitTime(visit.scheduledStartAt),
+    timeEnd: formatVisitTime(visit.scheduledEndAt),
+    status: dashboardVisitStatus(visit)
+  };
+}
+
+async function listStaffVisitHistory(id: string, query: StaffVisitHistoryQuery) {
+  const staff = await db.user.findFirst({ where: staffLookupWhere(id), select: { id: true } });
+  if (!staff) throw new ApiError(404, 'Staff user not found');
+
+  const baseWhere: Prisma.VisitWhereInput = {
+    staffId: staff.id,
+    status: { not: VisitStatus.CANCELLED },
+    OR: [{ status: VisitStatus.COMPLETED }, { scheduledStartAt: { lt: todayRange().start } }]
+  };
+  const range = historyDateRange(query);
+  if (range) baseWhere.scheduledStartAt = range;
+  const statusWhere = historyStatusWhere(query.status);
+  const where: Prisma.VisitWhereInput = statusWhere ? { AND: [baseWhere, statusWhere] } : baseWhere;
+  const skip = (query.page - 1) * query.pageSize;
+
+  const [total, items] = await Promise.all([
+    db.visit.count({ where }),
+    db.visit.findMany({ where, include: visitHistoryInclude, orderBy: [{ scheduledStartAt: 'desc' }, { id: 'asc' }], skip, take: query.pageSize })
+  ]);
+
+  return { items: items.map(serializeStaffHistoryVisit), page: query.page, pageSize: query.pageSize, total };
+}
+
+function startOfUtcDay(date = new Date()) {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+}
+
+function chartRanges(now = new Date()) {
+  const dayLabels = ['SUN', 'MON', 'TUES', 'WED', 'THUR', 'FRI', 'SAT'];
+  const monthLabels = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+  const today = startOfUtcDay(now);
+  const weekStart = new Date(today);
+  weekStart.setUTCDate(today.getUTCDate() - today.getUTCDay());
+  const weekly = Array.from({ length: 7 }, (_, index) => {
+    const start = new Date(weekStart);
+    start.setUTCDate(weekStart.getUTCDate() + index);
+    const end = new Date(start);
+    end.setUTCDate(start.getUTCDate() + 1);
+    return { start, end, label: dayLabels[start.getUTCDay()] };
+  });
+  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const nextMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+  const monthly: { start: Date; end: Date; label: string }[] = [];
+  for (let cursor = new Date(monthStart), week = 1; cursor < nextMonthStart; week += 1) {
+    const start = new Date(cursor);
+    const end = new Date(cursor);
+    end.setUTCDate(end.getUTCDate() + 7);
+    if (end > nextMonthStart) end.setTime(nextMonthStart.getTime());
+    monthly.push({ start, end, label: `WEEK ${week}` });
+    cursor = end;
+  }
+  const yearly = Array.from({ length: 12 }, (_, month) => ({ start: new Date(Date.UTC(now.getUTCFullYear(), month, 1)), end: new Date(Date.UTC(now.getUTCFullYear(), month + 1, 1)), label: monthLabels[month] }));
+  return { weekly, monthly, yearly, monthStart, nextMonthStart };
+}
+
+async function sumMiles(staffId: string, start?: Date, end?: Date): Promise<number> {
+  const where: any = { staffId };
+  if (start || end) where.submittedAt = { ...(start ? { gte: start } : {}), ...(end ? { lt: end } : {}) };
+  const result = await db.visitLog.aggregate({ where, _sum: { miles: true } });
+  return Number(result._sum?.miles ?? 0);
+}
+
+async function milesDataset(staffId: string, ranges: { start: Date; end: Date; label: string }[]) {
+  return Promise.all(ranges.map(async (range) => ({ label: range.label, value: Math.min(200, Number((await sumMiles(staffId, range.start, range.end)).toFixed(2))) })));
+}
+
+function percentileBetter(count: number, counts: number[]) {
+  if (!counts.length) return 0;
+  const lower = counts.filter((other) => other < count).length;
+  return Math.round((lower / counts.length) * 100);
+}
+
+async function getStaffInfoCard(id: string) {
+  const { start, end } = todayRange();
+  const staff = await db.user.findFirst({ where: staffLookupWhere(id), include: { staffProfile: true, visitsAsStaff: { where: { scheduledStartAt: { gte: start, lt: end }, status: { not: VisitStatus.CANCELLED } }, select: { id: true } } } });
+  if (!staff) throw new ApiError(404, 'Staff user not found');
+
+  const { weekly, monthly, yearly, monthStart, nextMonthStart } = chartRanges();
+  const [totalVisits, totalMileage, milesCovered, weeklyMiles, monthlyMiles, yearlyMiles, staffVisitCounts] = await Promise.all([
+    db.visit.count({ where: { staffId: staff.id, status: { not: VisitStatus.CANCELLED } } }),
+    sumMiles(staff.id, monthStart, nextMonthStart),
+    sumMiles(staff.id),
+    milesDataset(staff.id, weekly),
+    milesDataset(staff.id, monthly),
+    milesDataset(staff.id, yearly),
+    db.user.findMany({ where: { role: Role.STAFF }, select: { _count: { select: { visitsAsStaff: { where: { status: { not: VisitStatus.CANCELLED } } } } } } })
+  ]);
+
+  const profile = staff.staffProfile ?? {};
+  const name = staffDisplayName(staff) ?? '';
+  return {
+    id: staff.staffCode ?? staff.id,
+    name,
+    role: profile.staffRoleLabel ?? 'Home-Help & Support Assistant',
+    photo: profile.photoUrl ?? null,
+    status: staff.visitsAsStaff.length ? 'unavailable' : 'available',
+    ownsVehicle: Boolean(profile.ownsCar),
+    trainingUpToDate: false,
+    phone: profile.phone ?? '',
+    email: staff.email,
+    milesCovered: Number(milesCovered.toFixed(2)),
+    totalVisits,
+    percentileBetter: percentileBetter(totalVisits, staffVisitCounts.map((member: any) => member._count.visitsAsStaff)),
+    totalMileage: Number(totalMileage.toFixed(2)),
+    mileageMonth: new Intl.DateTimeFormat('en-US', { month: 'long', timeZone: 'UTC' }).format(new Date()),
+    weeklyMiles,
+    monthlyMiles,
+    yearlyMiles
+  };
 }
 
 async function listStaffVisits(id: string) {
@@ -1815,6 +1965,8 @@ export const adminService = {
   deleteClient,
   listClientHistory,
   listStaffVisits,
+  listStaffVisitHistory,
+  getStaffInfoCard,
   listStaff,
   createStaff,
   getStaffById,

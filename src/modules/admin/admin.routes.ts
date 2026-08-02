@@ -25,6 +25,7 @@ import {
   resetStaffPasswordSchema,
   staffIdParamSchema,
   staffListQuerySchema,
+  staffVisitHistoryQuerySchema,
   updateBookingSchema,
   updateClientSchema,
   updateJobPostSchema,
@@ -126,6 +127,12 @@ adminRouter.get('/clients/:id/history', validate({ params: clientIdParamSchema }
 adminRouter.get('/staff', validate({ query: staffListQuerySchema }), adminController.listStaff);
 adminRouter.post('/staff', uploadStaffFiles, validate({ body: createStaffSchema }), adminController.createStaff);
 adminRouter.get('/staff/:id', validate({ params: staffIdParamSchema }), adminController.getStaffById);
+adminRouter.get(
+  '/staff/:id/visits/history',
+  validate({ params: staffIdParamSchema, query: staffVisitHistoryQuerySchema }),
+  adminController.listStaffVisitHistory
+);
+adminRouter.get('/staff/:id/info-card', validate({ params: staffIdParamSchema }), adminController.getStaffInfoCard);
 adminRouter.get('/staff/:id/visits', validate({ params: staffIdParamSchema }), adminController.listStaffVisits);
 adminRouter.get('/staff/:id/credentials', validate({ params: staffIdParamSchema }), adminController.getStaffCredentials);
 adminRouter.post(

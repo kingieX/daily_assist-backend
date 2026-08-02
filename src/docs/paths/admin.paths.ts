@@ -153,6 +153,55 @@ const staffSchema: OpenAPIV3.SchemaObject = {
   }
 };
 
+
+const staffHistoryVisitSchema: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  required: ['id', 'clientName', 'address', 'task', 'date', 'timeStart', 'timeEnd', 'status'],
+  properties: {
+    id: { type: 'string', format: 'uuid' },
+    clientName: { type: 'string' },
+    address: { type: 'string' },
+    task: { type: 'string', example: 'Meal Prep' },
+    date: { type: 'string', format: 'date' },
+    timeStart: { type: 'string', example: '1:00pm' },
+    timeEnd: { type: 'string', example: '2:00pm' },
+    status: { type: 'string', enum: ['not-started', 'in-progress', 'completed', 'late'] }
+  }
+};
+
+const mileageDataPointSchema: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  required: ['label', 'value'],
+  properties: {
+    label: { type: 'string' },
+    value: { type: 'number', minimum: 0, maximum: 200 }
+  }
+};
+
+const staffInfoCardSchema: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  required: ['id', 'name', 'role', 'photo', 'status', 'ownsVehicle', 'trainingUpToDate', 'phone', 'email', 'milesCovered', 'totalVisits', 'percentileBetter', 'totalMileage', 'mileageMonth', 'weeklyMiles', 'monthlyMiles', 'yearlyMiles'],
+  properties: {
+    id: { type: 'string' },
+    name: { type: 'string' },
+    role: { type: 'string' },
+    photo: { type: 'string', nullable: true },
+    status: { type: 'string', enum: ['available', 'unavailable'], description: 'Matches GET /admin/staff/schedule: unavailable when at least one visit is assigned today.' },
+    ownsVehicle: { type: 'boolean', description: "Boolean replacement for the frontend's fragile exact-string comparison against 'Yes, owns a vehicle'." },
+    trainingUpToDate: { type: 'boolean', description: 'Currently false until a training data source exists. Frontend bug: StaffInfoModal must render its green checkmark conditionally from this field instead of always-on.' },
+    phone: { type: 'string' },
+    email: { type: 'string', format: 'email' },
+    milesCovered: { type: 'number' },
+    totalVisits: { type: 'integer', minimum: 0 },
+    percentileBetter: { type: 'integer', minimum: 0, maximum: 100, description: 'Visit-count percentile against all staff; confirm whether product wants same-zone/role instead.' },
+    totalMileage: { type: 'number' },
+    mileageMonth: { type: 'string', description: 'Current UTC month label; confirm if product wants a fixed reporting period.' },
+    weeklyMiles: { type: 'array', items: mileageDataPointSchema },
+    monthlyMiles: { type: 'array', items: mileageDataPointSchema },
+    yearlyMiles: { type: 'array', items: mileageDataPointSchema }
+  }
+};
+
 const staffFormSchema: OpenAPIV3.SchemaObject = {
   type: 'object',
   required: ['firstName', 'lastName', 'email', 'phone', 'role', 'dob', 'sex', 'zone', 'vehicle'],
@@ -635,6 +684,34 @@ export const adminPaths: OpenAPIV3.PathsObject = {
       security: adminSecurity,
       parameters: [{ ...idParam, schema: { type: 'string' } }],
       responses: { '200': { description: 'Staff visits retrieved', content: { 'application/json': { schema: { type: 'object', properties: { success: { type: 'boolean' }, message: { type: 'string' }, data: { type: 'array', items: visitSchema } } } } } } }
+    }
+  },
+
+  '/admin/staff/{id}/visits/history': {
+    get: {
+      tags: ['Admin — Staff'],
+      summary: 'List one staff member visit history',
+      description: 'Admin-scoped counterpart to GET /staff/visits/history. Returns the shared Visit records for the supplied staff id/code, sorted most recent first, with optional date/status filters.',
+      security: adminSecurity,
+      parameters: [
+        { ...idParam, schema: { type: 'string' } },
+        { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
+        { name: 'pageSize', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 10 } },
+        { name: 'startDate', in: 'query', schema: { type: 'string', format: 'date' } },
+        { name: 'endDate', in: 'query', schema: { type: 'string', format: 'date' } },
+        { name: 'status', in: 'query', schema: { type: 'string', enum: ['not-started', 'in-progress', 'completed', 'late'] } }
+      ],
+      responses: { '200': { description: 'Staff visit history retrieved', content: { 'application/json': { schema: { type: 'object', properties: { success: { type: 'boolean' }, message: { type: 'string' }, data: { type: 'object', properties: { items: { type: 'array', items: staffHistoryVisitSchema }, page: { type: 'integer' }, pageSize: { type: 'integer' }, total: { type: 'integer' } } } } } } } }, '404': { $ref: '#/components/responses/NotFound' } }
+    }
+  },
+  '/admin/staff/{id}/info-card': {
+    get: {
+      tags: ['Admin — Staff'],
+      summary: 'Get staff info modal card data',
+      description: 'Extended stats and mileage data for StaffInfoModal; see GET /admin/staff/{id} for basic profile fields. Mileage and visit stats derive from visits and check-out visit logs, not a separate statistics table. Frontend notes: replace vehicle string matching with a boolean ownsVehicle check, and make the Training up to date checkmark conditional on trainingUpToDate.',
+      security: adminSecurity,
+      parameters: [{ ...idParam, schema: { type: 'string' } }],
+      responses: { '200': { description: 'Staff info card retrieved', content: { 'application/json': { schema: { type: 'object', properties: { success: { type: 'boolean' }, message: { type: 'string' }, data: staffInfoCardSchema } } } } }, '404': { $ref: '#/components/responses/NotFound' } }
     }
   },
   '/admin/staff/{id}/credentials': {

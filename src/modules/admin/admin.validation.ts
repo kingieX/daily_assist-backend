@@ -218,6 +218,21 @@ export const updateClientSchema = clientFormSchema.partial().refine((data) => Ob
   message: 'At least one field must be provided for update'
 });
 
+
+const adminStaffVisitStatusSchema = z.enum(['not-started', 'in-progress', 'completed', 'late']);
+const isoDateQuerySchema = z.preprocess(emptyStringToUndefined, z.string().date().optional());
+
+export const staffVisitHistoryQuerySchema = z.object({
+  page: queryPage(1),
+  pageSize: queryLimit(10),
+  startDate: isoDateQuerySchema,
+  endDate: isoDateQuerySchema,
+  status: z.preprocess(emptyStringToUndefined, adminStaffVisitStatusSchema.optional())
+}).refine((data) => {
+  if (!data.startDate || !data.endDate) return true;
+  return data.startDate <= data.endDate;
+}, { message: 'startDate must be before or equal to endDate', path: ['startDate'] });
+
 const staffSortBySchema = z.enum(['createdAt', 'updatedAt', 'lastLoginAt', 'email', 'staffCode']).default('createdAt');
 
 export const staffListQuerySchema = z
@@ -312,6 +327,7 @@ export type UpdateBookingInput = z.infer<typeof updateBookingSchema>;
 export type ClientListQuery = z.infer<typeof clientListQuerySchema>;
 export type CreateClientInput = z.infer<typeof createClientSchema>;
 export type UpdateClientInput = z.infer<typeof updateClientSchema>;
+export type StaffVisitHistoryQuery = z.infer<typeof staffVisitHistoryQuerySchema>;
 export type StaffListQuery = z.infer<typeof staffListQuerySchema>;
 export type CreateStaffInput = z.infer<typeof createStaffSchema>;
 export type ProvisionStaffCredentialsInput = z.infer<typeof provisionStaffCredentialsSchema>;
