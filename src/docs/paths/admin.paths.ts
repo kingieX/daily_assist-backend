@@ -282,6 +282,21 @@ export const adminPaths: OpenAPIV3.PathsObject = {
       }
     }
   },
+  '/admin/dashboard/alerts/{id}/read': {
+    patch: {
+      tags: ['Admin — Dashboard'],
+      summary: 'Mark a dashboard alert as read',
+      description: 'Marks one unread dashboard alert notification for the authenticated admin as read. Uses the same shared notifications table that backs GET /admin/dashboard/alerts and only updates alerts owned by the authenticated admin.',
+      security: adminSecurity,
+      parameters: [idParam],
+      responses: {
+        '200': { description: 'Dashboard alert marked read', content: { 'application/json': { example: { success: true, message: 'Dashboard alert marked read', data: { id: 'uuid', type: 'warning', text: '1 Missed Check-In for Mr Grant', createdAt: '2026-08-02T09:00:00.000Z', read: true } } } } },
+        '401': { $ref: '#/components/responses/UnauthorizedError' },
+        '403': { $ref: '#/components/responses/ForbiddenError' },
+        '404': { $ref: '#/components/responses/NotFoundError' }
+      }
+    }
+  },
   '/admin/dashboard/alerts/read-all': {
     patch: {
       tags: ['Admin — Dashboard'],
