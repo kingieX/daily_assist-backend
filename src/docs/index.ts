@@ -11,6 +11,7 @@ import { visitPaths } from './paths/visits.paths';
 import { communicationsPaths } from './paths/communications.paths';
 import { operationsPaths } from './paths/operations.paths';
 import { profileSettingsPaths } from './paths/profile-settings.paths';
+import { subAdminPaths } from './paths/sub-admin.paths';
 import { withEndpointGuides } from './utils';
 
 /**
@@ -120,6 +121,10 @@ export const openApiSpec: OpenAPIV3.Document = {
       description: 'Admin staff account provisioning and profile management'
     },
     {
+      name: 'Admin — Sub-Admin Management',
+      description: 'Super-admin-only sub-admin CRUD and credential actions. Frontend note: AddAdminModal currently blocks submission until credentials are generated client-side, but the backend supports creating a sub-admin without credentials and provisioning them separately; the frontend can be simplified to match if desired, though it is not required.'
+    },
+    {
       name: 'Admin — Recruitment',
       description: 'Recruitment review pipeline and applicant-to-staff conversion'
     },
@@ -175,7 +180,8 @@ export const openApiSpec: OpenAPIV3.Document = {
     ...visitPaths,
     ...communicationsPaths,
     ...operationsPaths,
-    ...profileSettingsPaths
+    ...profileSettingsPaths,
+    ...subAdminPaths
     // Phase 3+: spread additional path modules here
     // e.g. ...adminBookingPaths, ...adminClientPaths, ...staffPaths
   })

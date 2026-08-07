@@ -194,6 +194,47 @@ const getStaffInfoCard = asyncHandler(async (req: Request, res: Response) => {
   return sendSuccess(res, 200, 'Staff info card retrieved', infoCard);
 });
 
+
+const listSubAdmins = asyncHandler(async (req: Request, res: Response) => {
+  const subAdmins = await adminService.listSubAdmins(req.query as any);
+  return sendSuccess(res, 200, 'Sub-admins retrieved', subAdmins);
+});
+
+const createSubAdmin = asyncHandler(async (req: Request, res: Response) => {
+  const subAdmin = await adminService.createSubAdmin(req.body);
+  return sendSuccess(res, 201, 'Sub-admin created successfully', subAdmin);
+});
+
+const getSubAdminById = asyncHandler(async (req: Request, res: Response) => {
+  const subAdmin = await adminService.getSubAdminById(req.params.id as string);
+  return sendSuccess(res, 200, 'Sub-admin retrieved', subAdmin);
+});
+
+const updateSubAdmin = asyncHandler(async (req: Request, res: Response) => {
+  const subAdmin = await adminService.updateSubAdmin(req.params.id as string, req.body);
+  return sendSuccess(res, 200, 'Sub-admin updated successfully', subAdmin);
+});
+
+const deleteSubAdmin = asyncHandler(async (req: Request, res: Response) => {
+  await adminService.deleteSubAdmin(req.params.id as string, getActorUserId(req));
+  return res.status(204).send();
+});
+
+const provisionSubAdminCredentials = asyncHandler(async (req: Request, res: Response) => {
+  const credentials = await adminService.provisionSubAdminCredentials(req.params.id as string, req.body);
+  return sendSuccess(res, 200, 'Sub-admin credentials provisioned successfully', credentials);
+});
+
+const getSubAdminCredentials = asyncHandler(async (req: Request, res: Response) => {
+  const credentials = await adminService.getSubAdminCredentials(req.params.id as string);
+  return sendSuccess(res, 200, 'Sub-admin credentials retrieved successfully', credentials);
+});
+
+const resetSubAdminPassword = asyncHandler(async (req: Request, res: Response) => {
+  const credentials = await adminService.resetSubAdminPassword(req.params.id as string, req.body);
+  return sendSuccess(res, 200, 'Sub-admin password reset successfully', credentials);
+});
+
 const listStaff = asyncHandler(async (req: Request, res: Response) => {
   const staff = await adminService.listStaff(req.query as any);
   return sendSuccess(res, 200, 'Staff list retrieved', staff);
@@ -302,6 +343,14 @@ export const adminController = {
   listStaffVisits,
   listStaffVisitHistory,
   getStaffInfoCard,
+  listSubAdmins,
+  createSubAdmin,
+  getSubAdminById,
+  updateSubAdmin,
+  deleteSubAdmin,
+  provisionSubAdminCredentials,
+  getSubAdminCredentials,
+  resetSubAdminPassword,
   listStaff,
   createStaff,
   getStaffById,

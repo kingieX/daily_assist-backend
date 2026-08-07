@@ -26,6 +26,12 @@ import {
   staffIdParamSchema,
   staffListQuerySchema,
   staffVisitHistoryQuerySchema,
+  subAdminIdParamSchema,
+  subAdminListQuerySchema,
+  createSubAdminSchema,
+  updateSubAdminSchema,
+  provisionSubAdminCredentialsSchema,
+  resetSubAdminPasswordSchema,
   updateBookingSchema,
   updateClientSchema,
   updateJobPostSchema,
@@ -123,6 +129,16 @@ adminRouter.patch(
 );
 adminRouter.delete('/clients/:id', validate({ params: clientIdParamSchema }), adminController.deleteClient);
 adminRouter.get('/clients/:id/history', validate({ params: clientIdParamSchema }), adminController.listClientHistory);
+
+
+adminRouter.get('/sub-admin', authorizeRoles(Role.SUPER_ADMIN), validate({ query: subAdminListQuerySchema }), adminController.listSubAdmins);
+adminRouter.post('/sub-admin', authorizeRoles(Role.SUPER_ADMIN), validate({ body: createSubAdminSchema }), adminController.createSubAdmin);
+adminRouter.get('/sub-admin/:id', authorizeRoles(Role.SUPER_ADMIN), validate({ params: subAdminIdParamSchema }), adminController.getSubAdminById);
+adminRouter.patch('/sub-admin/:id', authorizeRoles(Role.SUPER_ADMIN), validate({ params: subAdminIdParamSchema, body: updateSubAdminSchema }), adminController.updateSubAdmin);
+adminRouter.delete('/sub-admin/:id', authorizeRoles(Role.SUPER_ADMIN), validate({ params: subAdminIdParamSchema }), adminController.deleteSubAdmin);
+adminRouter.post('/sub-admin/:id/provision-credentials', authorizeRoles(Role.SUPER_ADMIN), validate({ params: subAdminIdParamSchema, body: provisionSubAdminCredentialsSchema }), adminController.provisionSubAdminCredentials);
+adminRouter.get('/sub-admin/:id/credentials', authorizeRoles(Role.SUPER_ADMIN), validate({ params: subAdminIdParamSchema }), adminController.getSubAdminCredentials);
+adminRouter.post('/sub-admin/:id/reset-password', authorizeRoles(Role.SUPER_ADMIN), validate({ params: subAdminIdParamSchema, body: resetSubAdminPasswordSchema }), adminController.resetSubAdminPassword);
 
 adminRouter.get('/staff', validate({ query: staffListQuerySchema }), adminController.listStaff);
 adminRouter.post('/staff', uploadStaffFiles, validate({ body: createStaffSchema }), adminController.createStaff);
