@@ -304,11 +304,11 @@ Example:
   - `NotificationPreference.visitEnabled === true`
   - `adminNotificationSettings:{userId}.missedCheckin.email !== false`, if the event setting supports email/dashboard channel separation.
 
-### Preference gaps to resolve before implementation
+### Preference decisions for implementation
 
-- Regular admin settings currently appear to be boolean-only for operational alert settings, while super-admin settings are email/dashboard objects. Decide whether to normalize regular admin settings to the same `{ email, dashboard }` shape.
-- Staff preferences do not currently have event-specific settings for visit reminders or rota changes. Decide whether broad `visitEnabled` is enough for staff.
-- Decide whether announcements should always generate dashboard notifications unless `announcementEnabled` is false, or whether each announcement should include explicit delivery-channel options.
+- Normalize regular admin settings to the same `{ email, dashboard }` shape used by super-admin settings. During migration/backward compatibility, a legacy boolean should be interpreted as both channels using the same value, e.g. `true` becomes `{ email: true, dashboard: true }` and `false` becomes `{ email: false, dashboard: false }`.
+- Staff should use the broad `message`, `announcement`, `visit`, and `system` category preferences for the first implementation. Event-level staff settings can be added later only if product requirements call for finer control, such as separate rota-change, visit-reminder, cancellation, or reassignment preferences.
+- Announcement behavior should not change as part of this implementation. Keep the existing announcement routes and delivery behavior untouched unless a separate announcement-specific change is explicitly approved.
 
 ## Notification Worker Plan
 
@@ -361,7 +361,7 @@ For each job:
 
 ### Delivery tracking model to consider
 
-The current `Notification` table tracks only in-app rows. It does not track email delivery attempts. Consider adding a separate delivery table later:
+The current `Notification` table tracks only in-app rows. It does not track email delivery attempts. Add a separate delivery table when implementing the worker so support/debugging can inspect asynchronous delivery state:
 
 - `NotificationDelivery`
   - `id`
@@ -375,15 +375,15 @@ The current `Notification` table tracks only in-app rows. It does not track emai
   - `createdAt`
   - `updatedAt`
 
-Do not add this model until implementation is approved.
+Add this model with the worker implementation rather than during the behavior-preserving route extraction.
 
 ### Worker technology decision
 
-Recommended options:
+Production decision:
 
-- BullMQ + Redis for production-grade delayed jobs, retries, and missed-check scheduling.
-- PostgreSQL-backed queue if avoiding Redis is a deployment requirement.
-- A simple in-process worker only for local development, not production.
+- Use BullMQ + Redis for production-grade delayed jobs, retries, and missed-check scheduling.
+- A simple in-process worker may be kept for local development only if needed, but it should not be the production delivery mechanism.
+- Revisit a PostgreSQL-backed queue only if Redis becomes a deployment blocker.
 
 ## WebSocket Plan for Chat and Live Notifications
 
@@ -419,7 +419,7 @@ Client-to-server events:
 
 - `conversation:join`
 - `conversation:leave`
-- `message:send` or continue using REST for writes and use sockets only for delivery.
+- `message:send` is deferred; initial implementation continues using REST for durable writes and sockets only for delivery.
 - `message:typing:start`
 - `message:typing:stop`
 - `message:read`
@@ -442,7 +442,7 @@ Server-to-client events:
 
 ### Recommended write pattern
 
-Prefer REST for durable writes first:
+Use REST for durable writes in the initial implementation:
 
 1. Client calls REST endpoint to send a message or perform a notification action.
 2. API writes to database in a transaction.
@@ -566,16 +566,32 @@ Keep for UI compatibility, backed by notifications:
 - `PATCH /admin/dashboard/alerts/:id/read`
 - `PATCH /admin/dashboard/alerts/read-all`
 
-## Key Decisions Needed Before Implementation
+## Approved Implementation Decisions
 
-1. Should existing URL paths remain stable, or should a new versioned neutral path like `/messages/*` and `/notifications/*` be introduced?
-2. Should regular admin notification settings be normalized to `{ email, dashboard }` like super-admin settings?
-3. Should staff get event-level settings beyond the broad `message`, `announcement`, `visit`, and `system` categories?
-4. Should chat writes happen only through REST, or should WebSocket message-send also be supported?
-5. Which queue technology should be used in production?
-6. Are email delivery audit records required for compliance/support?
-7. Should admin dashboard alerts include all notifications or only operational categories such as visit, booking, report, and system alerts?
-8. What should be the retention/deletion policy for messages and notifications?
+1. Keep existing role-scoped URLs stable in this API version. The refactor changes module ownership and OpenAPI grouping, not public paths. A future breaking API version can introduce neutral `/messages/*` and `/notifications/*` paths if intentionally versioned.
+2. Normalize regular admin event notification settings to `{ email, dashboard }` like super-admin settings, with legacy booleans interpreted as both channels using the same value.
+3. Keep staff notification preferences at the broad category level for now: `message`, `announcement`, `visit`, and `system`. Do not add staff event-level controls until product explicitly requests them.
+4. Use REST-only durable chat writes initially. WebSocket support should deliver post-commit events, read state, typing indicators, and live notification/alert updates.
+5. Use BullMQ + Redis in production for notification fan-out, email delivery, retries, and delayed/missed-event scheduling.
+6. Add delivery audit records with the worker implementation. Track recipient, channel, status, skip/failure reason, attempt count, and timestamps; allow `notificationId` to be nullable for email-only events.
+7. Keep admin dashboard alerts as a filtered projection of actionable/operational notifications only, such as visit, booking, report, system, missed check-in/out, and high-priority message events when needed. Do not include every notification by default.
+8. Use soft deletion for user-facing message and notification deletion. Retain messages by default until an explicit administrative retention policy is approved. Allow scheduled cleanup of old read notifications and delivery audit records after a defined support/debugging window, such as 90–180 days for delivery audit records and 180 days for read notifications.
+9. Do not change announcement behavior in this implementation. Announcements remain in the communications module with existing routes and delivery behavior.
+
+## Implementation Progress
+
+### Completed in initial implementation
+
+- Added dedicated admin and staff message routers while keeping the existing `/admin/messages/*` and `/staff/messages/*` URLs stable. These routers currently delegate to the existing communications controllers/services to keep behavior unchanged while establishing Messages module ownership.
+- Added dedicated admin and staff notification routers while keeping the existing `/admin/notifications/*` and `/staff/notifications/*` URLs stable. These routers currently delegate to the existing communications controllers/services to keep behavior unchanged while establishing Notifications module ownership.
+- Removed message and notification route declarations from the admin/staff communications routers so those routers now own announcement endpoints only.
+- Mounted the new message and notification routers from the admin and staff role routers before the remaining communications announcement routers.
+
+### Still pending
+
+- Extract message controller/service logic from the communications service into focused messages services.
+- Extract notification controller/service logic from the communications service into focused notifications services.
+- Add notification event abstraction, BullMQ + Redis worker, delivery audit records, email templates, and WebSocket gateway in later phases.
 
 ## Suggested Acceptance Criteria for Future Implementation
 
