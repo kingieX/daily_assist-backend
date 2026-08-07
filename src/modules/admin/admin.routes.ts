@@ -2,6 +2,8 @@ import { Role } from '@prisma/client';
 import { Router } from 'express';
 import { adminVisitsRouter } from '../visits/admin-visits.routes';
 import { adminCommunicationsRouter } from '../communications/admin-communications.routes';
+import { adminMessagesRouter } from '../messages/admin-messages.routes';
+import { adminNotificationsRouter } from '../notifications/admin-notifications.routes';
 import { adminOpsRouter } from '../operations/admin-ops.routes';
 import { authenticate } from '../../middlewares/auth.middleware';
 import { authorizeRoles } from '../../middlewares/rbac.middleware';
@@ -77,12 +79,14 @@ adminRouter.get('/dashboard/summary', adminController.getDashboardSummary);
 adminRouter.get('/dashboard/activity', adminController.getDashboardActivity);
 adminRouter.get('/staff/schedule', adminController.getStaffSchedule);
 adminRouter.get('/dashboard/alerts', adminController.getDashboardAlerts);
-adminRouter.patch('/dashboard/alerts/:id/read', validate({ params: idParamSchema }), adminController.markDashboardAlertRead);
 adminRouter.patch('/dashboard/alerts/read-all', adminController.markDashboardAlertsRead);
+adminRouter.patch('/dashboard/alerts/:id/read', validate({ params: idParamSchema }), adminController.markDashboardAlertRead);
 adminRouter.get('/dashboard/visits-today', adminController.getDashboardVisitsToday);
 adminRouter.get('/dashboard/reports-today', validate({ query: dashboardReportsTodayQuerySchema }), adminController.getDashboardReportsToday);
 
 adminRouter.use('/visits', adminVisitsRouter);
+adminRouter.use('/', adminMessagesRouter);
+adminRouter.use('/', adminNotificationsRouter);
 adminRouter.use('/', adminCommunicationsRouter);
 adminRouter.use('/', adminOpsRouter);
 

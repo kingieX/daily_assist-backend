@@ -84,7 +84,7 @@ export const communicationsPaths: OpenAPIV3.PathsObject = {
   '/staff/messages/{id}/reply': { post: { tags: ['Messages'], summary: 'Reply to direct chat as staff', security: secured, parameters: [idParam], requestBody: jsonBody({ type: 'object', required: ['text'], properties: { text: { type: 'string' } } }, { text: 'I have received this.' }), responses: { '201': { description: 'Reply sent' } } } },
   '/admin/messages/threads': {
     post: {
-      tags: ['Admin — Communications'],
+      tags: ['Messages'],
       summary: 'Create or get admin-staff thread',
       description: 'Creates an admin/staff conversation if it does not already exist; otherwise returns the existing thread.',
       security: secured,
@@ -92,7 +92,7 @@ export const communicationsPaths: OpenAPIV3.PathsObject = {
       responses: { '201': { description: 'Thread created or retrieved' } }
     },
     get: {
-      tags: ['Admin — Communications'],
+      tags: ['Messages'],
       summary: 'List message threads',
       description: 'Returns paginated message threads. Filter by staffId when an admin needs one staff conversation.',
       security: secured,
@@ -102,7 +102,7 @@ export const communicationsPaths: OpenAPIV3.PathsObject = {
   },
   '/admin/messages/threads/{id}/messages': {
     get: {
-      tags: ['Admin — Communications'],
+      tags: ['Messages'],
       summary: 'Get thread messages',
       description: 'Returns messages in a conversation thread.',
       security: secured,
@@ -110,7 +110,7 @@ export const communicationsPaths: OpenAPIV3.PathsObject = {
       responses: { '200': { description: 'Messages retrieved' } }
     },
     post: {
-      tags: ['Admin — Communications'],
+      tags: ['Messages'],
       summary: 'Post message to thread',
       description: 'Sends a text message and/or an HTTPS attachment URL to the selected thread.',
       security: secured,
@@ -168,13 +168,13 @@ export const communicationsPaths: OpenAPIV3.PathsObject = {
   },
   '/admin/notifications/history': {
     get: {
-      tags: ['Admin — Communications'],
+      tags: ['Notifications'],
       summary: 'List admin notification history',
       description: 'Returns paginated notification history. Use type and unreadOnly filters for inbox views.',
       security: secured,
       parameters: [
         ...paginationParameters,
-        { name: 'type', in: 'query', schema: { type: 'string', enum: ['MESSAGE', 'ANNOUNCEMENT', 'SYSTEM'] } },
+        { name: 'type', in: 'query', schema: { type: 'string', enum: ['MESSAGE', 'ANNOUNCEMENT', 'SYSTEM', 'VISIT'] } },
         { name: 'unreadOnly', in: 'query', schema: { type: 'boolean' } }
       ],
       responses: { '200': { description: 'Notifications retrieved' } }
@@ -182,7 +182,7 @@ export const communicationsPaths: OpenAPIV3.PathsObject = {
   },
   '/admin/notifications/{id}': {
     delete: {
-      tags: ['Admin — Communications'],
+      tags: ['Notifications'],
       summary: 'Delete notification',
       description: 'Deletes one notification from the authenticated admin notification history.',
       security: secured,
@@ -191,16 +191,45 @@ export const communicationsPaths: OpenAPIV3.PathsObject = {
     }
   },
 
+  '/admin/notifications/unread-count': {
+    get: {
+      tags: ['Notifications'],
+      summary: 'Get admin notification unread count',
+      security: secured,
+      responses: { '200': { description: 'Notification unread count retrieved' } }
+    }
+  },
+
+  '/admin/notifications/read-all': {
+    patch: {
+      tags: ['Notifications'],
+      summary: 'Mark all admin notifications as read',
+      security: secured,
+      responses: { '200': { description: 'Notifications marked as read' } }
+    }
+  },
+
+  '/admin/notifications/{id}/read': {
+    patch: {
+      tags: ['Notifications'],
+      summary: 'Mark admin notification as read',
+      security: secured,
+      parameters: [idParam],
+      requestBody: markReadBody,
+      responses: { '200': { description: 'Notification marked as read' } }
+    }
+  },
+
   '/admin/notifications/preferences': {
     get: {
-      tags: ['Admin — Communications'],
+      tags: ['Notifications'],
       summary: 'Get admin notification preferences',
       description: 'Returns notification channel preferences for the authenticated admin.',
       security: secured,
       responses: { '200': { description: 'Notification preferences retrieved' } }
     },
     patch: {
-      tags: ['Admin — Communications'],
+      tags: ['Notifications'],
       summary: 'Update admin notification preferences',
       description: 'Updates notification channel preferences for the authenticated admin. Omitted fields remain unchanged.',
       security: secured,
@@ -210,7 +239,7 @@ export const communicationsPaths: OpenAPIV3.PathsObject = {
   },
   '/staff/messages/threads': {
     post: {
-      tags: ['Staff — Communications'],
+      tags: ['Messages'],
       summary: 'Create or get own staff thread',
       description: 'Creates or returns the authenticated staff member’s support thread. Staff users do not send staffId.',
       security: secured,
@@ -218,7 +247,7 @@ export const communicationsPaths: OpenAPIV3.PathsObject = {
       responses: { '201': { description: 'Thread created or retrieved' } }
     },
     get: {
-      tags: ['Staff — Communications'],
+      tags: ['Messages'],
       summary: 'List staff message threads',
       description: 'Returns the authenticated staff member’s available message threads.',
       security: secured,
@@ -228,7 +257,7 @@ export const communicationsPaths: OpenAPIV3.PathsObject = {
   },
   '/staff/messages/threads/{id}/messages': {
     get: {
-      tags: ['Staff — Communications'],
+      tags: ['Messages'],
       summary: 'Get staff thread messages',
       description: 'Returns messages for a thread owned by the authenticated staff member.',
       security: secured,
@@ -236,7 +265,7 @@ export const communicationsPaths: OpenAPIV3.PathsObject = {
       responses: { '200': { description: 'Messages retrieved' } }
     },
     post: {
-      tags: ['Staff — Communications'],
+      tags: ['Messages'],
       summary: 'Post message in staff thread',
       description: 'Sends a text message and/or an HTTPS attachment URL in the staff member’s thread.',
       security: secured,
@@ -280,29 +309,57 @@ export const communicationsPaths: OpenAPIV3.PathsObject = {
   },
   '/staff/notifications': {
     get: {
-      tags: ['Staff — Communications'],
+      tags: ['Notifications'],
       summary: 'List staff notifications',
       description: 'Returns notification history for the authenticated staff member.',
       security: secured,
       parameters: [
         ...paginationParameters,
-        { name: 'type', in: 'query', schema: { type: 'string', enum: ['MESSAGE', 'ANNOUNCEMENT', 'SYSTEM'] } },
+        { name: 'type', in: 'query', schema: { type: 'string', enum: ['MESSAGE', 'ANNOUNCEMENT', 'SYSTEM', 'VISIT'] } },
         { name: 'unreadOnly', in: 'query', schema: { type: 'boolean' } }
       ],
       responses: { '200': { description: 'Notifications retrieved' } }
     }
   },
 
+  '/staff/notifications/unread-count': {
+    get: {
+      tags: ['Notifications'],
+      summary: 'Get staff notification unread count',
+      security: secured,
+      responses: { '200': { description: 'Notification unread count retrieved' } }
+    }
+  },
+
+  '/staff/notifications/read-all': {
+    patch: {
+      tags: ['Notifications'],
+      summary: 'Mark all staff notifications as read',
+      security: secured,
+      responses: { '200': { description: 'Notifications marked as read' } }
+    }
+  },
+
+  '/staff/notifications/{id}': {
+    delete: {
+      tags: ['Notifications'],
+      summary: 'Delete staff notification',
+      security: secured,
+      parameters: [idParam],
+      responses: { '200': { description: 'Notification deleted' } }
+    }
+  },
+
   '/staff/notifications/preferences': {
     get: {
-      tags: ['Staff — Communications'],
+      tags: ['Notifications'],
       summary: 'Get staff notification preferences',
       description: 'Returns notification channel preferences for the authenticated staff member.',
       security: secured,
       responses: { '200': { description: 'Notification preferences retrieved' } }
     },
     patch: {
-      tags: ['Staff — Communications'],
+      tags: ['Notifications'],
       summary: 'Update staff notification preferences',
       description: 'Updates notification channel preferences for the authenticated staff member. Omitted fields remain unchanged.',
       security: secured,
@@ -312,7 +369,7 @@ export const communicationsPaths: OpenAPIV3.PathsObject = {
   },
   '/staff/notifications/{id}/read': {
     patch: {
-      tags: ['Staff — Communications'],
+      tags: ['Notifications'],
       summary: 'Mark staff notification as read',
       description: 'Marks a notification as read for the authenticated staff member.',
       security: secured,

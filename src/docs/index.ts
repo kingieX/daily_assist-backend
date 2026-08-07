@@ -139,13 +139,15 @@ export const openApiSpec: OpenAPIV3.Document = {
     { name: 'Reports', description: 'Visit and incident report review workflow' },
     { name: 'Visit Reassignment', description: 'Visit reassignment operations used from missed check-in flows' },
     { name: 'Messages', description: 'Unified admin/staff inbox read models and direct chat operations' },
+    { name: 'Notifications', description: 'Admin/staff notification history, read state, deletion, unread counts, preferences, and worker-backed delivery projections' },
+    { name: 'Realtime', description: 'JWT-authenticated realtime event contract for chat, notifications, and dashboard alerts. Current server exposes the internal gateway; socket transport can be enabled when deployment dependencies are available.' },
     {
       name: 'Admin — Communications',
-      description: 'Admin messaging, announcements, and notification history operations'
+      description: 'Admin announcement broadcast operations'
     },
     {
       name: 'Staff — Communications',
-      description: 'Staff messaging, announcement reads, and notification actions'
+      description: 'Staff announcement reads and acknowledgements'
     },
     {
       name: 'Staff Profile', description: 'Authenticated staff profile view'
