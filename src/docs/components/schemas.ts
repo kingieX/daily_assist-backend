@@ -102,6 +102,29 @@ export const schemas: SchemasMap = {
   SuperAdminNotificationSettingsList: { type: 'array', items: { type: 'object', properties: { key: { type: 'string', enum: ['accountSignin', 'accountInfoChanges', 'bookingRequest', 'staffCheckin', 'staffCheckout', 'missedCheckin', 'missedCheckout'] }, label: { type: 'string' }, sub: { type: 'string' }, email: { type: 'boolean' }, dashboard: { type: 'boolean' } } } },
   SuperAdminNotificationSettingsUpdateRequest: { type: 'object', additionalProperties: { type: 'object', properties: { email: { type: 'boolean' }, dashboard: { type: 'boolean' } }, additionalProperties: false } },
   RolesPermissionsUpdateRequest: { type: 'object', properties: { admin: { type: 'object', additionalProperties: { type: 'boolean' } }, staff: { type: 'object', additionalProperties: { type: 'boolean' } } }, additionalProperties: false },
+
+  SubAdmin: {
+    type: 'object',
+    required: ['id', 'firstName', 'lastName', 'name', 'email', 'role', 'workEmail', 'hasCredentials', 'createdAt'],
+    properties: {
+      id: { type: 'string', pattern: '^DA\\d{4}$', example: 'DA0013', description: 'Sub-admin ID uses DA + zero-padded 4-digit sequence starting at DA0010. Product-owner confirmation is needed for the reserved DA0001-DA0009 founding/super-admin range before database seeding.' },
+      firstName: { type: 'string', example: 'Sam' },
+      lastName: { type: 'string', example: 'Smith' },
+      name: { type: 'string', example: 'Sam Smith' },
+      email: { type: 'string', format: 'email', description: 'Personal/primary contact email; not used as work login.', example: 'samsmith@gmail.com' },
+      role: { type: 'string', enum: ['Admin', 'Operation Manager'], example: 'Admin' },
+      workEmail: { type: 'string', format: 'email', nullable: true, description: 'Generated login email, distinct from personal email.', example: 'sam.smith@dailyassistuk.com' },
+      hasCredentials: { type: 'boolean', example: false },
+      createdAt: { type: 'string', format: 'date-time' }
+    }
+  },
+  SubAdminCreateRequest: { type: 'object', required: ['firstName', 'lastName', 'email', 'role'], properties: { firstName: { type: 'string' }, lastName: { type: 'string' }, email: { type: 'string', format: 'email' }, role: { type: 'string', enum: ['Admin', 'Operation Manager'] } } },
+  SubAdminUpdateRequest: { type: 'object', properties: { firstName: { type: 'string' }, lastName: { type: 'string' }, email: { type: 'string', format: 'email' }, role: { type: 'string', enum: ['Admin', 'Operation Manager'] } } },
+  SubAdminProvisionCredentialsRequest: { type: 'object', properties: { workEmail: { type: 'string', format: 'email' }, password: { type: 'string', minLength: 8 } } },
+  SubAdminCredentialProvisionResponse: { type: 'object', properties: { id: { type: 'string', example: 'DA0013' }, workEmail: { type: 'string', format: 'email' }, password: { type: 'string' }, hasCredentials: { type: 'boolean', example: true } } },
+  SubAdminCredentials: { type: 'object', properties: { workEmail: { type: 'string', format: 'email' }, password: { type: 'string' } } },
+  SubAdminResetPasswordRequest: { type: 'object', properties: { password: { type: 'string', minLength: 8 } } },
+  SubAdminPasswordResetResponse: { type: 'object', properties: { id: { type: 'string', example: 'DA0013' }, workEmail: { type: 'string', format: 'email' }, password: { type: 'string' } } },
   ErrorResponse: {
     type: 'object',
     properties: {

@@ -36,6 +36,11 @@ import type {
   ProvisionStaffCredentialsInput,
   RecruitmentListQuery,
   ResetStaffPasswordInput,
+  SubAdminListQuery,
+  CreateSubAdminInput,
+  UpdateSubAdminInput,
+  ProvisionSubAdminCredentialsInput,
+  ResetSubAdminPasswordInput,
   StaffListQuery,
   StaffVisitHistoryQuery,
   UpdateBookingInput,
@@ -165,8 +170,8 @@ async function generateUniqueWorkEmail(firstName: string, lastName: string, curr
 
     const existing = await db.user.findFirst({
       where: {
-        email: candidate,
-        id: { not: currentUserId }
+        id: { not: currentUserId },
+        OR: [{ email: candidate }, { businessEmail: candidate }]
       },
       select: { id: true }
     });
@@ -1394,6 +1399,125 @@ function buildStaffProfileData(input: StaffInputWithUploads): Record<string, unk
   return data;
 }
 
+
+function serializeSubAdmin(user: any) {
+  const firstName = user.firstName ?? '';
+  const lastName = user.lastName ?? '';
+  return {
+    id: user.staffCode ?? user.id,
+    firstName,
+    lastName,
+    name: [firstName, lastName].filter(Boolean).join(' ').trim(),
+    email: user.email,
+    role: user.adminRoleLabel ?? 'Admin',
+    workEmail: user.businessEmail ?? null,
+    hasCredentials: Boolean(user.businessEmail && user.dashboardPassword),
+    createdAt: user.createdAt
+  };
+}
+
+function subAdminLookupWhere(id: string): Prisma.UserWhereInput {
+  return { role: Role.ADMIN, staffCode: id };
+}
+
+async function generateNextSubAdminId(): Promise<string> {
+  const users = await db.user.findMany({ where: { staffCode: { not: null } }, select: { staffCode: true } });
+  const used = new Set(users.map((u: any) => u.staffCode).filter(Boolean).map((code: string) => Number(code.replace(/^DA/, ''))).filter(Number.isFinite));
+  let next = 10;
+  while (used.has(next)) next += 1;
+  return `DA${String(next).padStart(4, '0')}`;
+}
+
+function validateSubAdminWorkEmail(workEmail: string, firstName: string, lastName: string) {
+  const normalized = normalizeEmail(workEmail);
+  const expectedBase = [toEmailToken(firstName), toEmailToken(lastName)].filter(Boolean).join('.');
+  const match = normalized.match(/^([a-z0-9.]+?)(\d*)@dailyassistuk\.com$/);
+  if (!match || match[1] !== expectedBase) {
+    throw new ApiError(400, 'Work email must follow firstname.lastname@dailyassistuk.com convention');
+  }
+  return normalized;
+}
+
+async function listSubAdmins(query: SubAdminListQuery) {
+  const roles = query.role?.length ? query.role : undefined;
+  const where: Prisma.UserWhereInput = {
+    role: Role.ADMIN,
+    ...(roles ? { adminRoleLabel: { in: roles } } : {}),
+    ...(query.search ? { OR: [
+      { staffCode: { contains: query.search, mode: 'insensitive' } },
+      { email: { contains: query.search, mode: 'insensitive' } },
+      { firstName: { contains: query.search, mode: 'insensitive' } },
+      { lastName: { contains: query.search, mode: 'insensitive' } }
+    ] } : {})
+  };
+  const [items, total] = await db.$transaction([
+    db.user.findMany({ where, orderBy: [{ createdAt: 'desc' }, { id: 'asc' }], skip: (query.page - 1) * query.pageSize, take: query.pageSize }),
+    db.user.count({ where })
+  ]);
+  return { items: items.map(serializeSubAdmin), page: query.page, pageSize: query.pageSize, total };
+}
+
+async function createSubAdmin(input: CreateSubAdminInput) {
+  const email = normalizeEmail(input.email);
+  if (await db.user.findFirst({ where: { OR: [{ email }, { businessEmail: email }] }, select: { id: true } })) throw new ApiError(409, 'Email address is already in use');
+  const subAdmin = await db.user.create({ data: { email, firstName: input.firstName, lastName: input.lastName, adminRoleLabel: input.role, role: Role.ADMIN, staffCode: await generateNextSubAdminId(), passwordHash: await hashPassword(generateTempPassword()), status: UserStatus.ACTIVE } });
+  return serializeSubAdmin(subAdmin);
+}
+
+async function getSubAdminById(id: string) {
+  const subAdmin = await db.user.findFirst({ where: subAdminLookupWhere(id) });
+  if (!subAdmin) throw new ApiError(404, 'Sub-admin not found');
+  return serializeSubAdmin(subAdmin);
+}
+
+async function updateSubAdmin(id: string, input: UpdateSubAdminInput) {
+  const existing = await db.user.findFirst({ where: subAdminLookupWhere(id), select: { id: true } });
+  if (!existing) throw new ApiError(404, 'Sub-admin not found');
+  const data: any = {};
+  if (input.firstName !== undefined) data.firstName = input.firstName;
+  if (input.lastName !== undefined) data.lastName = input.lastName;
+  if (input.role !== undefined) data.adminRoleLabel = input.role;
+  if (input.email !== undefined) {
+    const email = normalizeEmail(input.email);
+    if (await db.user.findFirst({ where: { id: { not: existing.id }, OR: [{ email }, { businessEmail: email }] }, select: { id: true } })) throw new ApiError(409, 'Email address is already in use');
+    data.email = email;
+  }
+  return serializeSubAdmin(await db.user.update({ where: { id: existing.id }, data }));
+}
+
+async function deleteSubAdmin(id: string, actorUserId: string) {
+  const existing = await db.user.findFirst({ where: subAdminLookupWhere(id), select: { id: true, staffCode: true, email: true } });
+  if (!existing) throw new ApiError(404, 'Sub-admin not found');
+  await recordAuditLog({ actorUserId, action: 'DELETE', entity: 'sub_admin', entityId: existing.id, metadataJson: { staffCode: existing.staffCode, email: existing.email, hardDelete: true } });
+  await db.user.delete({ where: { id: existing.id } });
+}
+
+async function provisionSubAdminCredentials(id: string, input: ProvisionSubAdminCredentialsInput) {
+  const sub = await db.user.findFirst({ where: subAdminLookupWhere(id) });
+  if (!sub) throw new ApiError(404, 'Sub-admin not found');
+  const workEmail = input.workEmail ? validateSubAdminWorkEmail(input.workEmail, sub.firstName, sub.lastName) : await generateUniqueWorkEmail(sub.firstName, sub.lastName, sub.id);
+  if (workEmail !== sub.businessEmail && await db.user.findFirst({ where: { id: { not: sub.id }, OR: [{ email: workEmail }, { businessEmail: workEmail }] }, select: { id: true } })) throw new ApiError(409, 'Work email address is already in use');
+  const password = input.password ?? generateTempPassword(12);
+  await db.user.update({ where: { id: sub.id }, data: { businessEmail: workEmail, dashboardPassword: password, passwordHash: await hashPassword(password) } });
+  return { id: sub.staffCode, workEmail, password, hasCredentials: true };
+}
+
+async function getSubAdminCredentials(id: string) {
+  const sub = await db.user.findFirst({ where: subAdminLookupWhere(id), select: { businessEmail: true, dashboardPassword: true } });
+  if (!sub) throw new ApiError(404, 'Sub-admin not found');
+  if (!sub.businessEmail || !sub.dashboardPassword) throw new ApiError(404, 'credentials not yet generated');
+  return { workEmail: sub.businessEmail, password: sub.dashboardPassword };
+}
+
+async function resetSubAdminPassword(id: string, input: ResetSubAdminPasswordInput) {
+  const sub = await db.user.findFirst({ where: subAdminLookupWhere(id), select: { id: true, staffCode: true, businessEmail: true } });
+  if (!sub) throw new ApiError(404, 'Sub-admin not found');
+  if (!sub.businessEmail) throw new ApiError(409, 'Work email has not been provisioned yet');
+  const password = input.password ?? generateTempPassword(12);
+  await db.user.update({ where: { id: sub.id }, data: { dashboardPassword: password, passwordHash: await hashPassword(password) } });
+  return { id: sub.staffCode, workEmail: sub.businessEmail, password };
+}
+
 async function listStaff(filters: StaffListQuery = {}) {
   const where: Prisma.UserWhereInput = {
     role: Role.STAFF,
@@ -1967,6 +2091,14 @@ export const adminService = {
   listStaffVisits,
   listStaffVisitHistory,
   getStaffInfoCard,
+  listSubAdmins,
+  createSubAdmin,
+  getSubAdminById,
+  updateSubAdmin,
+  deleteSubAdmin,
+  provisionSubAdminCredentials,
+  getSubAdminCredentials,
+  resetSubAdminPassword,
   listStaff,
   createStaff,
   getStaffById,

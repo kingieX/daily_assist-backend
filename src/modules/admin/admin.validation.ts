@@ -277,6 +277,39 @@ export const resetStaffPasswordSchema = z.object({
 
 export const updateStaffSchema = staffFormSchema.partial();
 
+
+const subAdminRoleSchema = z.enum(['Admin', 'Operation Manager']);
+export const subAdminIdParamSchema = z.object({
+  id: z.string().trim().regex(/^DA\d{4}$/, 'Invalid sub-admin ID')
+});
+const roleQueryValueSchema = z.preprocess((value) => {
+  if (Array.isArray(value)) return value.flatMap((item) => String(item).split(',')).map((item) => item.trim()).filter(Boolean);
+  if (typeof value === 'string') return value.split(',').map((item) => item.trim()).filter(Boolean);
+  return value;
+}, z.array(subAdminRoleSchema).optional());
+export const subAdminListQuerySchema = z.object({
+  search: optionalTrimmedString,
+  role: roleQueryValueSchema,
+  page: queryPage(1),
+  pageSize: queryLimit(10)
+});
+export const createSubAdminSchema = z.object({
+  firstName: z.string().trim().min(1, 'First name is required'),
+  lastName: z.string().trim().min(1, 'Last name is required'),
+  email: z.string().trim().email('Invalid email format'),
+  role: subAdminRoleSchema
+});
+export const updateSubAdminSchema = createSubAdminSchema.partial().refine((data) => Object.keys(data).length > 0, {
+  message: 'At least one field must be provided for update'
+});
+export const provisionSubAdminCredentialsSchema = z.object({
+  workEmail: optionalEmail,
+  password: passwordSchema.optional()
+});
+export const resetSubAdminPasswordSchema = z.object({
+  password: passwordSchema.optional()
+});
+
 export const dashboardReportsTodayQuerySchema = z.object({
   limit: queryLimit(3)
 });
@@ -333,6 +366,11 @@ export type CreateStaffInput = z.infer<typeof createStaffSchema>;
 export type ProvisionStaffCredentialsInput = z.infer<typeof provisionStaffCredentialsSchema>;
 export type ResetStaffPasswordInput = z.infer<typeof resetStaffPasswordSchema>;
 export type UpdateStaffInput = z.infer<typeof updateStaffSchema>;
+export type SubAdminListQuery = z.infer<typeof subAdminListQuerySchema>;
+export type CreateSubAdminInput = z.infer<typeof createSubAdminSchema>;
+export type UpdateSubAdminInput = z.infer<typeof updateSubAdminSchema>;
+export type ProvisionSubAdminCredentialsInput = z.infer<typeof provisionSubAdminCredentialsSchema>;
+export type ResetSubAdminPasswordInput = z.infer<typeof resetSubAdminPasswordSchema>;
 export type DashboardReportsTodayQuery = z.infer<typeof dashboardReportsTodayQuerySchema>;
 export type RecruitmentListQuery = z.infer<typeof recruitmentListQuerySchema>;
 export type UpdateRecruitmentStatusInput = z.infer<typeof updateRecruitmentStatusSchema>;

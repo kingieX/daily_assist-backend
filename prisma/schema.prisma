@@ -140,6 +140,7 @@ model User {
   photoUrl             String?              @map("photo_url")
   passwordHash         String               @map("password_hash")
   role                 Role                 @default(STAFF)
+  adminRoleLabel       String?              @map("admin_role_label")
   status               UserStatus           @default(ACTIVE)
   lastLoginAt          DateTime?            @map("last_login_at")
   createdAt            DateTime             @default(now()) @map("created_at")
