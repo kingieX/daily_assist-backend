@@ -30,7 +30,8 @@ const sendToAudienceMap: Record<(typeof announcementSendToValues)[number], (type
 const COMM_NOTIFICATION_TYPE = {
   MESSAGE: 'MESSAGE',
   ANNOUNCEMENT: 'ANNOUNCEMENT',
-  SYSTEM: 'SYSTEM'
+  SYSTEM: 'SYSTEM',
+  VISIT: 'VISIT'
 } as const;
 
 export const inboxQuerySchema = z.object({
@@ -119,7 +120,8 @@ export const listNotificationsQuerySchema = paginationSchema.extend({
       .enum([
         COMM_NOTIFICATION_TYPE.MESSAGE,
         COMM_NOTIFICATION_TYPE.ANNOUNCEMENT,
-        COMM_NOTIFICATION_TYPE.SYSTEM
+        COMM_NOTIFICATION_TYPE.SYSTEM,
+        COMM_NOTIFICATION_TYPE.VISIT
       ])
       .optional()
   ),
