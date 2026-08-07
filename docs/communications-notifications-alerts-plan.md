@@ -222,9 +222,9 @@ Prefer one consistent naming pattern. Existing URLs can remain stable:
 
 Recommended additions:
 
-- `GET /admin/notifications/unread-count`
-- `PATCH /admin/notifications/:id/read`
-- `PATCH /admin/notifications/read-all`
+- `GET /admin/notifications/unread-count` — implemented
+- `PATCH /admin/notifications/:id/read` — implemented
+- `PATCH /admin/notifications/read-all` — implemented
 
 #### Staff notification endpoints
 
@@ -237,9 +237,9 @@ Keep existing URLs and tag under **Notifications**:
 
 Recommended additions:
 
-- `DELETE /staff/notifications/:id`
-- `GET /staff/notifications/unread-count`
-- `PATCH /staff/notifications/read-all`
+- `DELETE /staff/notifications/:id` — implemented
+- `GET /staff/notifications/unread-count` — implemented
+- `PATCH /staff/notifications/read-all` — implemented
 
 ### 4. Admin dashboard alerts
 
@@ -551,12 +551,12 @@ Behavior-preserving refactor.
 
 Recommended additions:
 
-- `PATCH /admin/notifications/:id/read`
-- `PATCH /admin/notifications/read-all`
-- `GET /admin/notifications/unread-count`
-- `DELETE /staff/notifications/:id`
-- `PATCH /staff/notifications/read-all`
-- `GET /staff/notifications/unread-count`
+- `PATCH /admin/notifications/:id/read` — implemented
+- `PATCH /admin/notifications/read-all` — implemented
+- `GET /admin/notifications/unread-count` — implemented
+- `DELETE /staff/notifications/:id` — implemented
+- `PATCH /staff/notifications/read-all` — implemented
+- `GET /staff/notifications/unread-count` — implemented
 
 ### Admin — Dashboard
 
@@ -582,16 +582,19 @@ Keep for UI compatibility, backed by notifications:
 
 ### Completed in initial implementation
 
-- Added dedicated admin and staff message routers while keeping the existing `/admin/messages/*` and `/staff/messages/*` URLs stable. These routers currently delegate to the existing communications controllers/services to keep behavior unchanged while establishing Messages module ownership.
-- Added dedicated admin and staff notification routers while keeping the existing `/admin/notifications/*` and `/staff/notifications/*` URLs stable. These routers currently delegate to the existing communications controllers/services to keep behavior unchanged while establishing Notifications module ownership.
+- Added dedicated admin and staff message routers while keeping the existing `/admin/messages/*` and `/staff/messages/*` URLs stable. These routers now use Messages controllers and a Messages service facade to establish Messages module ownership while preserving existing behavior.
+- Added dedicated admin and staff notification routers while keeping the existing `/admin/notifications/*` and `/staff/notifications/*` URLs stable. These routers now use Notifications controllers and a Notifications service facade to establish Notifications module ownership while preserving existing behavior.
+- Implemented the recommended notification utility endpoints: admin notification read, admin read-all, admin unread count, staff notification delete, staff read-all, and staff unread count.
 - Removed message and notification route declarations from the admin/staff communications routers so those routers now own announcement endpoints only.
 - Mounted the new message and notification routers from the admin and staff role routers before the remaining communications announcement routers.
+- Updated OpenAPI tagging so message/chat endpoints are documented under **Messages**, notification endpoints are documented under **Notifications**, and communications tags describe announcement workflows only.
+- Fixed admin dashboard alert route ordering so `/admin/dashboard/alerts/read-all` is registered before `/admin/dashboard/alerts/:id/read`.
 
 ### Still pending
 
-- Extract message controller/service logic from the communications service into focused messages services.
-- Extract notification controller/service logic from the communications service into focused notifications services.
-- Add notification event abstraction, BullMQ + Redis worker, delivery audit records, email templates, and WebSocket gateway in later phases.
+- Move the remaining message implementation details out of the legacy communications service and into the Messages service internals.
+- Move the remaining notification implementation details out of the legacy communications service and into the Notifications service internals.
+- Add notification event abstraction, BullMQ + Redis worker, delivery audit records, email templates, and WebSocket gateway in later phases. These require new infrastructure/dependencies and should be implemented after deployment configuration is confirmed.
 
 ## Suggested Acceptance Criteria for Future Implementation
 

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { validate } from '../../middlewares/validate.middleware';
-import { staffCommunicationsController } from '../communications/staff-communications.controller';
+import { staffNotificationsController } from './staff-notifications.controller';
 import {
   idParamSchema,
   listNotificationsQuerySchema,
@@ -10,9 +10,12 @@ import {
 
 const staffNotificationsRouter = Router();
 
-staffNotificationsRouter.get('/notifications', validate({ query: listNotificationsQuerySchema }), staffCommunicationsController.listNotifications);
-staffNotificationsRouter.patch('/notifications/:id/read', validate({ params: idParamSchema, body: markNotificationReadSchema }), staffCommunicationsController.markNotificationRead);
-staffNotificationsRouter.get('/notifications/preferences', staffCommunicationsController.getNotificationPreferences);
-staffNotificationsRouter.patch('/notifications/preferences', validate({ body: updateNotificationPreferencesSchema }), staffCommunicationsController.updateNotificationPreferences);
+staffNotificationsRouter.get('/notifications', validate({ query: listNotificationsQuerySchema }), staffNotificationsController.listNotifications);
+staffNotificationsRouter.get('/notifications/unread-count', staffNotificationsController.getUnreadCount);
+staffNotificationsRouter.patch('/notifications/read-all', staffNotificationsController.markAllNotificationsRead);
+staffNotificationsRouter.get('/notifications/preferences', staffNotificationsController.getNotificationPreferences);
+staffNotificationsRouter.patch('/notifications/preferences', validate({ body: updateNotificationPreferencesSchema }), staffNotificationsController.updateNotificationPreferences);
+staffNotificationsRouter.patch('/notifications/:id/read', validate({ params: idParamSchema, body: markNotificationReadSchema }), staffNotificationsController.markNotificationRead);
+staffNotificationsRouter.delete('/notifications/:id', validate({ params: idParamSchema }), staffNotificationsController.deleteNotification);
 
 export { staffNotificationsRouter };
