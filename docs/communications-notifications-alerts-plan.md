@@ -483,19 +483,19 @@ Behavior-preserving refactor.
 
 ### Phase 4 — Worker and email delivery
 
-- Add queue infrastructure.
-- Add notification worker process entry point.
-- Add email templates per event category.
-- Enforce `NotificationPreference` and admin notification-settings checks in one shared delivery policy.
-- Add retry/error logging.
+- Add queue infrastructure. — partially implemented with an in-process queue abstraction; BullMQ + Redis remains pending until dependencies can be installed.
+- Add notification worker process entry point. — implemented.
+- Add email templates per event category. — generic notification email sender implemented; event-specific copy can be added per product wording.
+- Enforce `NotificationPreference` and admin notification-settings checks in one shared delivery policy. — implemented in the notification event service.
+- Add retry/error logging. — delivery attempts are logged through delivery audit records; production retries remain tied to BullMQ + Redis.
 
 ### Phase 5 — WebSocket gateway
 
-- Add authenticated WebSocket server.
-- Add room membership for users and conversations.
-- Emit chat events from message creation/update/delete flows.
-- Emit notification and alert events from worker after durable notification creation.
-- Add unread-count events.
+- Add authenticated WebSocket server. — realtime gateway abstraction added; socket transport remains pending until dependencies can be installed.
+- Add room membership for users and conversations. — room naming helpers added in the gateway abstraction.
+- Emit chat events from message creation/update/delete flows. — pending transport integration.
+- Emit notification and alert events from worker after durable notification creation. — implemented in the event service abstraction.
+- Add unread-count events. — implemented in the event service abstraction.
 
 ### Phase 6 — Cleanup and frontend migration
 
@@ -594,7 +594,9 @@ Keep for UI compatibility, backed by notifications:
 
 - Move the remaining message implementation details out of the legacy communications service and into the Messages service internals.
 - Move the remaining notification implementation details out of the legacy communications service and into the Notifications service internals.
-- Add notification event abstraction, BullMQ + Redis worker, delivery audit records, email templates, and WebSocket gateway in later phases. These require new infrastructure/dependencies and should be implemented after deployment configuration is confirmed.
+- Added notification event abstraction, delivery policy checks, delivery audit model, generic notification email sender, worker entrypoint, and realtime gateway abstraction.
+- BullMQ + Redis and a socket transport remain pending because the package registry rejected the required production dependencies in this environment; the current implementation uses an in-process queue/gateway abstraction so endpoint testing can proceed without changing deployment infrastructure.
+- Move event producers incrementally from direct `notification.create` calls onto `enqueueNotificationEvent(...)`, starting with message and visit workflows once product confirms email fan-out timing.
 
 ## Suggested Acceptance Criteria for Future Implementation
 

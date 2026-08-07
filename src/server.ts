@@ -2,11 +2,13 @@ import { app } from './app';
 import { env } from './config/env';
 import { logger } from './config/logger';
 import { prisma } from './config/prisma';
+import { realtimeGateway } from './realtime/realtime.gateway';
 
 async function startServer(): Promise<void> {
   await prisma.$connect();
 
   const server = app.listen(env.PORT, () => {
+    realtimeGateway.attach(server);
     logger.info(`DailyAssist backend started on port ${env.PORT}`);
     logger.info(`Swagger UI available at http://localhost:${env.PORT}/api/docs`);
   });

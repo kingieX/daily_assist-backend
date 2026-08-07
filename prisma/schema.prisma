@@ -100,6 +100,19 @@ enum NotificationType {
   VISIT
 }
 
+enum NotificationDeliveryChannel {
+  DASHBOARD
+  EMAIL
+  WEBSOCKET
+}
+
+enum NotificationDeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
 
 enum ReportStatus {
   NEW
@@ -160,6 +173,7 @@ model User {
   announcementRecipients    AnnouncementRecipient[]
   notifications             Notification[]
   notificationPreference    NotificationPreference?
+  notificationDeliveries    NotificationDelivery[]
   reportsCreated            Report[]                @relation("ReportCreator")
   reportsUpdated            Report[]                @relation("ReportUpdater")
   auditLogs                 AuditLog[]              @relation("AuditActor")
@@ -514,9 +528,29 @@ model Notification {
   metadataJson Json?            @map("metadata_json")
   readAt       DateTime?        @map("read_at")
   createdAt    DateTime         @default(now()) @map("created_at")
+  deliveries   NotificationDelivery[]
 
   @@index([userId, createdAt])
   @@map("notifications")
+}
+
+model NotificationDelivery {
+  id             String                     @id @default(uuid())
+  notificationId String?                    @map("notification_id")
+  notification   Notification?              @relation(fields: [notificationId], references: [id], onDelete: SetNull)
+  userId         String                     @map("user_id")
+  user           User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel        NotificationDeliveryChannel
+  status         NotificationDeliveryStatus @default(PENDING)
+  reason         String?
+  attemptCount   Int                        @default(0) @map("attempt_count")
+  lastAttemptAt  DateTime?                  @map("last_attempt_at")
+  createdAt      DateTime                   @default(now()) @map("created_at")
+  updatedAt      DateTime                   @updatedAt @map("updated_at")
+
+  @@index([notificationId])
+  @@index([userId, channel, status])
+  @@map("notification_deliveries")
 }
 
 

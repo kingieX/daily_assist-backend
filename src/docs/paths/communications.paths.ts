@@ -174,7 +174,7 @@ export const communicationsPaths: OpenAPIV3.PathsObject = {
       security: secured,
       parameters: [
         ...paginationParameters,
-        { name: 'type', in: 'query', schema: { type: 'string', enum: ['MESSAGE', 'ANNOUNCEMENT', 'SYSTEM'] } },
+        { name: 'type', in: 'query', schema: { type: 'string', enum: ['MESSAGE', 'ANNOUNCEMENT', 'SYSTEM', 'VISIT'] } },
         { name: 'unreadOnly', in: 'query', schema: { type: 'boolean' } }
       ],
       responses: { '200': { description: 'Notifications retrieved' } }
@@ -315,7 +315,7 @@ export const communicationsPaths: OpenAPIV3.PathsObject = {
       security: secured,
       parameters: [
         ...paginationParameters,
-        { name: 'type', in: 'query', schema: { type: 'string', enum: ['MESSAGE', 'ANNOUNCEMENT', 'SYSTEM'] } },
+        { name: 'type', in: 'query', schema: { type: 'string', enum: ['MESSAGE', 'ANNOUNCEMENT', 'SYSTEM', 'VISIT'] } },
         { name: 'unreadOnly', in: 'query', schema: { type: 'boolean' } }
       ],
       responses: { '200': { description: 'Notifications retrieved' } }

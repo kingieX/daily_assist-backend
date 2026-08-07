@@ -199,3 +199,36 @@ export async function sendBookingInquiryEmail(
     "Booking enquiry email sent",
   );
 }
+
+export type GenericNotificationEmailInput = {
+  to: string;
+  subject: string;
+  title: string;
+  body: string;
+};
+
+export async function sendNotificationEmail(input: GenericNotificationEmailInput): Promise<void> {
+  const html = professionalShell(
+    input.title,
+    input.body,
+    `<p style="margin:0;font-size:16px;line-height:1.7;">${escapeHtml(input.body)}</p>`
+  );
+
+  if (!transporter) {
+    logger.info(
+      { to: input.to, subject: input.subject, title: input.title, body: input.body },
+      '[DEV] Notification email not sent — Mailtrap/SMTP config not set.',
+    );
+    return;
+  }
+
+  await transporter.sendMail({
+    from: env.EMAIL_FROM,
+    to: input.to,
+    subject: input.subject,
+    html,
+    text: `${input.title}\n\n${input.body}`,
+  });
+
+  logger.info({ to: input.to, subject: input.subject }, 'Notification email sent');
+}

@@ -15,7 +15,8 @@
     "test:phase4": "npm run build && node --test tests/visit-state-machine.test.mjs",
     "test:phase5": "npm run build && node --test tests/communications-workflows.test.mjs",
     "test:phase6": "npm run build && node --test tests/phase6-ops-validation.test.mjs",
-    "create:super-admin": "node scripts/create-super-admin.js"
+    "create:super-admin": "node scripts/create-super-admin.js",
+    "worker:notifications": "ts-node-dev --respawn --transpile-only src/modules/notifications/worker/notification-worker.ts"
   },
   "keywords": [
     "dailyassist",
