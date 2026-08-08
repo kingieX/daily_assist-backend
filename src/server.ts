@@ -2,10 +2,12 @@ import { app } from './app';
 import { env } from './config/env';
 import { logger } from './config/logger';
 import { prisma } from './config/prisma';
+import { verifyEmailDelivery } from './config/mailer';
 import { realtimeGateway } from './realtime/realtime.gateway';
 
 async function startServer(): Promise<void> {
   await prisma.$connect();
+  await verifyEmailDelivery();
 
   const server = app.listen(env.PORT, () => {
     realtimeGateway.attach(server);

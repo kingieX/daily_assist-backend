@@ -3,8 +3,9 @@ import { env } from "./env";
 import { logger } from "./logger";
 
 /**
- * Returns a real nodemailer transport when Mailtrap or generic SMTP credentials are configured,
- * otherwise null (dev fallback: log the email content instead of sending).
+ * Returns a real nodemailer SMTP transport when Mailtrap or generic SMTP credentials are configured.
+ * In non-production environments email delivery can fall back to structured logs when SMTP is optional.
+ * Production validates SMTP configuration at startup through env.EMAIL_DELIVERY_REQUIRED.
  */
 function createTransport(): nodemailer.Transporter | null {
   if (env.MAILTRAP_PASS) {
@@ -35,6 +36,24 @@ function createTransport(): nodemailer.Transporter | null {
 }
 
 const transporter = createTransport();
+
+export function isEmailDeliveryConfigured(): boolean {
+  return Boolean(transporter);
+}
+
+export async function verifyEmailDelivery(): Promise<void> {
+  if (!transporter) {
+    if (env.EMAIL_DELIVERY_REQUIRED) {
+      throw new Error('SMTP email delivery is required but no Mailtrap or generic SMTP transport is configured');
+    }
+    logger.warn('SMTP email delivery is not configured; email senders will log messages instead of sending.');
+    return;
+  }
+
+  await transporter.verify();
+  logger.info('SMTP email delivery verified');
+}
+
 const BOOKING_INQUIRY_RECIPIENT = "info@dailyassistuk.com";
 
 // ─── Email Senders ────────────────────────────────────────────────────────────

@@ -653,7 +653,10 @@ CORS_ORIGIN="http://localhost:3000"
 FRONTEND_URL="http://localhost:3000"
 # Optional locally, recommended/required for production-grade notification queueing:
 # REDIS_URL="redis://localhost:6379"
-# Optional email delivery. Without SMTP/Mailtrap credentials, email content is logged in dev instead of sent:
+# Email delivery is optional in local development and required by default in production.
+# Set EMAIL_DELIVERY_REQUIRED=true locally if you want startup to fail until SMTP is configured.
+EMAIL_DELIVERY_REQUIRED=false
+# Without SMTP/Mailtrap credentials, email content is logged in dev instead of sent:
 # MAILTRAP_PASS="your-mailtrap-token"
 # EMAIL_HOST="smtp.example.com"
 # EMAIL_PORT=587
@@ -673,7 +676,7 @@ In a second terminal, start the worker when testing BullMQ/Redis delivery:
 REDIS_URL="redis://localhost:6379" npm run worker:notifications
 ```
 
-If `REDIS_URL` is not set, REST-triggered notification events are processed by the API process through the local in-process fallback queue.
+If `REDIS_URL` is not set, REST-triggered notification events are processed by the API process through the local in-process fallback queue. If `EMAIL_DELIVERY_REQUIRED=true`, the API verifies SMTP during startup and fails fast when Mailtrap/generic SMTP credentials are missing or invalid.
 
 ### 2. Get admin and staff tokens
 
@@ -809,7 +812,8 @@ Production should provide:
 - `CORS_ORIGIN` set to the deployed frontend origin or comma-separated origins
 - `FRONTEND_URL`
 - `REDIS_URL` for BullMQ notification queue durability and retries
-- SMTP/Mailtrap configuration for real email delivery: either `MAILTRAP_PASS` with the Mailtrap defaults or `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, `EMAIL_PASS`, and `EMAIL_FROM`
+- `EMAIL_DELIVERY_REQUIRED` (defaults to `true` in production) so production fails fast if SMTP is missing
+- SMTP/Mailtrap configuration for real email delivery: either `MAILTRAP_PASS` with the Mailtrap defaults or the complete generic SMTP set `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, `EMAIL_PASS`, and `EMAIL_FROM`
 
 Run production migrations before deploying the new worker/API version:
 
