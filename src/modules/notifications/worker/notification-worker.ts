@@ -1,9 +1,11 @@
 import { logger } from '../../../config/logger';
+import { verifyEmailDelivery } from '../../../config/mailer';
 import { prisma } from '../../../config/prisma';
 import { startNotificationWorker } from '../notification-events.service';
 
 async function main(): Promise<void> {
   await prisma.$connect();
+  await verifyEmailDelivery();
   const worker = startNotificationWorker();
   if (!worker) logger.info('Notification worker is idle because REDIS_URL is not configured.');
 }
