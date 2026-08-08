@@ -1,6 +1,7 @@
 import { communicationsService } from '../communications/communications.service';
 import { prisma } from '../../config/prisma';
 import { ApiError } from '../../utils/api-error';
+import { realtimeGateway } from '../../realtime/realtime.gateway';
 import type { ListNotificationsQuery, UpdateNotificationPreferencesInput } from '../communications/communications.validation';
 
 const db = prisma as any;
@@ -10,11 +11,17 @@ async function listNotifications(query: ListNotificationsQuery, userId: string) 
 }
 
 async function markNotificationRead(notificationId: string, userId: string) {
-  return communicationsService.markNotificationRead(notificationId, userId);
+  const result = await communicationsService.markNotificationRead(notificationId, userId);
+  realtimeGateway.emitToUser(userId, 'notification:read', { id: notificationId });
+  realtimeGateway.emitToUser(userId, 'notification:unread_count', await getUnreadCount(userId));
+  return result;
 }
 
 async function deleteNotification(notificationId: string, userId: string) {
-  return communicationsService.deleteNotification(notificationId, userId);
+  const result = await communicationsService.deleteNotification(notificationId, userId);
+  realtimeGateway.emitToUser(userId, 'notification:deleted', { id: notificationId });
+  realtimeGateway.emitToUser(userId, 'notification:unread_count', await getUnreadCount(userId));
+  return result;
 }
 
 async function getNotificationPreferences(userId: string) {
@@ -35,6 +42,8 @@ async function markAllNotificationsRead(userId: string) {
     where: { userId, readAt: null },
     data: { readAt: new Date() }
   });
+  realtimeGateway.emitToUser(userId, 'notification:read', { all: true });
+  realtimeGateway.emitToUser(userId, 'notification:unread_count', await getUnreadCount(userId));
   return { updatedCount: result.count };
 }
 
