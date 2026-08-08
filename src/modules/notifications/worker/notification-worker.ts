@@ -1,3 +1,15 @@
 import { logger } from '../../../config/logger';
+import { prisma } from '../../../config/prisma';
+import { startNotificationWorker } from '../notification-events.service';
 
-logger.info('Notification worker entrypoint loaded. In this build, jobs are processed by the in-process notification event queue. Configure BullMQ + Redis in a follow-up deployment dependency change.');
+async function main(): Promise<void> {
+  await prisma.$connect();
+  const worker = startNotificationWorker();
+  if (!worker) logger.info('Notification worker is idle because REDIS_URL is not configured.');
+}
+
+void main().catch(async (error) => {
+  logger.error({ error }, 'Failed to start notification worker');
+  await prisma.$disconnect();
+  process.exit(1);
+});

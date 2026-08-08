@@ -1,5 +1,7 @@
 import { Role } from '@prisma/client';
 import { prisma } from '../../config/prisma';
+import { realtimeGateway } from '../../realtime/realtime.gateway';
+import { enqueueNotificationEvent } from '../notifications/notification-events.service';
 import { ApiError } from '../../utils/api-error';
 import type {
   CreateAnnouncementInput,
@@ -272,25 +274,20 @@ async function postMessage(
       data: { updatedAt: new Date() }
     });
 
-    if (conversation.staffId && conversation.staffId !== currentUserId) {
-      const preferences = await tx.notificationPreference.findUnique({
-        where: { userId: conversation.staffId }
-      });
-      if ((preferences?.inAppEnabled ?? true) && (preferences?.messageEnabled ?? true)) {
-        await tx.notification.create({
-          data: {
-            userId: conversation.staffId,
-            type: COMM_NOTIFICATION_TYPE.MESSAGE,
-            title: 'New message',
-            body: (input.body?.trim() || 'New attachment').slice(0, 150),
-            metadataJson: { conversationId }
-          }
-        });
-      }
-    }
-
     return created;
   });
+
+  realtimeGateway.emitToConversation(conversationId, 'message:created', { ...message, conversationId });
+  if (conversation.staffId && conversation.staffId !== currentUserId) {
+    await enqueueNotificationEvent('message.created', {
+      actorUserId: currentUserId,
+      recipientIds: [conversation.staffId],
+      type: COMM_NOTIFICATION_TYPE.MESSAGE,
+      title: 'New message',
+      body: (input.body?.trim() || 'New attachment').slice(0, 150),
+      metadataJson: { conversationId, messageId: message.id }
+    });
+  }
 
   return message;
 }

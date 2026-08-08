@@ -23,7 +23,8 @@ const envSchema = z.object({
   EMAIL_FROM: z.string().default('DailyAssist <hello@dailyassistuk.com>'),
   CAPTCHA_SECRET: z.string().optional(),
   CAPTCHA_VERIFY_URL: z.string().url().default('https://challenges.cloudflare.com/turnstile/v0/siteverify'),
-  FRONTEND_URL: z.string().default('http://localhost:3000')
+  FRONTEND_URL: z.string().default('http://localhost:3000'),
+  REDIS_URL: z.string().url().optional()
 });
 
 const parsedEnv = envSchema.safeParse(process.env);
