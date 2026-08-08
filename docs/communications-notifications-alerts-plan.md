@@ -483,7 +483,7 @@ Behavior-preserving refactor.
 
 ### Phase 4 — Worker and email delivery
 
-- Add queue infrastructure. — partially implemented with an in-process queue abstraction; BullMQ + Redis remains pending until dependencies can be installed.
+- Add queue infrastructure. — implemented with BullMQ + Redis when `REDIS_URL` is configured, with the in-process queue retained as a local/test fallback.
 - Add notification worker process entry point. — implemented.
 - Add email templates per event category. — generic notification email sender implemented; event-specific copy can be added per product wording.
 - Enforce `NotificationPreference` and admin notification-settings checks in one shared delivery policy. — implemented in the notification event service.
@@ -491,9 +491,9 @@ Behavior-preserving refactor.
 
 ### Phase 5 — WebSocket gateway
 
-- Add authenticated WebSocket server. — realtime gateway abstraction added; socket transport remains pending until dependencies can be installed.
-- Add room membership for users and conversations. — room naming helpers added in the gateway abstraction.
-- Emit chat events from message creation/update/delete flows. — pending transport integration.
+- Add authenticated WebSocket server. — implemented with Socket.IO using REST JWT access tokens and active-user checks.
+- Add room membership for users and conversations. — implemented for private user rooms, role rooms, and client-requested conversation rooms.
+- Emit chat events from message creation/update/delete flows. — message creation emits `message:created` and soft deletion emits `message:deleted` to authorized conversation rooms after database writes commit.
 - Emit notification and alert events from worker after durable notification creation. — implemented in the event service abstraction.
 - Add unread-count events. — implemented in the event service abstraction.
 
@@ -588,6 +588,7 @@ Keep for UI compatibility, backed by notifications:
 - Removed message and notification route declarations from the admin/staff communications routers so those routers now own announcement endpoints only.
 - Mounted the new message and notification routers from the admin and staff role routers before the remaining communications announcement routers.
 - Updated OpenAPI tagging so message/chat endpoints are documented under **Messages**, notification endpoints are documented under **Notifications**, and communications tags describe announcement workflows only.
+- Added Swagger/OpenAPI documentation for the Socket.IO realtime connection contract and post-commit message/notification event behavior.
 - Fixed admin dashboard alert route ordering so `/admin/dashboard/alerts/read-all` is registered before `/admin/dashboard/alerts/:id/read`.
 
 ### Still pending
@@ -595,8 +596,9 @@ Keep for UI compatibility, backed by notifications:
 - Move the remaining message implementation details out of the legacy communications service and into the Messages service internals.
 - Move the remaining notification implementation details out of the legacy communications service and into the Notifications service internals.
 - Added notification event abstraction, delivery policy checks, delivery audit model, generic notification email sender, worker entrypoint, and realtime gateway abstraction.
-- BullMQ + Redis and a socket transport remain pending because the package registry rejected the required production dependencies in this environment; the current implementation uses an in-process queue/gateway abstraction so endpoint testing can proceed without changing deployment infrastructure.
-- Move event producers incrementally from direct `notification.create` calls onto `enqueueNotificationEvent(...)`, starting with message and visit workflows once product confirms email fan-out timing.
+- BullMQ + Redis and Socket.IO transport are now wired in. `REDIS_URL` enables durable queue processing; without it, the in-process fallback remains available for local/test runs.
+- Socket.IO room joins now enforce the same conversation authorization rule as REST message reads.
+- Move event producers incrementally from direct `notification.create` calls onto `enqueueNotificationEvent(...)`; message creation, announcement creation, visit assignment, visit reassignment, and visit cancellation now use the notification event queue.
 
 ## Suggested Acceptance Criteria for Future Implementation
 

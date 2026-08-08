@@ -1,5 +1,6 @@
 import { BookingStatus, ClientSource, NotificationType, Prisma, Role, ServiceType, UserStatus } from '@prisma/client';
 import { prisma } from '../../config/prisma';
+import { enqueueNotificationEvent } from '../notifications/notification-events.service';
 import { ApiError } from '../../utils/api-error';
 import { assertTransition, VISIT_STATUS } from './visit-state';
 import type {
@@ -198,8 +199,8 @@ function serializeTask(visit: any) {
   return { id: full.id, client: full.clientName, status: full.status, address: full.address, serviceType: full.selectedServiceTypes[0] ?? full.package, time: full.time, notes: full.note };
 }
 
-async function notifyVisit(tx: Prisma.TransactionClient, userId: string, title: string, body: string, visitId: string) {
-  await tx.notification.create({ data: { userId, type: NotificationType.VISIT, title, body, metadataJson: { visitId } } });
+async function notifyVisit(userId: string, title: string, body: string, visitId: string, eventType: 'visit.assigned' | 'visit.reassigned' | 'visit.cancelled') {
+  await enqueueNotificationEvent(eventType, { recipientIds: [userId], type: NotificationType.VISIT, title, body, metadataJson: { visitId } });
 }
 
 async function ensureFrontendBooking(tx: Prisma.TransactionClient, input: any) {
@@ -277,13 +278,14 @@ async function createVisit(input: CreateVisitInput, actorUserId: string) {
   const start = input.scheduledStartAt ?? parseVisitDateTime((input as any).date, (input as any).startTime);
   const end = input.scheduledEndAt ?? parseVisitDateTime((input as any).date, (input as any).endTime);
   if (!start || !end || end <= start) throw new ApiError(400, 'endTime must be after startTime');
-  return prisma.$transaction(async (tx) => {
+  const created = await prisma.$transaction(async (tx) => {
     const bookingId = await ensureFrontendBooking(tx, input);
     const visit = await tx.visit.create({ data: { bookingId, staffId: input.staffId, scheduledStartAt: start, scheduledEndAt: end, adminNotes: (input as any).note ?? input.adminNotes ?? null, status: VISIT_STATUS.ASSIGNED }, include: visitInclude });
     await addVisitEvent(tx, visit.id, actorUserId, VISIT_EVENT.ASSIGNED, { staffId: input.staffId });
-    await notifyVisit(tx, input.staffId, 'New visit assigned', 'A new visit has been assigned to you.', visit.id);
     return serializeVisit(visit);
   });
+  await notifyVisit(input.staffId, 'New visit assigned', 'A new visit has been assigned to you.', created.id, 'visit.assigned');
+  return created;
 }
 
 async function updateVisit(id: string, input: UpdateVisitInput, actorUserId: string) {
@@ -297,15 +299,16 @@ async function updateVisit(id: string, input: UpdateVisitInput, actorUserId: str
   const start = input.scheduledStartAt ?? parseVisitDateTime((input as any).date, (input as any).startTime);
   const end = input.scheduledEndAt ?? parseVisitDateTime((input as any).date, (input as any).endTime);
   if (start && end && end <= start) throw new ApiError(400, 'endTime must be after startTime');
-  return prisma.$transaction(async (tx) => {
+  const updated = await prisma.$transaction(async (tx) => {
     const visit = await tx.visit.update({ where: { id }, data: { scheduledStartAt: start, scheduledEndAt: end, adminNotes: (input as any).note ?? input.adminNotes, staffNotes: input.staffNotes, staffId: newStaffId }, include: visitInclude });
     await addVisitEvent(tx, id, actorUserId, newStaffId && newStaffId !== existing.staffId ? VISIT_EVENT.REASSIGNED : VISIT_EVENT.NOTE_UPDATED, { updatedFields: Object.keys(input) });
-    if (newStaffId && newStaffId !== existing.staffId) {
-      await notifyVisit(tx, existing.staffId, 'Visit reassigned', 'A visit has been removed from your schedule.', id);
-      await notifyVisit(tx, newStaffId, 'Visit assigned', 'A visit has been assigned to you.', id);
-    }
     return serializeVisit(visit);
   });
+  if (newStaffId && newStaffId !== existing.staffId) {
+    await notifyVisit(existing.staffId, 'Visit reassigned', 'A visit has been removed from your schedule.', id, 'visit.reassigned');
+    await notifyVisit(newStaffId, 'Visit assigned', 'A visit has been assigned to you.', id, 'visit.assigned');
+  }
+  return updated;
 }
 
 async function reassignVisit(id: string, input: ReassignVisitInput, actorUserId: string) {
@@ -315,12 +318,13 @@ async function reassignVisit(id: string, input: ReassignVisitInput, actorUserId:
 async function cancelVisit(id: string, input: CancelVisitInput, actorUserId: string) {
   const visit = await prisma.visit.findUnique({ where: { id } });
   if (!visit) throw new ApiError(404, 'Visit not found');
-  return prisma.$transaction(async (tx) => {
-    const updated = await tx.visit.update({ where: { id }, data: { status: VISIT_STATUS.CANCELLED }, include: visitInclude });
+  const updated = await prisma.$transaction(async (tx) => {
+    const updatedVisit = await tx.visit.update({ where: { id }, data: { status: VISIT_STATUS.CANCELLED }, include: visitInclude });
     await addVisitEvent(tx, id, actorUserId, VISIT_EVENT.CANCELLED, { reason: input.reason ?? 'Cancelled by admin' });
-    await notifyVisit(tx, visit.staffId, 'Visit cancelled', 'A visit has been cancelled and removed from your task list.', id);
-    return serializeVisit(updated);
+    return serializeVisit(updatedVisit);
   });
+  await notifyVisit(visit.staffId, 'Visit cancelled', 'A visit has been cancelled and removed from your task list.', id, 'visit.cancelled');
+  return updated;
 }
 
 async function getStaffVisitOrThrowRaw(visitId: string, staffUserId: string) {

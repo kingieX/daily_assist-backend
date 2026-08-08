@@ -1,12 +1,16 @@
+import { Job, Queue, Worker } from 'bullmq';
 import { NotificationType, Role } from '@prisma/client';
 import { randomUUID } from 'crypto';
+import IORedis from 'ioredis';
 import { prisma } from '../../config/prisma';
 import { logger } from '../../config/logger';
+import { env } from '../../config/env';
 import { sendNotificationEmail } from '../../config/mailer';
 import { realtimeGateway } from '../../realtime/realtime.gateway';
 import { notificationsService } from './notifications.service';
 
 const db = prisma as any;
+const QUEUE_NAME = 'notifications';
 
 export type NotificationEventType =
   | 'message.created'
@@ -45,8 +49,34 @@ export type NotificationEventJob = {
 type DeliveryChannel = 'DASHBOARD' | 'EMAIL' | 'WEBSOCKET';
 type DeliveryStatus = 'PENDING' | 'SENT' | 'FAILED' | 'SKIPPED';
 
-const jobs: NotificationEventJob[] = [];
+function alertFromNotification(notification: any) {
+  return {
+    id: notification.id,
+    type: notification.type === NotificationType.VISIT ? 'warning' : notification.type === NotificationType.MESSAGE ? 'info' : 'yellow',
+    text: [notification.title, notification.body].filter(Boolean).join(' - '),
+    createdAt: notification.createdAt.toISOString(),
+    read: Boolean(notification.readAt)
+  };
+}
+
+const fallbackJobs: NotificationEventJob[] = [];
 let processing = false;
+let queue: Queue<NotificationEventPayload> | null = null;
+let worker: Worker<NotificationEventPayload> | null = null;
+let redisConnection: IORedis | null = null;
+
+function getRedisConnection(): IORedis | null {
+  if (!env.REDIS_URL) return null;
+  if (!redisConnection) redisConnection = new IORedis(env.REDIS_URL, { maxRetriesPerRequest: null });
+  return redisConnection;
+}
+
+function getNotificationQueue(): Queue<NotificationEventPayload> | null {
+  const connection = getRedisConnection();
+  if (!connection) return null;
+  if (!queue) queue = new Queue<NotificationEventPayload>(QUEUE_NAME, { connection });
+  return queue;
+}
 
 function categoryFlag(type: NotificationType): 'messageEnabled' | 'announcementEnabled' | 'visitEnabled' | 'systemEnabled' {
   if (type === NotificationType.MESSAGE) return 'messageEnabled';
@@ -59,9 +89,7 @@ function adminChannelAllowed(settings: Record<string, unknown> | null, key: stri
   if (!key || !settings) return true;
   const value = settings[key];
   if (typeof value === 'boolean') return value;
-  if (value && typeof value === 'object' && channel in value) {
-    return (value as Record<string, unknown>)[channel] !== false;
-  }
+  if (value && typeof value === 'object' && channel in value) return (value as Record<string, unknown>)[channel] !== false;
   return true;
 }
 
@@ -107,21 +135,17 @@ async function processJob(job: NotificationEventJob): Promise<void> {
 
     let notificationId: string | null = null;
     if (dashboardAllowed) {
-      const notification = await db.notification.create({
-        data: {
-          userId: recipient.id,
-          type,
-          title: job.payload.title,
-          body: job.payload.body,
-          metadataJson: { ...(job.payload.metadataJson ?? {}), eventType: job.eventType }
-        }
-      });
+      const notification = await db.notification.create({ data: { userId: recipient.id, type, title: job.payload.title, body: job.payload.body, metadataJson: { ...(job.payload.metadataJson ?? {}), eventType: job.eventType } } });
       notificationId = notification.id;
       await createDelivery({ notificationId, userId: recipient.id, channel: 'DASHBOARD', status: 'SENT' });
       realtimeGateway.emitToUser(recipient.id, 'notification:created', notification);
+      realtimeGateway.emitToUser(recipient.id, 'alert:created', alertFromNotification(notification));
       realtimeGateway.emitToUser(recipient.id, 'notification:unread_count', await notificationsService.getUnreadCount(recipient.id));
+      realtimeGateway.emitToUser(recipient.id, 'alert:unread_count', await notificationsService.getUnreadCount(recipient.id));
+      await createDelivery({ notificationId, userId: recipient.id, channel: 'WEBSOCKET', status: 'SENT' });
     } else {
       await createDelivery({ userId: recipient.id, channel: 'DASHBOARD', status: 'SKIPPED', reason: 'Preference disabled' });
+      await createDelivery({ userId: recipient.id, channel: 'WEBSOCKET', status: 'SKIPPED', reason: 'Dashboard preference disabled' });
     }
 
     if (emailAllowed && recipient.email) {
@@ -131,6 +155,7 @@ async function processJob(job: NotificationEventJob): Promise<void> {
       } catch (error) {
         logger.error({ error, jobId: job.id, userId: recipient.id }, 'Notification email delivery failed');
         await createDelivery({ notificationId, userId: recipient.id, channel: 'EMAIL', status: 'FAILED', reason: 'Email delivery failed' });
+        throw error;
       }
     } else {
       await createDelivery({ notificationId, userId: recipient.id, channel: 'EMAIL', status: 'SKIPPED', reason: emailAllowed ? 'Recipient email missing' : 'Preference disabled' });
@@ -138,12 +163,12 @@ async function processJob(job: NotificationEventJob): Promise<void> {
   }
 }
 
-async function drainQueue(): Promise<void> {
+async function drainFallbackQueue(): Promise<void> {
   if (processing) return;
   processing = true;
   try {
-    while (jobs.length) {
-      const job = jobs.shift();
+    while (fallbackJobs.length) {
+      const job = fallbackJobs.shift();
       if (job) await processJob(job);
     }
   } finally {
@@ -152,12 +177,35 @@ async function drainQueue(): Promise<void> {
 }
 
 export async function enqueueNotificationEvent(eventType: NotificationEventType, payload: NotificationEventPayload): Promise<NotificationEventJob> {
-  const job = { id: randomUUID(), eventType, payload, createdAt: new Date() };
-  jobs.push(job);
-  setImmediate(() => void drainQueue());
-  return job;
+  const fallbackJob = { id: randomUUID(), eventType, payload, createdAt: new Date() };
+  const bullQueue = getNotificationQueue();
+  if (bullQueue) {
+    try {
+      const bullJob = await bullQueue.add(eventType, payload, { attempts: 3, backoff: { type: 'exponential', delay: 5000 }, removeOnComplete: 1000, removeOnFail: 5000 });
+      return { ...fallbackJob, id: bullJob.id ?? fallbackJob.id };
+    } catch (error) {
+      logger.error({ error, eventType }, 'Failed to enqueue notification job in BullMQ; falling back to in-process queue');
+    }
+  }
+  fallbackJobs.push(fallbackJob);
+  setImmediate(() => void drainFallbackQueue());
+  return fallbackJob;
 }
 
 export async function processNotificationEventNow(eventType: NotificationEventType, payload: NotificationEventPayload): Promise<void> {
   await processJob({ id: randomUUID(), eventType, payload, createdAt: new Date() });
+}
+
+export function startNotificationWorker(): Worker<NotificationEventPayload> | null {
+  const connection = getRedisConnection();
+  if (!connection) {
+    logger.warn('REDIS_URL is not set; notification events will use the in-process fallback queue');
+    return null;
+  }
+  if (worker) return worker;
+  worker = new Worker<NotificationEventPayload>(QUEUE_NAME, async (job: Job<NotificationEventPayload>) => processJob({ id: String(job.id), eventType: job.name as NotificationEventType, payload: job.data, createdAt: new Date(job.timestamp) }), { connection, concurrency: 5 });
+  worker.on('failed', (job, error) => logger.error({ error, jobId: job?.id, eventType: job?.name }, 'Notification job failed'));
+  worker.on('completed', (job) => logger.debug({ jobId: job.id, eventType: job.name }, 'Notification job completed'));
+  logger.info('BullMQ notification worker started');
+  return worker;
 }

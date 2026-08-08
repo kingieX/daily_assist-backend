@@ -1,5 +1,7 @@
 import { Role } from '@prisma/client';
 import { prisma } from '../../config/prisma';
+import { realtimeGateway } from '../../realtime/realtime.gateway';
+import { enqueueNotificationEvent } from '../notifications/notification-events.service';
 import { ApiError } from '../../utils/api-error';
 import type {
   CreateAnnouncementInput,
@@ -272,25 +274,20 @@ async function postMessage(
       data: { updatedAt: new Date() }
     });
 
-    if (conversation.staffId && conversation.staffId !== currentUserId) {
-      const preferences = await tx.notificationPreference.findUnique({
-        where: { userId: conversation.staffId }
-      });
-      if ((preferences?.inAppEnabled ?? true) && (preferences?.messageEnabled ?? true)) {
-        await tx.notification.create({
-          data: {
-            userId: conversation.staffId,
-            type: COMM_NOTIFICATION_TYPE.MESSAGE,
-            title: 'New message',
-            body: (input.body?.trim() || 'New attachment').slice(0, 150),
-            metadataJson: { conversationId }
-          }
-        });
-      }
-    }
-
     return created;
   });
+
+  realtimeGateway.emitToConversation(conversationId, 'message:created', { ...message, conversationId });
+  if (conversation.staffId && conversation.staffId !== currentUserId) {
+    await enqueueNotificationEvent('message.created', {
+      actorUserId: currentUserId,
+      recipientIds: [conversation.staffId],
+      type: COMM_NOTIFICATION_TYPE.MESSAGE,
+      title: 'New message',
+      body: (input.body?.trim() || 'New attachment').slice(0, 150),
+      metadataJson: { conversationId, messageId: message.id }
+    });
+  }
 
   return message;
 }
@@ -300,7 +297,7 @@ async function deleteMessage(messageId: string, currentUserRole: Role, currentUs
     where: { id: messageId },
     include: {
       conversation: {
-        select: { staffId: true }
+        select: { id: true, staffId: true }
       }
     }
   });
@@ -320,6 +317,7 @@ async function deleteMessage(messageId: string, currentUserRole: Role, currentUs
     data: { deletedAt: new Date() }
   });
 
+  realtimeGateway.emitToConversation(message.conversation.id, 'message:deleted', { id: messageId, conversationId: message.conversation.id });
   return { id: messageId, deleted: true };
 }
 
@@ -403,8 +401,8 @@ async function createAnnouncement(input: CreateAnnouncementInput, actorUserId: s
     throw new ApiError(400, 'No eligible staff recipients found for announcement');
   }
 
-  return db.$transaction(async (tx: any) => {
-    const announcement = await tx.announcement.create({
+  const announcement = await db.$transaction(async (tx: any) => {
+    const created = await tx.announcement.create({
       data: {
         title: input.title,
         body: input.message,
@@ -429,29 +427,19 @@ async function createAnnouncement(input: CreateAnnouncementInput, actorUserId: s
       }
     });
 
-    const recipientPreferences = await tx.notificationPreference.findMany({
-      where: { userId: { in: recipients.map((recipient: any) => recipient.id) } },
-      select: { userId: true, inAppEnabled: true, announcementEnabled: true }
-    });
-    const prefsMap = new Map<string, any>(recipientPreferences.map((pref: any) => [pref.userId, pref]));
-
-    await tx.notification.createMany({
-      data: recipients
-        .filter((recipient: any) => {
-          const pref = prefsMap.get(recipient.id);
-          return (pref?.inAppEnabled ?? true) && (pref?.announcementEnabled ?? true);
-        })
-        .map((recipient: any) => ({
-          userId: recipient.id,
-          type: COMM_NOTIFICATION_TYPE.ANNOUNCEMENT,
-          title: input.title,
-          body: input.message.slice(0, 200),
-          metadataJson: { announcementId: announcement.id }
-        }))
-    });
-
-    return adminAnnouncementResponse(announcement);
+    return adminAnnouncementResponse(created);
   });
+
+  await enqueueNotificationEvent('announcement.created', {
+    actorUserId,
+    recipientIds: recipients.map((recipient: any) => recipient.id),
+    type: COMM_NOTIFICATION_TYPE.ANNOUNCEMENT,
+    title: input.title,
+    body: input.message.slice(0, 200),
+    metadataJson: { announcementId: announcement.id }
+  });
+
+  return announcement;
 }
 
 async function acknowledgeAnnouncement(announcementId: string, userId: string) {
