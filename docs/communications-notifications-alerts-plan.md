@@ -493,7 +493,7 @@ Behavior-preserving refactor.
 
 - Add authenticated WebSocket server. — implemented with Socket.IO using REST JWT access tokens and active-user checks.
 - Add room membership for users and conversations. — implemented for private user rooms, role rooms, and client-requested conversation rooms.
-- Emit chat events from message creation/update/delete flows. — message creation now emits `message:created` to conversation rooms after the database transaction commits.
+- Emit chat events from message creation/update/delete flows. — message creation emits `message:created` and soft deletion emits `message:deleted` to authorized conversation rooms after database writes commit.
 - Emit notification and alert events from worker after durable notification creation. — implemented in the event service abstraction.
 - Add unread-count events. — implemented in the event service abstraction.
 
@@ -588,6 +588,7 @@ Keep for UI compatibility, backed by notifications:
 - Removed message and notification route declarations from the admin/staff communications routers so those routers now own announcement endpoints only.
 - Mounted the new message and notification routers from the admin and staff role routers before the remaining communications announcement routers.
 - Updated OpenAPI tagging so message/chat endpoints are documented under **Messages**, notification endpoints are documented under **Notifications**, and communications tags describe announcement workflows only.
+- Added Swagger/OpenAPI documentation for the Socket.IO realtime connection contract and post-commit message/notification event behavior.
 - Fixed admin dashboard alert route ordering so `/admin/dashboard/alerts/read-all` is registered before `/admin/dashboard/alerts/:id/read`.
 
 ### Still pending
@@ -596,7 +597,8 @@ Keep for UI compatibility, backed by notifications:
 - Move the remaining notification implementation details out of the legacy communications service and into the Notifications service internals.
 - Added notification event abstraction, delivery policy checks, delivery audit model, generic notification email sender, worker entrypoint, and realtime gateway abstraction.
 - BullMQ + Redis and Socket.IO transport are now wired in. `REDIS_URL` enables durable queue processing; without it, the in-process fallback remains available for local/test runs.
-- Move event producers incrementally from direct `notification.create` calls onto `enqueueNotificationEvent(...)`; message creation has moved first, while visit workflows still need product confirmation for email fan-out timing.
+- Socket.IO room joins now enforce the same conversation authorization rule as REST message reads.
+- Move event producers incrementally from direct `notification.create` calls onto `enqueueNotificationEvent(...)`; message creation, announcement creation, visit assignment, visit reassignment, and visit cancellation now use the notification event queue.
 
 ## Suggested Acceptance Criteria for Future Implementation
 

@@ -1,7 +1,7 @@
 import { EventEmitter } from 'events';
 import type { Server as HttpServer } from 'http';
 import { Server as SocketServer, Socket } from 'socket.io';
-import { UserStatus } from '@prisma/client';
+import { Role, UserStatus } from '@prisma/client';
 import { logger } from '../config/logger';
 import { env } from '../config/env';
 import { prisma } from '../config/prisma';
@@ -54,17 +54,35 @@ class RealtimeGateway extends EventEmitter {
       socket.join(`user:${user.userId}`);
       socket.join(`role:${user.role.toLowerCase().replace('_', '-')}`);
 
-      socket.on('conversation:join', (conversationId: string) => {
-        if (typeof conversationId === 'string' && conversationId) socket.join(`conversation:${conversationId}`);
+      socket.on('conversation:join', async (conversationId: string) => {
+        if (await this.canAccessConversation(conversationId, user.userId, user.role)) socket.join(`conversation:${conversationId}`);
       });
       socket.on('conversation:leave', (conversationId: string) => {
         if (typeof conversationId === 'string' && conversationId) socket.leave(`conversation:${conversationId}`);
       });
-      socket.on('message:typing:start', (conversationId: string) => this.emitToConversation(conversationId, 'message:typing', { conversationId, userId: user.userId, typing: true }));
-      socket.on('message:typing:stop', (conversationId: string) => this.emitToConversation(conversationId, 'message:typing', { conversationId, userId: user.userId, typing: false }));
+      socket.on('message:typing:start', async (conversationId: string) => {
+        if (await this.canAccessConversation(conversationId, user.userId, user.role)) this.emitToConversation(conversationId, 'message:typing', { conversationId, userId: user.userId, typing: true });
+      });
+      socket.on('message:typing:stop', async (conversationId: string) => {
+        if (await this.canAccessConversation(conversationId, user.userId, user.role)) this.emitToConversation(conversationId, 'message:typing', { conversationId, userId: user.userId, typing: false });
+      });
+      socket.on('notification:read', async (notificationId: string) => {
+        if (typeof notificationId !== 'string' || !notificationId) return;
+        const updated = await prisma.notification.updateMany({ where: { id: notificationId, userId: user.userId, readAt: null }, data: { readAt: new Date() } });
+        if (updated.count) this.emitToUser(user.userId, 'notification:read', { id: notificationId });
+      });
     });
 
     logger.info('Socket.IO realtime gateway initialized');
+  }
+
+
+  private async canAccessConversation(conversationId: string, userId: string, role: string): Promise<boolean> {
+    if (typeof conversationId !== 'string' || !conversationId) return false;
+    if (role === Role.ADMIN || role === Role.SUPER_ADMIN) {
+      return Boolean(await prisma.conversation.findUnique({ where: { id: conversationId }, select: { id: true } }));
+    }
+    return Boolean(await prisma.conversation.findFirst({ where: { id: conversationId, staffId: userId }, select: { id: true } }));
   }
 
   emitToUser(userId: string, event: string, payload: Record<string, unknown>): void {

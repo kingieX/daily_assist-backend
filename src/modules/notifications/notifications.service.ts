@@ -13,7 +13,9 @@ async function listNotifications(query: ListNotificationsQuery, userId: string) 
 async function markNotificationRead(notificationId: string, userId: string) {
   const result = await communicationsService.markNotificationRead(notificationId, userId);
   realtimeGateway.emitToUser(userId, 'notification:read', { id: notificationId });
+  realtimeGateway.emitToUser(userId, 'alert:read', { id: notificationId });
   realtimeGateway.emitToUser(userId, 'notification:unread_count', await getUnreadCount(userId));
+  realtimeGateway.emitToUser(userId, 'alert:unread_count', await getUnreadCount(userId));
   return result;
 }
 
@@ -21,6 +23,7 @@ async function deleteNotification(notificationId: string, userId: string) {
   const result = await communicationsService.deleteNotification(notificationId, userId);
   realtimeGateway.emitToUser(userId, 'notification:deleted', { id: notificationId });
   realtimeGateway.emitToUser(userId, 'notification:unread_count', await getUnreadCount(userId));
+  realtimeGateway.emitToUser(userId, 'alert:unread_count', await getUnreadCount(userId));
   return result;
 }
 
@@ -43,7 +46,9 @@ async function markAllNotificationsRead(userId: string) {
     data: { readAt: new Date() }
   });
   realtimeGateway.emitToUser(userId, 'notification:read', { all: true });
+  realtimeGateway.emitToUser(userId, 'alert:read', { all: true });
   realtimeGateway.emitToUser(userId, 'notification:unread_count', await getUnreadCount(userId));
+  realtimeGateway.emitToUser(userId, 'alert:unread_count', await getUnreadCount(userId));
   return { updatedCount: result.count };
 }
 

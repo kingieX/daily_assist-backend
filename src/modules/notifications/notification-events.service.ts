@@ -49,6 +49,16 @@ export type NotificationEventJob = {
 type DeliveryChannel = 'DASHBOARD' | 'EMAIL' | 'WEBSOCKET';
 type DeliveryStatus = 'PENDING' | 'SENT' | 'FAILED' | 'SKIPPED';
 
+function alertFromNotification(notification: any) {
+  return {
+    id: notification.id,
+    type: notification.type === NotificationType.VISIT ? 'warning' : notification.type === NotificationType.MESSAGE ? 'info' : 'yellow',
+    text: [notification.title, notification.body].filter(Boolean).join(' - '),
+    createdAt: notification.createdAt.toISOString(),
+    read: Boolean(notification.readAt)
+  };
+}
+
 const fallbackJobs: NotificationEventJob[] = [];
 let processing = false;
 let queue: Queue<NotificationEventPayload> | null = null;
@@ -129,7 +139,9 @@ async function processJob(job: NotificationEventJob): Promise<void> {
       notificationId = notification.id;
       await createDelivery({ notificationId, userId: recipient.id, channel: 'DASHBOARD', status: 'SENT' });
       realtimeGateway.emitToUser(recipient.id, 'notification:created', notification);
+      realtimeGateway.emitToUser(recipient.id, 'alert:created', alertFromNotification(notification));
       realtimeGateway.emitToUser(recipient.id, 'notification:unread_count', await notificationsService.getUnreadCount(recipient.id));
+      realtimeGateway.emitToUser(recipient.id, 'alert:unread_count', await notificationsService.getUnreadCount(recipient.id));
       await createDelivery({ notificationId, userId: recipient.id, channel: 'WEBSOCKET', status: 'SENT' });
     } else {
       await createDelivery({ userId: recipient.id, channel: 'DASHBOARD', status: 'SKIPPED', reason: 'Preference disabled' });
@@ -168,8 +180,12 @@ export async function enqueueNotificationEvent(eventType: NotificationEventType,
   const fallbackJob = { id: randomUUID(), eventType, payload, createdAt: new Date() };
   const bullQueue = getNotificationQueue();
   if (bullQueue) {
-    const bullJob = await bullQueue.add(eventType, payload, { attempts: 3, backoff: { type: 'exponential', delay: 5000 }, removeOnComplete: 1000, removeOnFail: 5000 });
-    return { ...fallbackJob, id: bullJob.id ?? fallbackJob.id };
+    try {
+      const bullJob = await bullQueue.add(eventType, payload, { attempts: 3, backoff: { type: 'exponential', delay: 5000 }, removeOnComplete: 1000, removeOnFail: 5000 });
+      return { ...fallbackJob, id: bullJob.id ?? fallbackJob.id };
+    } catch (error) {
+      logger.error({ error, eventType }, 'Failed to enqueue notification job in BullMQ; falling back to in-process queue');
+    }
   }
   fallbackJobs.push(fallbackJob);
   setImmediate(() => void drainFallbackQueue());

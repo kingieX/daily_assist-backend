@@ -297,7 +297,7 @@ async function deleteMessage(messageId: string, currentUserRole: Role, currentUs
     where: { id: messageId },
     include: {
       conversation: {
-        select: { staffId: true }
+        select: { id: true, staffId: true }
       }
     }
   });
@@ -317,6 +317,7 @@ async function deleteMessage(messageId: string, currentUserRole: Role, currentUs
     data: { deletedAt: new Date() }
   });
 
+  realtimeGateway.emitToConversation(message.conversation.id, 'message:deleted', { id: messageId, conversationId: message.conversation.id });
   return { id: messageId, deleted: true };
 }
 
@@ -400,8 +401,8 @@ async function createAnnouncement(input: CreateAnnouncementInput, actorUserId: s
     throw new ApiError(400, 'No eligible staff recipients found for announcement');
   }
 
-  return db.$transaction(async (tx: any) => {
-    const announcement = await tx.announcement.create({
+  const announcement = await db.$transaction(async (tx: any) => {
+    const created = await tx.announcement.create({
       data: {
         title: input.title,
         body: input.message,
@@ -426,29 +427,19 @@ async function createAnnouncement(input: CreateAnnouncementInput, actorUserId: s
       }
     });
 
-    const recipientPreferences = await tx.notificationPreference.findMany({
-      where: { userId: { in: recipients.map((recipient: any) => recipient.id) } },
-      select: { userId: true, inAppEnabled: true, announcementEnabled: true }
-    });
-    const prefsMap = new Map<string, any>(recipientPreferences.map((pref: any) => [pref.userId, pref]));
-
-    await tx.notification.createMany({
-      data: recipients
-        .filter((recipient: any) => {
-          const pref = prefsMap.get(recipient.id);
-          return (pref?.inAppEnabled ?? true) && (pref?.announcementEnabled ?? true);
-        })
-        .map((recipient: any) => ({
-          userId: recipient.id,
-          type: COMM_NOTIFICATION_TYPE.ANNOUNCEMENT,
-          title: input.title,
-          body: input.message.slice(0, 200),
-          metadataJson: { announcementId: announcement.id }
-        }))
-    });
-
-    return adminAnnouncementResponse(announcement);
+    return adminAnnouncementResponse(created);
   });
+
+  await enqueueNotificationEvent('announcement.created', {
+    actorUserId,
+    recipientIds: recipients.map((recipient: any) => recipient.id),
+    type: COMM_NOTIFICATION_TYPE.ANNOUNCEMENT,
+    title: input.title,
+    body: input.message.slice(0, 200),
+    metadataJson: { announcementId: announcement.id }
+  });
+
+  return announcement;
 }
 
 async function acknowledgeAnnouncement(announcementId: string, userId: string) {
