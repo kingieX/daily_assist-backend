@@ -413,6 +413,11 @@ export async function changeAdminPassword(userId: string, data: { currentPasswor
 
 export function getRolesPermissions() { return rolesPermissions; }
 
+export function getMyRolesPermissions(role: Role) {
+  if (role === Role.SUPER_ADMIN) return rolesPermissions;
+  return { admin: rolesPermissions.admin };
+}
+
 export function updateRolesPermissions(input: { admin?: Record<string, boolean>; staff?: Record<string, boolean> }) {
   for (const role of ['admin', 'staff'] as const) {
     const updates = input[role];

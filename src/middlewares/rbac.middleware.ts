@@ -1,6 +1,7 @@
 import { Role } from '@prisma/client';
 import { NextFunction, Request, Response } from 'express';
 import { ApiError } from '../utils/api-error';
+import { normalizeRole } from '../utils/roles';
 
 export function authorizeRoles(...allowedRoles: Role[]) {
   return (req: Request, _res: Response, next: NextFunction): void => {
@@ -9,7 +10,8 @@ export function authorizeRoles(...allowedRoles: Role[]) {
       return;
     }
 
-    if (!allowedRoles.includes(req.user.role as Role)) {
+    const role = normalizeRole(req.user.role);
+    if (!role || !allowedRoles.includes(role)) {
       next(new ApiError(403, 'Forbidden: insufficient permissions'));
       return;
     }

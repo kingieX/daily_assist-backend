@@ -72,6 +72,7 @@ adminRouter.patch(
 );
 adminRouter.get('/system-log', validate({ query: systemLogQuerySchema }), adminSettingsController.listSystemLog);
 adminRouter.get('/system-log/export', validate({ query: systemLogExportQuerySchema }), adminSettingsController.exportSystemLog);
+adminRouter.get('/my-roles-permissions', adminSettingsController.getMyRolesPermissions);
 adminRouter.get('/roles-permissions', authorizeRoles(Role.SUPER_ADMIN), adminSettingsController.getRolesPermissions);
 adminRouter.patch('/roles-permissions', authorizeRoles(Role.SUPER_ADMIN), validate({ body: rolesPermissionsUpdateSchema }), adminSettingsController.updateRolesPermissions);
 

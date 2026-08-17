@@ -21,10 +21,32 @@ const envSchema = z.object({
   EMAIL_USER: z.string().optional(),
   EMAIL_PASS: z.string().optional(),
   EMAIL_FROM: z.string().default('DailyAssist <hello@dailyassistuk.com>'),
+  EMAIL_DELIVERY_REQUIRED: z.coerce.boolean().default(process.env.NODE_ENV === 'production'),
   CAPTCHA_SECRET: z.string().optional(),
   CAPTCHA_VERIFY_URL: z.string().url().default('https://challenges.cloudflare.com/turnstile/v0/siteverify'),
   FRONTEND_URL: z.string().default('http://localhost:3000'),
   REDIS_URL: z.string().url().optional()
+}).superRefine((value, ctx) => {
+  const hasMailtrapSmtp = Boolean(value.MAILTRAP_PASS);
+  const smtpFields = [value.EMAIL_HOST, value.EMAIL_USER, value.EMAIL_PASS];
+  const hasGenericSmtp = smtpFields.every(Boolean);
+  const hasPartialGenericSmtp = smtpFields.some(Boolean) && !hasGenericSmtp;
+
+  if (hasPartialGenericSmtp) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['EMAIL_HOST'],
+      message: 'EMAIL_HOST, EMAIL_USER, and EMAIL_PASS must be provided together for generic SMTP delivery'
+    });
+  }
+
+  if (value.EMAIL_DELIVERY_REQUIRED && !hasMailtrapSmtp && !hasGenericSmtp) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['EMAIL_DELIVERY_REQUIRED'],
+      message: 'SMTP email delivery is required; set MAILTRAP_PASS or set EMAIL_HOST, EMAIL_USER, and EMAIL_PASS'
+    });
+  }
 });
 
 const parsedEnv = envSchema.safeParse(process.env);
