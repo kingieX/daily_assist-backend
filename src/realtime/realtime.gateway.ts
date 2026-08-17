@@ -6,6 +6,7 @@ import { logger } from '../config/logger';
 import { env } from '../config/env';
 import { prisma } from '../config/prisma';
 import { verifyAccessToken } from '../utils/jwt';
+import { normalizeRole } from '../utils/roles';
 
 export type RealtimeEvent = {
   room: string;
@@ -39,9 +40,12 @@ class RealtimeGateway extends EventEmitter {
         const token = tokenFromSocket(socket);
         if (!token) return next(new Error('Authentication required'));
         const payload = verifyAccessToken(token);
+        const tokenRole = normalizeRole(payload.role);
         const user = await prisma.user.findUnique({ where: { id: payload.sub }, select: { id: true, role: true, status: true } });
         if (!user || user.status !== UserStatus.ACTIVE) return next(new Error('User account is not active'));
-        (socket as AuthenticatedSocket).data.user = { userId: user.id, role: user.role };
+        const role = normalizeRole(user.role) ?? tokenRole;
+        if (!role) return next(new Error('Invalid user role'));
+        (socket as AuthenticatedSocket).data.user = { userId: user.id, role };
         return next();
       } catch {
         return next(new Error('Invalid access token'));

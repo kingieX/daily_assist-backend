@@ -333,6 +333,21 @@ export const profileSettingsPaths: OpenAPIV3.PathsObject = {
       }
     }
   },
+
+  '/admin/my-roles-permissions': {
+    get: {
+      tags: ['Admin Settings'],
+      summary: 'Get current admin role permissions',
+      description: 'Admin and Super Admin. Returns the permission set that applies to the authenticated admin user. Sub-admins should use this endpoint to read the permissions assigned by the Super Admin.',
+      security: secured,
+      responses: {
+        '200': jsonEnvelope('#/components/schemas/RolesPermissionsResponse', {
+          admin: rolesPermissionsExample.admin
+        }),
+        ...standardErrors
+      }
+    }
+  },
   '/admin/roles-permissions': {
     get: {
       tags: ['Admin Settings'],

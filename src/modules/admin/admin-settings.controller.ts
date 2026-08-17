@@ -74,6 +74,11 @@ const getRolesPermissions = asyncHandler(async (_req: Request, res: Response) =>
   return sendSuccess(res, 200, 'Roles and permissions retrieved', adminSettingsService.getRolesPermissions());
 });
 
+const getMyRolesPermissions = asyncHandler(async (req: Request, res: Response) => {
+  const user = getAuthenticatedUser(req);
+  return sendSuccess(res, 200, 'Current role permissions retrieved', adminSettingsService.getMyRolesPermissions(user.role));
+});
+
 const updateRolesPermissions = asyncHandler(async (req: Request, res: Response) => {
   return sendSuccess(res, 200, 'Roles and permissions updated', adminSettingsService.updateRolesPermissions(req.body));
 });
@@ -88,5 +93,6 @@ export const adminSettingsController = {
   listSystemLog,
   exportSystemLog,
   getRolesPermissions,
+  getMyRolesPermissions,
   updateRolesPermissions
 };
