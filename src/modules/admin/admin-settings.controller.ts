@@ -58,8 +58,13 @@ const listSystemLog = asyncHandler(async (req: Request, res: Response) => {
   return sendSuccess(res, 200, 'System log retrieved', result);
 });
 
-const exportSystemLog = asyncHandler(async (req: Request, res: Response) => {
-  const exported = await adminSettingsService.exportSystemLog(req.query as any);
+const getSystemLogById = asyncHandler(async (req: Request, res: Response) => {
+  const result = await adminSettingsService.getSystemLogById(req.params.id as string);
+  return sendSuccess(res, 200, 'System log retrieved', result);
+});
+
+const exportSystemLog = (format: 'csv' | 'pdf') => asyncHandler(async (req: Request, res: Response) => {
+  const exported = await adminSettingsService.exportSystemLog({ ...(req.query as any), format });
   res.setHeader('Content-Type', exported.contentType);
   res.setHeader('Content-Disposition', `attachment; filename="${exported.filename}"`);
   return res.status(200).send(exported.body);
@@ -91,6 +96,7 @@ export const adminSettingsController = {
   updateNotificationSettings,
   changeAdminPassword,
   listSystemLog,
+  getSystemLogById,
   exportSystemLog,
   getRolesPermissions,
   getMyRolesPermissions,

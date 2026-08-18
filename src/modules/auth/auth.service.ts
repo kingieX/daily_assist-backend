@@ -88,6 +88,7 @@ async function login(input: LoginInput): Promise<SessionResult> {
   });
 
   if (!user) {
+    await recordAuditLog({ action: 'FAILED_LOGIN', module: 'AUTHENTICATION', entity: 'auth_session', entityId: normalizedEmail, affectedItem: normalizedEmail, description: 'Failed login: user not found', status: 'FAILURE', metadataJson: { actorEmail: normalizedEmail, reason: 'user_not_found' } });
     throw new ApiError(401, 'Invalid email or password');
   }
 
@@ -102,6 +103,7 @@ async function login(input: LoginInput): Promise<SessionResult> {
   const passwordMatches = await comparePassword(input.password, user.passwordHash);
 
   if (!passwordMatches) {
+    await recordAuditLog({ actorUserId: user.id, action: 'FAILED_LOGIN', module: 'AUTHENTICATION', entity: 'auth_session', entityId: user.id, affectedItem: user.email, description: 'Failed login: invalid password', status: 'FAILURE', metadataJson: { role: user.role, reason: 'invalid_password' } });
     throw new ApiError(401, 'Invalid email or password');
   }
 
@@ -113,6 +115,7 @@ async function login(input: LoginInput): Promise<SessionResult> {
   await recordAuditLog({
     actorUserId: user.id,
     action: 'LOGIN',
+    module: 'AUTHENTICATION',
     entity: 'auth_session',
     entityId: user.id,
     metadataJson: { role: user.role, source: 'password_login' }
@@ -221,6 +224,7 @@ async function logout(refreshToken: string): Promise<void> {
   await recordAuditLog({
     actorUserId: payload.sub,
     action: 'LOGOUT',
+    module: 'AUTHENTICATION',
     entity: 'auth_session',
     entityId: payload.sub,
     metadataJson: { revokedTokenCount: result.count }

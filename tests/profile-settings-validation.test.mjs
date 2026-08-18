@@ -26,10 +26,10 @@ test('notification settings use single-toggle frontend keys only', () => {
 });
 
 test('system log query validates enums, pagination defaults, and custom date range', () => {
-  const parsed = systemLogQuerySchema.parse({ action: 'Assigned', module: 'Visits' });
+  const parsed = systemLogQuerySchema.parse({ action: 'ASSIGN', module: 'VISITS' });
   assert.equal(parsed.page, 1);
   assert.equal(parsed.pageSize, 10);
-  assert.equal(systemLogQuerySchema.safeParse({ action: 'Archived' }).success, false);
+  assert.equal(systemLogQuerySchema.safeParse({ action: 'ARCHIVE' }).success, true);
   assert.equal(systemLogQuerySchema.safeParse({ dateRange: 'Custom Range' }).success, false);
   assert.equal(
     systemLogQuerySchema.safeParse({ dateRange: 'Custom Range', startDate: '2026-07-01', endDate: '2026-07-23' }).success,
@@ -37,8 +37,7 @@ test('system log query validates enums, pagination defaults, and custom date ran
   );
 });
 
-test('system log export requires csv or pdf format', () => {
-  assert.equal(systemLogExportQuerySchema.safeParse({ format: 'csv' }).success, true);
-  assert.equal(systemLogExportQuerySchema.safeParse({ format: 'pdf' }).success, true);
-  assert.equal(systemLogExportQuerySchema.safeParse({ format: 'xlsx' }).success, false);
+test('system log export accepts the same filters as listing without a format parameter', () => {
+  assert.equal(systemLogExportQuerySchema.safeParse({ action: 'ASSIGN', module: 'VISITS' }).success, true);
+  assert.equal(systemLogExportQuerySchema.safeParse({ format: 'xlsx' }).success, true);
 });

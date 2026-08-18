@@ -66,47 +66,29 @@ const notificationSettingsExample = [
 const systemLogExample = {
   items: [
     {
-      id: '1',
-      time: '2026-07-22T09:45:00.000Z',
-      user: 'Admin John',
-      action: 'Assigned',
-      module: 'Visits',
-      affectedItem: 'Visit ID: VST-1023',
-      description: 'Sarah Johnson assigned to visit for Mrs. Alan.',
+      id: '018f5f9d-1d70-7b1d-a111-9848d49a0001',
+      actor: { id: 'admin-user-id', name: 'Admin John', email: 'admin@example.com', role: 'ADMIN' },
+      action: 'ASSIGN',
+      module: 'VISITS',
+      entityType: 'visit',
+      entityId: 'visit-id',
+      affectedItem: 'visit-id',
+      description: 'Reassigned visit',
       ipAddress: '192.168.0.45',
-      status: 'Success'
+      userAgent: 'Mozilla/5.0',
+      status: 'SUCCESS',
+      metadata: { previousStaffId: 'old-staff-id', newStaffId: 'new-staff-id' },
+      createdAt: '2026-07-22T09:45:00.000Z'
     }
   ],
-  page: 1,
-  pageSize: 10,
-  total: 87
+  pagination: { page: 1, pageSize: 10, total: 87, totalPages: 9 }
 };
 
 const logFilterParameters: OpenAPIV3.ParameterObject[] = [
-  {
-    name: 'user',
-    in: 'query',
-    schema: { type: 'string', enum: ['Admin', 'Operation Manager', 'Staff', 'System'] },
-    description: 'Filter by displayed user category.'
-  },
-  {
-    name: 'action',
-    in: 'query',
-    schema: {
-      type: 'string',
-      enum: ['Created', 'Updated', 'Deleted', 'Assigned', 'Approved', 'Triggered', 'Submitted', 'Attempted', 'Sent', 'Cancelled']
-    },
-    description: 'Filter by frontend action label.'
-  },
-  {
-    name: 'module',
-    in: 'query',
-    schema: {
-      type: 'string',
-      enum: ['Clients', 'Staff', 'Visits', 'Bookings', 'Messages', 'Settings', 'Alerts', 'Notification', 'Check-in', 'Visit logs', 'Service']
-    },
-    description: 'Filter by frontend module label.'
-  },
+  { name: 'actorUserId', in: 'query', schema: { type: 'string' }, description: 'Filter by exact actor user id.' },
+  { name: 'user', in: 'query', schema: { type: 'string' }, description: 'Search actor name, email, or role.' },
+  { name: 'action', in: 'query', schema: { type: 'string', enum: ['CREATE', 'UPDATE', 'DELETE', 'LOGIN', 'LOGOUT', 'FAILED_LOGIN', 'PASSWORD_RESET', 'PASSWORD_CHANGE', 'STATUS_CHANGE', 'SETTINGS_UPDATE', 'REPORT_PROCESSING', 'CONFIRM', 'CANCEL', 'ASSIGN', 'ACTIVATE', 'DEACTIVATE'] }, description: 'Filter by backend audit action.' },
+  { name: 'module', in: 'query', schema: { type: 'string', example: 'VISITS' }, description: 'Filter by backend module, for example AUTHENTICATION, CLIENTS, STAFF, BOOKINGS, VISITS, SETTINGS.' },
   {
     name: 'dateRange',
     in: 'query',
@@ -305,29 +287,52 @@ export const profileSettingsPaths: OpenAPIV3.PathsObject = {
       }
     }
   },
-  '/admin/system-log/export': {
+  '/admin/system-log/{id}': {
     get: {
       tags: ['System Log'],
-      summary: 'Export filtered system log as CSV or PDF',
+      summary: 'Get a system log entry',
+      security: secured,
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+      responses: {
+        '200': jsonEnvelope('#/components/schemas/SystemLogEntry', systemLogExample.items[0]),
+        ...standardErrors
+      }
+    }
+  },
+  '/admin/system-log/export/csv': {
+    get: {
+      tags: ['System Log'],
+      summary: 'Export filtered system log as CSV',
       description: 'Applies the same filters as /admin/system-log but returns the full filtered result set without pagination.',
       security: secured,
-      parameters: [
-        ...logFilterParameters,
-        { name: 'format', in: 'query', required: true, schema: { type: 'string', enum: ['csv', 'pdf'] } }
-      ],
+      parameters: logFilterParameters,
       responses: {
         '200': {
-          description: 'System log export file.',
+          description: 'System log CSV export file.',
           headers: {
             'Content-Disposition': {
               schema: { type: 'string' },
               description: 'attachment; filename="system_log.csv" or attachment; filename="system_log.pdf"'
             }
           },
-          content: {
-            'text/csv': { schema: { type: 'string' }, example: 'Time,User,Action,Module,Description,Status\n"2026-07-22T09:45:00.000Z","Admin John","Assigned","Visits","Sarah Johnson assigned to visit for Mrs. Alan.","Success"' },
-            'application/pdf': { schema: { type: 'string', format: 'binary' } }
-          }
+          content: { 'text/csv': { schema: { type: 'string' }, example: 'Created At,Actor Name,Actor Email,Actor Role,Action,Module,Entity Type,Entity ID,Affected Item,Description,IP Address,Status\n"2026-07-22T09:45:00.000Z","Admin John","admin@example.com","ADMIN","ASSIGN","VISITS","visit","visit-id","visit-id","Reassigned visit","192.168.0.45","SUCCESS"' } }
+        },
+        ...standardErrors
+      }
+    }
+  },
+
+  '/admin/system-log/export/pdf': {
+    get: {
+      tags: ['System Log'],
+      summary: 'Export filtered system log as PDF',
+      description: 'Applies the same filters as /admin/system-log but returns the full filtered result set without pagination.',
+      security: secured,
+      parameters: logFilterParameters,
+      responses: {
+        '200': {
+          description: 'System log PDF export file.',
+          content: { 'application/pdf': { schema: { type: 'string', format: 'binary' } } }
         },
         ...standardErrors
       }

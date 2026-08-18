@@ -173,7 +173,7 @@ async function generateUniqueWorkEmail(firstName: string, lastName: string, curr
         id: { not: currentUserId },
         OR: [{ email: candidate }, { businessEmail: candidate }]
       },
-      select: { id: true }
+      select: { id: true, clientCode: true, firstName: true, lastName: true }
     });
 
     if (!existing) return candidate;
@@ -826,7 +826,9 @@ async function updateBooking(id: string, input: UpdateBookingInput, actorUserId?
     await db.booking.update({ where: { id }, data });
   }
 
-  return getBookingById(id);
+  const updatedBooking = await getBookingById(id);
+  await recordAuditLog({ actorUserId, action: input.status === 'assigned' ? 'ASSIGN' : input.status === 'cancelled' ? 'CANCEL' : input.status !== undefined && input.status !== booking.status ? 'STATUS_CHANGE' : 'UPDATE', module: 'BOOKINGS', entity: 'booking', entityId: id, affectedItem: id, description: input.status === 'assigned' ? 'Assigned booking and created visit' : input.status === 'cancelled' ? 'Cancelled booking' : 'Updated booking', metadataJson: { previousStatus: booking.status, newStatus: input.status ? ((apiStatusToDb as any)[input.status] ?? input.status) : booking.status, assignedStaffId: input.staffId ?? null, changedFields: Object.keys(input) } });
+  return updatedBooking;
 }
 
 function frontendClientSexToDbSex(sex?: string): string | null | undefined {
@@ -1000,7 +1002,7 @@ async function listClients(filters: ClientListQuery = {}) {
   return items.map(serializeClient);
 }
 
-async function createClient(input: CreateClientInput) {
+async function createClient(input: CreateClientInput, actorUserId?: string) {
   const clientCode = await generateNextClientCode();
   const client = await db.client.create({
     data: {
@@ -1010,6 +1012,7 @@ async function createClient(input: CreateClientInput) {
     }
   });
 
+  await recordAuditLog({ actorUserId, action: 'CREATE', module: 'CLIENTS', entity: 'client', entityId: client.id, affectedItem: client.clientCode ?? client.id, description: `Created client ${[client.firstName, client.lastName].filter(Boolean).join(' ')}` });
   return serializeClient(client);
 }
 
@@ -1025,7 +1028,7 @@ async function getClientById(id: string) {
   return serializeClient(client);
 }
 
-async function updateClient(id: string, input: UpdateClientInput) {
+async function updateClient(id: string, input: UpdateClientInput, actorUserId?: string) {
   const existingClient = await db.client.findFirst({
     where: clientLookupWhere(id),
     select: { id: true }
@@ -1046,14 +1049,18 @@ async function updateClient(id: string, input: UpdateClientInput) {
     data
   });
 
+  await recordAuditLog({ actorUserId, action: 'UPDATE', module: 'CLIENTS', entity: 'client', entityId: client.id, affectedItem: client.clientCode ?? client.id, description: `Updated client ${[client.firstName, client.lastName].filter(Boolean).join(' ')}`, metadataJson: { changedFields: Object.keys(data) } });
   return serializeClient(client);
 }
 
-async function deleteClient(id: string) {
+async function deleteClient(id: string, actorUserId?: string) {
   const client = await db.client.findFirst({
     where: clientLookupWhere(id),
     select: {
       id: true,
+      clientCode: true,
+      firstName: true,
+      lastName: true,
       bookings: { select: { id: true } }
     }
   });
@@ -1070,6 +1077,7 @@ async function deleteClient(id: string) {
     }
     await tx.client.delete({ where: { id: client.id } });
   });
+  await recordAuditLog({ actorUserId, action: 'DELETE', module: 'CLIENTS', entity: 'client', entityId: client.id, affectedItem: client.clientCode ?? client.id, description: `Deleted client ${[client.firstName, client.lastName].filter(Boolean).join(' ')}`, metadataJson: { deletedBookings: bookingIds.length } });
 }
 
 async function listClientHistory(id: string) {
@@ -1541,7 +1549,7 @@ async function listStaff(filters: StaffListQuery = {}) {
   return items.map(serializeStaff);
 }
 
-async function createStaff(input: CreateStaffInput) {
+async function createStaff(input: CreateStaffInput, actorUserId?: string) {
   const normalizedEmail = normalizeEmail(input.email);
   const existingUser = await db.user.findUnique({
     where: { email: normalizedEmail },
@@ -1577,6 +1585,7 @@ async function createStaff(input: CreateStaffInput) {
     }
   });
 
+  await recordAuditLog({ actorUserId, action: 'CREATE', module: 'STAFF', entity: 'staff', entityId: staff.id, affectedItem: staff.staffCode ?? staff.id, description: `Created staff ${staff.email}` });
   return serializeStaff(staff);
 }
 
@@ -1766,7 +1775,7 @@ async function resetStaffPassword(id: string, input: ResetStaffPasswordInput) {
   return { id: staff.id, passwordReset: true };
 }
 
-async function updateStaff(id: string, input: UpdateStaffInput) {
+async function updateStaff(id: string, input: UpdateStaffInput, actorUserId?: string) {
   const staff = await db.user.findFirst({
     where: staffLookupWhere(id),
     include: { staffProfile: true }
@@ -1825,15 +1834,17 @@ async function updateStaff(id: string, input: UpdateStaffInput) {
     }
   });
 
+  await recordAuditLog({ actorUserId, action: nextStatus && nextStatus !== staff.status ? 'STATUS_CHANGE' : 'UPDATE', module: 'STAFF', entity: 'staff', entityId: updated.id, affectedItem: updated.staffCode ?? updated.id, description: `Updated staff ${updated.email}`, metadataJson: { previousStatus: staff.status, newStatus: updated.status, changedFields: Object.keys(userData).filter((field) => field !== 'staffProfile') } });
   return serializeStaff(updated);
 }
 
-async function deleteStaff(id: string) {
+async function deleteStaff(id: string, actorUserId?: string) {
   const staff = await db.user.findFirst({
     where: staffLookupWhere(id),
     select: {
       id: true,
-      staffCode: true
+      staffCode: true,
+      email: true
     }
   });
 
@@ -1875,6 +1886,7 @@ async function deleteStaff(id: string) {
     await tx.auditLog.updateMany({ where: { actorUserId: staff.id }, data: { actorUserId: null } });
     await tx.user.delete({ where: { id: staff.id } });
   });
+  await recordAuditLog({ actorUserId, action: 'DELETE', module: 'STAFF', entity: 'staff', entityId: staff.id, affectedItem: staff.staffCode ?? staff.id, description: `Deleted staff ${staff.email}` });
 
   return {
     id: staff.staffCode ?? staff.id,

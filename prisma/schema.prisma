@@ -138,6 +138,14 @@ enum AuditAction {
   STATUS_CHANGE
   SETTINGS_UPDATE
   REPORT_PROCESSING
+  FAILED_LOGIN
+  PASSWORD_RESET
+  PASSWORD_CHANGE
+  CONFIRM
+  CANCEL
+  ASSIGN
+  ACTIVATE
+  DEACTIVATE
 }
 
 // ─── Identity & Security ──────────────────────────────────────────────────────
@@ -606,15 +614,27 @@ model AuditLog {
   id          String      @id @default(uuid())
   actorUserId String?     @map("actor_user_id")
   actorUser   User?       @relation("AuditActor", fields: [actorUserId], references: [id])
+  actorEmail  String?     @map("actor_email")
+  actorName   String?     @map("actor_name")
+  actorRole   String?     @map("actor_role")
   action      AuditAction
+  module      String
   entity      String
   entityId    String?     @map("entity_id")
+  affectedItem String?    @map("affected_item")
+  description String
+  status      String      @default("SUCCESS")
+  ipAddress   String?     @map("ip_address")
+  userAgent   String?     @map("user_agent")
   metadataJson Json?      @map("metadata_json")
   createdAt   DateTime    @default(now()) @map("created_at")
 
   @@index([actorUserId, createdAt])
+  @@index([module, createdAt])
   @@index([entity, createdAt])
+  @@index([entityId, createdAt])
   @@index([action, createdAt])
+  @@index([createdAt])
   @@map("audit_logs")
 }
 
