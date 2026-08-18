@@ -71,7 +71,10 @@ adminRouter.patch(
   adminSettingsController.updateNotificationSettings
 );
 adminRouter.get('/system-log', validate({ query: systemLogQuerySchema }), adminSettingsController.listSystemLog);
-adminRouter.get('/system-log/export', validate({ query: systemLogExportQuerySchema }), adminSettingsController.exportSystemLog);
+adminRouter.get('/system-log/export/csv', validate({ query: systemLogExportQuerySchema }), adminSettingsController.exportSystemLog('csv'));
+adminRouter.get('/system-log/export/pdf', validate({ query: systemLogExportQuerySchema }), adminSettingsController.exportSystemLog('pdf'));
+adminRouter.get('/system-log/:id', validate({ params: idParamSchema }), adminSettingsController.getSystemLogById);
+adminRouter.get('/my-roles-permissions', adminSettingsController.getMyRolesPermissions);
 adminRouter.get('/roles-permissions', authorizeRoles(Role.SUPER_ADMIN), adminSettingsController.getRolesPermissions);
 adminRouter.patch('/roles-permissions', authorizeRoles(Role.SUPER_ADMIN), validate({ body: rolesPermissionsUpdateSchema }), adminSettingsController.updateRolesPermissions);
 

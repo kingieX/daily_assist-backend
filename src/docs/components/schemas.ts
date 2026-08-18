@@ -547,30 +547,52 @@ export const schemas: SchemasMap = {
     }
   },
 
+  SystemLogActor: {
+    type: 'object',
+    nullable: true,
+    properties: {
+      id: { type: 'string', nullable: true },
+      name: { type: 'string', nullable: true },
+      email: { type: 'string', nullable: true },
+      role: { type: 'string', nullable: true }
+    }
+  },
+
   SystemLogEntry: {
     type: 'object',
-    required: ['id', 'time', 'user', 'action', 'module', 'affectedItem', 'description', 'ipAddress', 'status'],
+    required: ['id', 'action', 'module', 'entityType', 'description', 'status', 'createdAt'],
     properties: {
       id: { type: 'string' },
-      time: { type: 'string', format: 'date-time' },
-      user: { type: 'string' },
-      action: { type: 'string', enum: ['Created', 'Updated', 'Deleted', 'Assigned', 'Approved', 'Triggered', 'Submitted', 'Attempted', 'Sent', 'Cancelled'] },
-      module: { type: 'string' },
-      affectedItem: { type: 'string' },
+      actor: { $ref: '#/components/schemas/SystemLogActor' },
+      action: { type: 'string', enum: ['CREATE', 'UPDATE', 'DELETE', 'LOGIN', 'LOGOUT', 'FAILED_LOGIN', 'PASSWORD_RESET', 'PASSWORD_CHANGE', 'STATUS_CHANGE', 'SETTINGS_UPDATE', 'REPORT_PROCESSING', 'CONFIRM', 'CANCEL', 'ASSIGN', 'ACTIVATE', 'DEACTIVATE'] },
+      module: { type: 'string', example: 'VISITS' },
+      entityType: { type: 'string', example: 'visit' },
+      entityId: { type: 'string', nullable: true },
+      affectedItem: { type: 'string', nullable: true },
       description: { type: 'string' },
-      ipAddress: { type: 'string' },
-      status: { type: 'string', enum: ['Success', 'Warning', 'Failed', 'Cancelled'] }
+      status: { type: 'string', enum: ['SUCCESS', 'FAILURE'] },
+      ipAddress: { type: 'string', nullable: true },
+      userAgent: { type: 'string', nullable: true },
+      metadata: { type: 'object', nullable: true, additionalProperties: true },
+      createdAt: { type: 'string', format: 'date-time' }
     }
   },
 
   SystemLogListResponse: {
     type: 'object',
-    required: ['items', 'page', 'pageSize', 'total'],
+    required: ['items', 'pagination'],
     properties: {
       items: { type: 'array', items: { $ref: '#/components/schemas/SystemLogEntry' } },
-      page: { type: 'integer' },
-      pageSize: { type: 'integer' },
-      total: { type: 'integer' }
+      pagination: {
+        type: 'object',
+        required: ['page', 'pageSize', 'total', 'totalPages'],
+        properties: {
+          page: { type: 'integer' },
+          pageSize: { type: 'integer' },
+          total: { type: 'integer' },
+          totalPages: { type: 'integer' }
+        }
+      }
     }
   },
 

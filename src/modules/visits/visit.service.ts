@@ -2,6 +2,7 @@ import { BookingStatus, ClientSource, NotificationType, Prisma, Role, ServiceTyp
 import { prisma } from '../../config/prisma';
 import { enqueueNotificationEvent } from '../notifications/notification-events.service';
 import { ApiError } from '../../utils/api-error';
+import { recordAuditLog } from '../operations/audit-log.service';
 import { assertTransition, VISIT_STATUS } from './visit-state';
 import type {
   AdminVisitListQuery,
@@ -285,6 +286,7 @@ async function createVisit(input: CreateVisitInput, actorUserId: string) {
     return serializeVisit(visit);
   });
   await notifyVisit(input.staffId, 'New visit assigned', 'A new visit has been assigned to you.', created.id, 'visit.assigned');
+  await recordAuditLog({ actorUserId, action: 'CREATE', module: 'VISITS', entity: 'visit', entityId: created.id, affectedItem: created.id, description: 'Created visit', metadataJson: { staffId: input.staffId, bookingId: (created as any).bookingId ?? null } });
   return created;
 }
 
@@ -308,6 +310,7 @@ async function updateVisit(id: string, input: UpdateVisitInput, actorUserId: str
     await notifyVisit(existing.staffId, 'Visit reassigned', 'A visit has been removed from your schedule.', id, 'visit.reassigned');
     await notifyVisit(newStaffId, 'Visit assigned', 'A visit has been assigned to you.', id, 'visit.assigned');
   }
+  await recordAuditLog({ actorUserId, action: newStaffId && newStaffId !== existing.staffId ? 'ASSIGN' : 'UPDATE', module: 'VISITS', entity: 'visit', entityId: id, affectedItem: id, description: newStaffId && newStaffId !== existing.staffId ? 'Reassigned visit' : 'Updated visit', metadataJson: { previousStaffId: existing.staffId, newStaffId: newStaffId ?? existing.staffId, changedFields: Object.keys(input) } });
   return updated;
 }
 
@@ -324,6 +327,7 @@ async function cancelVisit(id: string, input: CancelVisitInput, actorUserId: str
     return serializeVisit(updatedVisit);
   });
   await notifyVisit(visit.staffId, 'Visit cancelled', 'A visit has been cancelled and removed from your task list.', id, 'visit.cancelled');
+  await recordAuditLog({ actorUserId, action: 'CANCEL', module: 'VISITS', entity: 'visit', entityId: id, affectedItem: id, description: 'Cancelled visit', metadataJson: { reason: input.reason ?? 'Cancelled by admin', previousStatus: visit.status, newStatus: VISIT_STATUS.CANCELLED } });
   return updated;
 }
 
@@ -438,6 +442,7 @@ async function acknowledgeVisit(visitId: string, staffUserId: string) {
     });
 
     await addVisitEvent(tx, visitId, staffUserId, VISIT_EVENT.ACKNOWLEDGED);
+    await recordAuditLog({ actorUserId: staffUserId, action: 'STATUS_CHANGE', module: 'VISITS', entity: 'visit', entityId: visitId, affectedItem: visitId, description: 'Acknowledged visit', metadataJson: { previousStatus: visit.status, newStatus: VISIT_STATUS.ACKNOWLEDGED } });
     return updated;
   });
 }
@@ -457,6 +462,7 @@ async function checkInVisit(visitId: string, staffUserId: string) {
     });
 
     await addVisitEvent(tx, visitId, staffUserId, VISIT_EVENT.CHECKED_IN);
+    await recordAuditLog({ actorUserId: staffUserId, action: 'STATUS_CHANGE', module: 'VISITS', entity: 'visit', entityId: visitId, affectedItem: visitId, description: 'Checked in to visit', metadataJson: { previousStatus: visit.status, newStatus: VISIT_STATUS.IN_PROGRESS } });
     return { id: updated.id, status: staffVisitStatus(updated.status), checkInAt: updated.checkInAt?.toISOString() ?? null };
   });
 }
@@ -478,6 +484,7 @@ async function checkOutVisit(visitId: string, staffUserId: string, input: CheckO
       logId: log.id
     });
 
+    await recordAuditLog({ actorUserId: staffUserId, action: 'STATUS_CHANGE', module: 'VISITS', entity: 'visit', entityId: visitId, affectedItem: visitId, description: 'Checked out and completed visit', metadataJson: { previousStatus: visit.status, newStatus: VISIT_STATUS.COMPLETED, visitLogId: log.id } });
     return { id: updated.id, status: staffVisitStatus(updated.status), checkOutAt: updated.checkOutAt?.toISOString() ?? now.toISOString(), log: serializeVisitLog(log) };
   });
 }

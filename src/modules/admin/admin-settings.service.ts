@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { AuditAction, Role, User, UserStatus } from '@prisma/client';
+import { Role, User, UserStatus } from '@prisma/client';
 import { prisma } from '../../config/prisma';
 import { ApiError } from '../../utils/api-error';
 import { comparePassword, hashPassword } from '../../utils/password';
@@ -68,6 +68,7 @@ type AdminProfileUser = User & {
 };
 
 type SystemLogQuery = {
+  actorUserId?: string;
   user?: string;
   action?: string;
   module?: string;
@@ -278,67 +279,91 @@ function dateFilter(range?: string, startDate?: Date, endDate?: Date) {
   return undefined;
 }
 
-function displayAction(action: AuditAction): string {
-  const mapping: Record<AuditAction, string> = {
-    CREATE: 'Created',
-    UPDATE: 'Updated',
-    DELETE: 'Deleted',
-    LOGIN: 'Attempted',
-    LOGOUT: 'Attempted',
-    STATUS_CHANGE: 'Updated',
-    SETTINGS_UPDATE: 'Updated',
-    REPORT_PROCESSING: 'Approved'
-  };
-  return mapping[action];
+
+function buildSystemLogWhere(query: SystemLogQuery) {
+  const createdAt = dateFilter(query.dateRange, query.startDate, query.endDate);
+  const and: any[] = [];
+  if (createdAt) and.push({ createdAt });
+  if (query.actorUserId) and.push({ actorUserId: query.actorUserId });
+  if (query.action) and.push({ action: query.action });
+  if (query.module) and.push({ module: { equals: query.module, mode: 'insensitive' } });
+  if (query.user) {
+    and.push({
+      OR: [
+        { actorName: { contains: query.user, mode: 'insensitive' } },
+        { actorEmail: { contains: query.user, mode: 'insensitive' } },
+        { actorRole: { contains: query.user, mode: 'insensitive' } }
+      ]
+    });
+  }
+  if (query.search) {
+    and.push({
+      OR: [
+        { description: { contains: query.search, mode: 'insensitive' } },
+        { module: { contains: query.search, mode: 'insensitive' } },
+        { entity: { contains: query.search, mode: 'insensitive' } },
+        { entityId: { contains: query.search, mode: 'insensitive' } },
+        { affectedItem: { contains: query.search, mode: 'insensitive' } },
+        { actorName: { contains: query.search, mode: 'insensitive' } },
+        { actorEmail: { contains: query.search, mode: 'insensitive' } }
+      ]
+    });
+  }
+  return and.length ? { AND: and } : {};
 }
 
 function serializeSystemLogEntry(log: any) {
-  const metadata = (log.metadataJson ?? {}) as Record<string, string>;
-  const actor = log.actorUser as AdminProfileUser | null;
-  const userCategory = metadata.userCategory ?? (actor ? titleRole(actor.role) : 'System');
-  const actorName = actor ? [actor.firstName, actor.lastName].filter(Boolean).join(' ') || actor.email : 'System';
-
+  const actorName = log.actorName ?? (log.actorUser ? [log.actorUser.firstName, log.actorUser.lastName].filter(Boolean).join(' ') || log.actorUser.email : null);
   return {
     id: log.id,
-    time: log.createdAt.toISOString(),
-    user: metadata.user ?? (userCategory === 'System' ? 'System' : `${userCategory} ${actorName}`.trim()),
-    action: metadata.displayAction ?? displayAction(log.action),
-    module: metadata.module ?? log.entity,
-    affectedItem: metadata.affectedItem ?? (log.entityId ? `${log.entity}: ${log.entityId}` : log.entity),
-    description: metadata.description ?? `${displayAction(log.action)} ${log.entity}`,
-    ipAddress: metadata.ipAddress ?? '',
-    status: metadata.status ?? 'Success'
+    actor: log.actorUserId || actorName || log.actorEmail ? {
+      id: log.actorUserId,
+      name: actorName,
+      email: log.actorEmail ?? log.actorUser?.email ?? null,
+      role: log.actorRole ?? log.actorUser?.role ?? null
+    } : null,
+    action: log.action,
+    module: log.module,
+    entityType: log.entity,
+    entityId: log.entityId,
+    affectedItem: log.affectedItem,
+    description: log.description,
+    status: log.status,
+    ipAddress: log.ipAddress,
+    userAgent: log.userAgent,
+    metadata: log.metadataJson ?? null,
+    createdAt: log.createdAt.toISOString()
   };
-}
-
-function matchesSystemLogFilters(entry: ReturnType<typeof serializeSystemLogEntry>, query: SystemLogQuery): boolean {
-  const search = query.search?.toLowerCase();
-  return (
-    (!query.user || entry.user.includes(query.user)) &&
-    (!query.action || entry.action === query.action) &&
-    (!query.module || entry.module === query.module) &&
-    (!search || `${entry.description} ${entry.action}`.toLowerCase().includes(search))
-  );
 }
 
 export async function listSystemLog(query: SystemLogQuery) {
-  const createdAt = dateFilter(query.dateRange, query.startDate, query.endDate);
-  const where = createdAt ? { createdAt } : {};
-  const entries = await prisma.auditLog.findMany({
-    where,
-    include: { actorUser: true },
-    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }]
-  });
-
-  const filtered = entries.map(serializeSystemLogEntry).filter((entry) => matchesSystemLogFilters(entry, query));
-  const offset = (query.page - 1) * query.pageSize;
+  const where = buildSystemLogWhere(query);
+  const [entries, total] = await prisma.$transaction([
+    prisma.auditLog.findMany({
+      where,
+      include: { actorUser: true },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      skip: (query.page - 1) * query.pageSize,
+      take: query.pageSize
+    }),
+    prisma.auditLog.count({ where })
+  ]);
 
   return {
-    items: filtered.slice(offset, offset + query.pageSize),
-    page: query.page,
-    pageSize: query.pageSize,
-    total: filtered.length
+    items: entries.map(serializeSystemLogEntry),
+    pagination: {
+      page: query.page,
+      pageSize: query.pageSize,
+      total,
+      totalPages: Math.ceil(total / query.pageSize)
+    }
   };
+}
+
+export async function getSystemLogById(id: string) {
+  const log = await prisma.auditLog.findUnique({ where: { id }, include: { actorUser: true } });
+  if (!log) throw new ApiError(404, 'System log not found');
+  return serializeSystemLogEntry(log);
 }
 
 function csvEscape(value: unknown): string {
@@ -347,8 +372,8 @@ function csvEscape(value: unknown): string {
 
 function buildMinimalPdf(lines: string[]): Buffer {
   const content = `BT /F1 10 Tf 40 760 Td ${lines
-    .slice(0, 80)
-    .map((line, index) => `${index === 0 ? '' : '0 -14 Td '}(${line.replace(/[()\\]/g, '\\$&')}) Tj`)
+    .slice(0, 200)
+    .map((line, index) => `${index === 0 ? '' : '0 -14 Td '}(${line.slice(0, 140).replace(/[()\\]/g, '\\$&')}) Tj`)
     .join(' ')} ET`;
   const objects = [
     '1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj',
@@ -360,41 +385,23 @@ function buildMinimalPdf(lines: string[]): Buffer {
   const header = '%PDF-1.4\n';
   const offsets: number[] = [];
   let body = '';
-  for (const object of objects) {
-    offsets.push(Buffer.byteLength(header + body));
-    body += `${object}\n`;
-  }
+  for (const object of objects) { offsets.push(Buffer.byteLength(header + body)); body += `${object}\n`; }
   const xrefOffset = Buffer.byteLength(header + body);
-  const xref = `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n${offsets
-    .map((offset) => `${String(offset).padStart(10, '0')} 00000 n `)
-    .join('\n')}\ntrailer << /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  const xref = `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n${offsets.map((offset) => `${String(offset).padStart(10, '0')} 00000 n `).join('\n')}\ntrailer << /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
   return Buffer.from(header + body + xref);
 }
 
 export async function exportSystemLog(query: Omit<SystemLogQuery, 'page' | 'pageSize'> & { format: 'csv' | 'pdf' }) {
-  const rows = (await listSystemLog({ ...query, page: 1, pageSize: 100_000 })).items;
-
+  const rows = await prisma.auditLog.findMany({ where: buildSystemLogWhere(query as unknown as SystemLogQuery), include: { actorUser: true }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 10000 });
+  const serialized = rows.map(serializeSystemLogEntry);
+  const filename = `system_log_${new Date().toISOString().slice(0, 10)}.${query.format}`;
   if (query.format === 'csv') {
-    return {
-      contentType: 'text/csv; charset=utf-8',
-      filename: 'system_log.csv',
-      body: [
-        'Time,User,Action,Module,Description,Status',
-        ...rows.map((row) =>
-          [row.time, row.user, row.action, row.module, row.description, row.status].map(csvEscape).join(',')
-        )
-      ].join('\n')
-    };
+    return { contentType: 'text/csv; charset=utf-8', filename, body: [
+      'Created At,Actor Name,Actor Email,Actor Role,Action,Module,Entity Type,Entity ID,Affected Item,Description,IP Address,Status',
+      ...serialized.map((row) => [row.createdAt, row.actor?.name, row.actor?.email, row.actor?.role, row.action, row.module, row.entityType, row.entityId, row.affectedItem, row.description, row.ipAddress, row.status].map(csvEscape).join(','))
+    ].join('\n') };
   }
-
-  return {
-    contentType: 'application/pdf',
-    filename: 'system_log.pdf',
-    body: buildMinimalPdf([
-      'System Log',
-      ...rows.map((row) => `${row.time} | ${row.user} | ${row.action} | ${row.module} | ${row.description} | ${row.status}`)
-    ])
-  };
+  return { contentType: 'application/pdf', filename, body: buildMinimalPdf(['System Log / Audit Trail', `Exported At: ${new Date().toISOString()}`, ...serialized.map((row) => `${row.createdAt} | ${row.actor?.email ?? 'System'} | ${row.action} | ${row.module} | ${row.description} | ${row.status}`)]) };
 }
 
 export async function changeAdminPassword(userId: string, data: { currentPassword: string; newPassword: string; confirmPassword: string }) {
@@ -412,6 +419,11 @@ export async function changeAdminPassword(userId: string, data: { currentPasswor
 }
 
 export function getRolesPermissions() { return rolesPermissions; }
+
+export function getMyRolesPermissions(role: Role) {
+  if (role === Role.SUPER_ADMIN) return rolesPermissions;
+  return { admin: rolesPermissions.admin };
+}
 
 export function updateRolesPermissions(input: { admin?: Record<string, boolean>; staff?: Record<string, boolean> }) {
   for (const role of ['admin', 'staff'] as const) {

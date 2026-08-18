@@ -11,6 +11,7 @@ import { openApiSpec } from './docs';
 import { errorHandler } from './middlewares/error.middleware';
 import { notFoundHandler } from './middlewares/not-found.middleware';
 import { v1Router } from './routes/v1.routes';
+import { auditContextMiddleware } from './modules/operations/audit-context';
 
 function getCorsOrigin(): boolean | string[] {
   if (env.CORS_ORIGIN === '*') {
@@ -33,6 +34,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(pinoHttp({ logger }));
+app.use(auditContextMiddleware);
 app.use(
   '/uploads',
   (_req, res, next) => {

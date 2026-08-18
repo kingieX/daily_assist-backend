@@ -154,7 +154,7 @@ const listClients = asyncHandler(async (req: Request, res: Response) => {
 });
 
 const createClient = asyncHandler(async (req: Request, res: Response) => {
-  const client = await adminService.createClient({ ...req.body, ...clientProofUrl(req) });
+  const client = await adminService.createClient({ ...req.body, ...clientProofUrl(req) }, getActorUserId(req));
   return sendSuccess(res, 201, 'Client created successfully', client);
 });
 
@@ -164,12 +164,12 @@ const getClientById = asyncHandler(async (req: Request, res: Response) => {
 });
 
 const updateClient = asyncHandler(async (req: Request, res: Response) => {
-  const client = await adminService.updateClient(req.params.id as string, { ...req.body, ...clientProofUrl(req) });
+  const client = await adminService.updateClient(req.params.id as string, { ...req.body, ...clientProofUrl(req) }, getActorUserId(req));
   return sendSuccess(res, 200, 'Client updated successfully', client);
 });
 
 const deleteClient = asyncHandler(async (req: Request, res: Response) => {
-  await adminService.deleteClient(req.params.id as string);
+  await adminService.deleteClient(req.params.id as string, getActorUserId(req));
   return sendSuccess(res, 200, 'Client deleted successfully');
 });
 
@@ -241,7 +241,7 @@ const listStaff = asyncHandler(async (req: Request, res: Response) => {
 });
 
 const createStaff = asyncHandler(async (req: Request, res: Response) => {
-  const staff = await adminService.createStaff({ ...req.body, ...staffUploadUrls(req) });
+  const staff = await adminService.createStaff({ ...req.body, ...staffUploadUrls(req) }, getActorUserId(req));
   return sendSuccess(res, 201, 'Staff account created successfully', staff);
 });
 
@@ -267,12 +267,12 @@ const resetStaffPassword = asyncHandler(async (req: Request, res: Response) => {
 });
 
 const updateStaff = asyncHandler(async (req: Request, res: Response) => {
-  const staff = await adminService.updateStaff(req.params.id as string, { ...req.body, ...staffUploadUrls(req) });
+  const staff = await adminService.updateStaff(req.params.id as string, { ...req.body, ...staffUploadUrls(req) }, getActorUserId(req));
   return sendSuccess(res, 200, 'Staff updated successfully', staff);
 });
 
 const deleteStaff = asyncHandler(async (req: Request, res: Response) => {
-  const result = await adminService.deleteStaff(req.params.id as string);
+  const result = await adminService.deleteStaff(req.params.id as string, getActorUserId(req));
   return sendSuccess(res, 200, 'Staff deleted successfully', result);
 });
 

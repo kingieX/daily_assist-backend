@@ -611,3 +611,215 @@ Keep for UI compatibility, backed by notifications:
 - Email sending happens asynchronously through a worker.
 - WebSocket events are emitted only after durable database writes.
 - Staff alert behavior remains unchanged unless explicitly approved.
+
+## Completion Cross-Check — August 8, 2026
+
+The implementation has been cross-checked against this plan. The public route surface described in **Endpoint Ownership After Refactor** is present and mounted under the existing role-scoped URL prefixes, while module ownership has been split into Messages, Communications, and Notifications.
+
+### Confirmed complete
+
+- **Messages endpoints:** admin and staff message/chat endpoints are declared in the dedicated Messages routers and are mounted from the admin/staff role routers before the announcement-only communications routers.
+- **Communications endpoints:** admin and staff communications routers now contain announcement endpoints only.
+- **Notifications endpoints:** admin and staff notification history/feed, preferences, read, read-all, unread-count, and delete endpoints are declared in the dedicated Notifications routers.
+- **Dashboard alerts:** admin dashboard alert routes remain available and operate over the notification rows/read state used by notification history.
+- **Notification event abstraction:** message creation, announcement creation, and visit assignment/reassignment/cancellation paths enqueue notification events instead of directly creating notification feed rows in those request flows.
+- **Worker and email delivery:** the notification event service supports BullMQ + Redis when `REDIS_URL` is configured, keeps an in-process fallback for local/test environments, applies user/admin preferences, sends generic notification emails, emits realtime events, and records delivery audit rows.
+- **WebSocket gateway:** Socket.IO is attached to the HTTP server, authenticates with REST JWT access tokens, joins private user/role rooms, authorizes conversation room joins, and emits post-commit message/notification/alert events.
+- **Database migration coverage:** the `NotificationDelivery` audit model in `prisma/schema.prisma` is now backed by a migration that creates its enums, table, indexes, and foreign keys.
+
+### Implementation notes
+
+- The public URL paths intentionally remain `/admin/messages/*`, `/staff/messages/*`, `/admin/notifications/*`, and `/staff/notifications/*` to avoid a frontend breaking change.
+- Some internal service methods still delegate through the legacy communications service facade. This does not block the documented endpoints, worker behavior, or realtime delivery, but can be cleaned up later as an internal-only refactor.
+- `REDIS_URL` is optional for local endpoint testing. In production it should be configured so notification jobs are durable and retryable through BullMQ.
+
+## Endpoint Testing Guide
+
+### 1. Required local setup
+
+Install dependencies, provide environment variables, run migrations, seed users, and start the API:
+
+```bash
+npm install
+
+cat > .env <<'ENV'
+DATABASE_URL="postgresql://USER:PASSWORD@localhost:5432/dailyassist"
+JWT_ACCESS_SECRET="replace-with-at-least-32-characters-access-secret"
+JWT_REFRESH_SECRET="replace-with-at-least-32-characters-refresh-secret"
+JWT_ACCESS_EXPIRES_IN="15m"
+JWT_REFRESH_EXPIRES_IN="7d"
+PORT=4000
+CORS_ORIGIN="http://localhost:3000"
+FRONTEND_URL="http://localhost:3000"
+# Optional locally, recommended/required for production-grade notification queueing:
+# REDIS_URL="redis://localhost:6379"
+# Email delivery is optional in local development and required by default in production.
+# Set EMAIL_DELIVERY_REQUIRED=true locally if you want startup to fail until SMTP is configured.
+EMAIL_DELIVERY_REQUIRED=false
+# Without SMTP/Mailtrap credentials, email content is logged in dev instead of sent:
+# MAILTRAP_PASS="your-mailtrap-token"
+# EMAIL_HOST="smtp.example.com"
+# EMAIL_PORT=587
+# EMAIL_USER="smtp-user"
+# EMAIL_PASS="smtp-password"
+# EMAIL_FROM="DailyAssist <hello@dailyassistuk.com>"
+ENV
+
+npm run prisma:migrate:deploy
+npm run prisma:seed
+npm run dev
+```
+
+In a second terminal, start the worker when testing BullMQ/Redis delivery:
+
+```bash
+REDIS_URL="redis://localhost:6379" npm run worker:notifications
+```
+
+If `REDIS_URL` is not set, REST-triggered notification events are processed by the API process through the local in-process fallback queue. If `EMAIL_DELIVERY_REQUIRED=true`, the API verifies SMTP during startup and fails fast when Mailtrap/generic SMTP credentials are missing or invalid.
+
+### 2. Get admin and staff tokens
+
+The seed script defaults to `admin@dailyassist.local` and `staff@dailyassist.local` unless overridden with `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`, `SEED_STAFF_EMAIL`, or `SEED_STAFF_PASSWORD`.
+
+```bash
+BASE_URL="http://localhost:4000/api/v1"
+
+ADMIN_TOKEN=$(curl -sS -X POST "$BASE_URL/auth/admin/login" \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"admin@dailyassist.local","password":"Admin@12345"}' | jq -r '.data.accessToken')
+
+STAFF_TOKEN=$(curl -sS -X POST "$BASE_URL/auth/staff/login" \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"staff@dailyassist.local","password":"Staff@12345"}' | jq -r '.data.accessToken')
+```
+
+### 3. Smoke-test the documented read endpoints
+
+A script is included for the main communications/notifications read checks:
+
+```bash
+BASE_URL="http://localhost:4000/api/v1" \
+ADMIN_EMAIL="admin@dailyassist.local" \
+ADMIN_PASSWORD="Admin@12345" \
+STAFF_EMAIL="staff@dailyassist.local" \
+STAFF_PASSWORD="Staff@12345" \
+./scripts/smoke/phase5-communications-curl.sh
+```
+
+The script checks:
+
+1. `GET /admin/messages/threads`
+2. `GET /admin/announcements`
+3. `GET /admin/notifications/history`
+4. `GET /staff/messages/threads`
+5. `GET /staff/announcements`
+6. `GET /staff/notifications`
+
+### 4. Manual endpoint checks
+
+Use the tokens from step 2.
+
+```bash
+curl -sS "$BASE_URL/admin/messages?page=1&pageSize=10" -H "Authorization: Bearer $ADMIN_TOKEN" | jq .
+curl -sS "$BASE_URL/admin/messages/threads?page=1&limit=10" -H "Authorization: Bearer $ADMIN_TOKEN" | jq .
+curl -sS "$BASE_URL/admin/announcements?page=1&limit=10" -H "Authorization: Bearer $ADMIN_TOKEN" | jq .
+curl -sS "$BASE_URL/admin/notifications/history?page=1&limit=10" -H "Authorization: Bearer $ADMIN_TOKEN" | jq .
+curl -sS "$BASE_URL/admin/notifications/unread-count" -H "Authorization: Bearer $ADMIN_TOKEN" | jq .
+curl -sS "$BASE_URL/admin/notifications/preferences" -H "Authorization: Bearer $ADMIN_TOKEN" | jq .
+curl -sS "$BASE_URL/admin/dashboard/alerts" -H "Authorization: Bearer $ADMIN_TOKEN" | jq .
+
+curl -sS "$BASE_URL/staff/messages?page=1&pageSize=10" -H "Authorization: Bearer $STAFF_TOKEN" | jq .
+curl -sS "$BASE_URL/staff/messages/threads?page=1&limit=10" -H "Authorization: Bearer $STAFF_TOKEN" | jq .
+curl -sS "$BASE_URL/staff/announcements?page=1&limit=10" -H "Authorization: Bearer $STAFF_TOKEN" | jq .
+curl -sS "$BASE_URL/staff/notifications?page=1&limit=10" -H "Authorization: Bearer $STAFF_TOKEN" | jq .
+curl -sS "$BASE_URL/staff/notifications/unread-count" -H "Authorization: Bearer $STAFF_TOKEN" | jq .
+curl -sS "$BASE_URL/staff/notifications/preferences" -H "Authorization: Bearer $STAFF_TOKEN" | jq .
+```
+
+### 5. Create data that triggers notification delivery
+
+Create an announcement, which should enqueue an `announcement.created` notification event for eligible staff recipients:
+
+```bash
+curl -sS -X POST "$BASE_URL/admin/announcements" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"title":"Test announcement","body":"Testing notification delivery","audienceType":"ALL_STAFF"}' | jq .
+
+curl -sS "$BASE_URL/staff/notifications?page=1&limit=10" \
+  -H "Authorization: Bearer $STAFF_TOKEN" | jq .
+```
+
+After you identify a notification ID, test read/delete operations:
+
+```bash
+NOTIFICATION_ID="paste-notification-id-here"
+
+curl -sS -X PATCH "$BASE_URL/staff/notifications/$NOTIFICATION_ID/read" \
+  -H "Authorization: Bearer $STAFF_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{}' | jq .
+
+curl -sS -X DELETE "$BASE_URL/staff/notifications/$NOTIFICATION_ID" \
+  -H "Authorization: Bearer $STAFF_TOKEN" | jq .
+```
+
+### 6. Test preferences
+
+Disable staff announcement notifications, create another announcement, and confirm it is skipped for that staff member:
+
+```bash
+curl -sS -X PATCH "$BASE_URL/staff/notifications/preferences" \
+  -H "Authorization: Bearer $STAFF_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"announcementEnabled":false}' | jq .
+```
+
+For admin event-level notification settings, use:
+
+```bash
+curl -sS "$BASE_URL/admin/notification-settings" -H "Authorization: Bearer $ADMIN_TOKEN" | jq .
+
+curl -sS -X PATCH "$BASE_URL/admin/notification-settings" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"bookingRequest":{"email":true,"dashboard":true}}' | jq .
+```
+
+### 7. Test Socket.IO realtime behavior
+
+Connect a Socket.IO client to `http://localhost:4000` using the same JWT access token, not the `/api/v1` prefix. Provide the token as `auth.token` or an `Authorization: Bearer <token>` header. Then listen for:
+
+- `message:created`
+- `message:deleted`
+- `notification:created`
+- `notification:read`
+- `notification:deleted`
+- `notification:unread_count`
+- `alert:created`
+- `alert:read`
+- `alert:unread_count`
+
+To receive chat room events, emit `conversation:join` with a conversation ID that the authenticated user is allowed to access.
+
+### 8. Production environment checklist
+
+Production should provide:
+
+- `DATABASE_URL`
+- `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET` with at least 32 characters each
+- `CORS_ORIGIN` set to the deployed frontend origin or comma-separated origins
+- `FRONTEND_URL`
+- `REDIS_URL` for BullMQ notification queue durability and retries
+- `EMAIL_DELIVERY_REQUIRED` (defaults to `true` in production) so production fails fast if SMTP is missing
+- SMTP/Mailtrap configuration for real email delivery: either `MAILTRAP_PASS` with the Mailtrap defaults or the complete generic SMTP set `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, `EMAIL_PASS`, and `EMAIL_FROM`
+
+Run production migrations before deploying the new worker/API version:
+
+```bash
+npm run prisma:migrate:deploy
+npm run build
+npm start
+npm run worker:notifications
+```

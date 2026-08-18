@@ -50,47 +50,13 @@ export const notificationSettingsSchema = z
 
 const systemLogFilterSchema = z
   .object({
-    user: z.preprocess(emptyStringToUndefined, z.enum(['Admin', 'Operation Manager', 'Staff', 'System']).optional()),
-    action: z.preprocess(
-      emptyStringToUndefined,
-      z
-        .enum([
-          'Created',
-          'Updated',
-          'Deleted',
-          'Assigned',
-          'Approved',
-          'Triggered',
-          'Submitted',
-          'Attempted',
-          'Sent',
-          'Cancelled'
-        ])
-        .optional()
-    ),
-    module: z.preprocess(
-      emptyStringToUndefined,
-      z
-        .enum([
-          'Clients',
-          'Staff',
-          'Visits',
-          'Bookings',
-          'Messages',
-          'Settings',
-          'Alerts',
-          'Notification',
-          'Check-in',
-          'Visit logs',
-          'Service'
-        ])
-        .optional()
-    ),
+    actorUserId: optionalTrimmedString,
+    user: optionalTrimmedString,
+    action: z.preprocess(emptyStringToUndefined, z.string().trim().optional()),
+    module: z.preprocess(emptyStringToUndefined, z.string().trim().optional()),
     dateRange: z.preprocess(
       emptyStringToUndefined,
-      z
-        .enum(['Today', 'Yesterday', 'Last 7 Days', 'Last 30 Days', 'This Month', 'Custom Range'])
-        .optional()
+      z.enum(['Today', 'Yesterday', 'Last 7 Days', 'Last 30 Days', 'This Month', 'Custom Range']).optional()
     ),
     startDate: z.preprocess(emptyStringToUndefined, z.coerce.date().optional()),
     endDate: z.preprocess(emptyStringToUndefined, z.coerce.date().optional()),
@@ -106,6 +72,4 @@ export const systemLogQuerySchema = systemLogFilterSchema.extend({
   pageSize: z.coerce.number().int().min(1).max(100).default(10)
 });
 
-export const systemLogExportQuerySchema = systemLogFilterSchema.extend({
-  format: z.enum(['csv', 'pdf'])
-});
+export const systemLogExportQuerySchema = systemLogFilterSchema;
