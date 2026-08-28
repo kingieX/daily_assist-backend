@@ -1,4 +1,4 @@
-import { Role } from '@prisma/client';
+import { NotificationType, Role } from '@prisma/client';
 import { prisma } from '../../config/prisma';
 import { realtimeGateway } from '../../realtime/realtime.gateway';
 import { enqueueNotificationEvent } from '../notifications/notification-events.service';
@@ -278,13 +278,23 @@ async function postMessage(
   });
 
   realtimeGateway.emitToConversation(conversationId, 'message:created', { ...message, conversationId });
-  if (conversation.staffId && conversation.staffId !== currentUserId) {
+  const notificationBody = (input.body?.trim() || 'New attachment').slice(0, 150);
+  if (currentUserRole === Role.STAFF) {
+    await enqueueNotificationEvent('message.created', {
+      actorUserId: currentUserId,
+      roleRecipients: [Role.ADMIN, Role.SUPER_ADMIN],
+      type: NotificationType.MESSAGE,
+      title: 'New staff message',
+      body: notificationBody,
+      metadataJson: { conversationId, messageId: message.id }
+    });
+  } else if (conversation.staffId && conversation.staffId !== currentUserId) {
     await enqueueNotificationEvent('message.created', {
       actorUserId: currentUserId,
       recipientIds: [conversation.staffId],
       type: COMM_NOTIFICATION_TYPE.MESSAGE,
       title: 'New message',
-      body: (input.body?.trim() || 'New attachment').slice(0, 150),
+      body: notificationBody,
       metadataJson: { conversationId, messageId: message.id }
     });
   }
