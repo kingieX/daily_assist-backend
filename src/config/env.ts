@@ -27,7 +27,7 @@ const envSchema = z
     EMAIL_PORT: z.coerce.number().optional(),
     EMAIL_USER: z.string().optional(),
     EMAIL_PASS: z.string().optional(),
-    EMAIL_FROM: z.string().default("<no-reply@dailyassistuk.com>"),
+    EMAIL_FROM: z.string().default("no-reply@dailyassistuk.com"),
     EMAIL_DELIVERY_REQUIRED: z.coerce
       .boolean()
       .default(process.env.NODE_ENV === "production"),
