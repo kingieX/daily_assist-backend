@@ -448,13 +448,13 @@ async function acknowledgeVisit(visitId: string, staffUserId: string) {
 }
 
 async function checkInVisit(visitId: string, staffUserId: string) {
-  const visit = await prisma.visit.findFirst({ where: { id: visitId, staffId: staffUserId } });
+  const visit = await prisma.visit.findFirst({ where: { id: visitId, staffId: staffUserId }, include: visitInclude });
   if (!visit) throw new ApiError(404, 'Visit not found for current staff user');
 
   if (visit.status === VISIT_STATUS.IN_PROGRESS || visit.status === VISIT_STATUS.COMPLETED) throw new ApiError(409, 'Visit is already in progress or completed');
   if (![VISIT_STATUS.ASSIGNED, VISIT_STATUS.ACKNOWLEDGED].includes(visit.status as any)) throw new ApiError(409, 'Visit cannot be checked in');
 
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const updated = await tx.visit.update({
       where: { id: visitId },
       data: { status: VISIT_STATUS.IN_PROGRESS, checkInAt: new Date() },
@@ -465,16 +465,28 @@ async function checkInVisit(visitId: string, staffUserId: string) {
     await recordAuditLog({ actorUserId: staffUserId, action: 'STATUS_CHANGE', module: 'VISITS', entity: 'visit', entityId: visitId, affectedItem: visitId, description: 'Checked in to visit', metadataJson: { previousStatus: visit.status, newStatus: VISIT_STATUS.IN_PROGRESS } });
     return { id: updated.id, status: staffVisitStatus(updated.status), checkInAt: updated.checkInAt?.toISOString() ?? null };
   });
+
+  await enqueueNotificationEvent('visit.checkin.completed', {
+    actorUserId: staffUserId,
+    roleRecipients: [Role.ADMIN, Role.SUPER_ADMIN],
+    type: NotificationType.VISIT,
+    title: 'Staff checked in',
+    body: `${staffName(visit.staff)} checked in for ${serializeVisit(visit).clientName}.`,
+    metadataJson: { visitId },
+    adminSettingKey: 'staffCheckin'
+  });
+
+  return result;
 }
 
 async function checkOutVisit(visitId: string, staffUserId: string, input: CheckOutVisitInput) {
-  const visit = await prisma.visit.findFirst({ where: { id: visitId, staffId: staffUserId } });
+  const visit = await prisma.visit.findFirst({ where: { id: visitId, staffId: staffUserId }, include: visitInclude });
   if (!visit) throw new ApiError(404, 'Visit not found for current staff user');
 
   if (visit.status === VISIT_STATUS.COMPLETED) throw new ApiError(409, 'Visit is already completed');
   if (visit.status !== VISIT_STATUS.IN_PROGRESS || !visit.checkInAt) throw new ApiError(409, 'Visit must be checked in before check-out');
 
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const now = new Date();
     const updated = await tx.visit.update({ where: { id: visitId }, data: { status: VISIT_STATUS.COMPLETED, checkOutAt: now, completionSummary: input.notes, staffNotes: input.notes }, include: visitInclude });
     const log = await (tx as any).visitLog.create({ data: { visitId, staffId: staffUserId, visitTypes: input.visitTypes, otherService: input.otherService, miles: input.miles, notes: input.notes, signature: input.signature, confirmed: input.confirmed, submittedAt: now } });
@@ -487,6 +499,18 @@ async function checkOutVisit(visitId: string, staffUserId: string, input: CheckO
     await recordAuditLog({ actorUserId: staffUserId, action: 'STATUS_CHANGE', module: 'VISITS', entity: 'visit', entityId: visitId, affectedItem: visitId, description: 'Checked out and completed visit', metadataJson: { previousStatus: visit.status, newStatus: VISIT_STATUS.COMPLETED, visitLogId: log.id } });
     return { id: updated.id, status: staffVisitStatus(updated.status), checkOutAt: updated.checkOutAt?.toISOString() ?? now.toISOString(), log: serializeVisitLog(log) };
   });
+
+  await enqueueNotificationEvent('visit.checkout.completed', {
+    actorUserId: staffUserId,
+    roleRecipients: [Role.ADMIN, Role.SUPER_ADMIN],
+    type: NotificationType.VISIT,
+    title: 'Staff checked out',
+    body: `${staffName(visit.staff)} checked out from ${serializeVisit(visit).clientName}.`,
+    metadataJson: { visitId },
+    adminSettingKey: 'staffCheckout'
+  });
+
+  return result;
 }
 
 export const visitService = {

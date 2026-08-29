@@ -56,6 +56,49 @@ export async function verifyEmailDelivery(): Promise<void> {
 
 const BOOKING_INQUIRY_RECIPIENT = "info@dailyassistuk.com";
 
+function stripHtml(html: string): string {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<br\s*\/?\s*>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<\/tr>/gi, '\n')
+    .replace(/<\/td>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n\s+/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function ensureHtmlDocument(html: string): string {
+  if (/<html[\s>]/i.test(html)) return html;
+  return `<!doctype html>
+<html>
+  <head><meta name="viewport" content="width=device-width, initial-scale=1.0" /></head>
+  <body>
+${html}
+  </body>
+</html>`;
+}
+
+async function sendStructuredMail(options: nodemailer.SendMailOptions & { html: string; text?: string }): Promise<void> {
+  if (!transporter) return;
+
+  const html = ensureHtmlDocument(options.html);
+  await transporter.sendMail({
+    ...options,
+    html,
+    text: options.text ?? stripHtml(html),
+  });
+}
+
 // ─── Email Senders ────────────────────────────────────────────────────────────
 
 export async function sendPasswordResetEmail(
@@ -81,7 +124,7 @@ export async function sendPasswordResetEmail(
     return;
   }
 
-  await transporter.sendMail({
+  await sendStructuredMail({
     from: env.EMAIL_FROM,
     to,
     subject,
@@ -160,7 +203,7 @@ export async function sendStaffCredentialsEmail(input: StaffCredentialsEmailInpu
     return;
   }
 
-  await transporter.sendMail({
+  await sendStructuredMail({
     from: env.EMAIL_FROM,
     to: input.to,
     subject,
@@ -205,7 +248,7 @@ export async function sendBookingInquiryEmail(
     return;
   }
 
-  await transporter.sendMail({
+  await sendStructuredMail({
     from: env.EMAIL_FROM,
     to: BOOKING_INQUIRY_RECIPIENT,
     replyTo: input.email,
@@ -241,7 +284,7 @@ export async function sendNotificationEmail(input: GenericNotificationEmailInput
     return;
   }
 
-  await transporter.sendMail({
+  await sendStructuredMail({
     from: env.EMAIL_FROM,
     to: input.to,
     subject: input.subject,
