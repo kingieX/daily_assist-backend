@@ -322,10 +322,10 @@ export const adminPaths: OpenAPIV3.PathsObject = {
     get: {
       tags: ['Admin — Dashboard'],
       summary: 'Get dashboard alerts feed',
-      description: 'Dashboard-specific flat projection over the shared notifications/alerts table used by admin and staff alert feeds. This endpoint reads generated alert records; visit-status, staff-message, and reminder alerts should be produced by event/scheduled workers so admin and staff feeds stay consistent.',
+      description: "Dashboard-specific flat projection over the shared notifications table. It returns the same admin-owned notification rows shown by `/admin/notifications/history`, formatted as flat alert cards. Staff-originated chat messages are projected as info alerts; staff check-in/check-out visit notifications are projected as warning alerts when the authenticated admin's broad notification preferences and admin notification settings allow dashboard delivery.",
       security: adminSecurity,
       responses: {
-        '200': { description: 'Dashboard alerts retrieved', content: { 'application/json': { example: { success: true, message: 'Dashboard alerts retrieved', data: [{ id: 'uuid', type: 'warning', text: '1 Missed Check-In for Mr Grant', createdAt: '2026-08-02T09:00:00.000Z', read: false }] } } } },
+        '200': { description: 'Dashboard alerts retrieved', content: { 'application/json': { example: { success: true, message: 'Dashboard alerts retrieved', data: [{ id: 'uuid', type: 'warning', text: 'Staff checked in - Sarah Johnson checked in for Mrs Grant.', createdAt: '2026-08-02T09:00:00.000Z', read: false }] } } } },
         '401': { $ref: '#/components/responses/UnauthorizedError' },
         '403': { $ref: '#/components/responses/ForbiddenError' }
       }
@@ -339,7 +339,7 @@ export const adminPaths: OpenAPIV3.PathsObject = {
       security: adminSecurity,
       parameters: [idParam],
       responses: {
-        '200': { description: 'Dashboard alert marked read', content: { 'application/json': { example: { success: true, message: 'Dashboard alert marked read', data: { id: 'uuid', type: 'warning', text: '1 Missed Check-In for Mr Grant', createdAt: '2026-08-02T09:00:00.000Z', read: true } } } } },
+        '200': { description: 'Dashboard alert marked read', content: { 'application/json': { example: { success: true, message: 'Dashboard alert marked read', data: { id: 'uuid', type: 'warning', text: 'Staff checked in - Sarah Johnson checked in for Mrs Grant.', createdAt: '2026-08-02T09:00:00.000Z', read: true } } } } },
         '401': { $ref: '#/components/responses/UnauthorizedError' },
         '403': { $ref: '#/components/responses/ForbiddenError' },
         '404': { $ref: '#/components/responses/NotFoundError' }

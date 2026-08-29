@@ -73,7 +73,7 @@ const markReadBody = jsonBody(
 
 export const communicationsPaths: OpenAPIV3.PathsObject = {
   '/admin/messages': {
-    get: { tags: ['Messages'], summary: 'List admin unified inbox', description: 'Read model over direct chats, announcements, and notifications. Supports tab=all|announcement|notification, search by name, page, and pageSize. Direct replies enqueue `message.created` notification jobs and emit `message:created` over Socket.IO after the message transaction commits.', security: secured, parameters: [{ name: 'tab', in: 'query', schema: { type: 'string', enum: ['all', 'announcement', 'notification'] } }, { name: 'search', in: 'query', schema: { type: 'string' } }, { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } }, { name: 'pageSize', in: 'query', schema: { type: 'integer', default: 20 } }], responses: { '200': { description: 'Messages retrieved' } } },
+    get: { tags: ['Messages'], summary: 'List admin unified inbox', description: 'Read model over direct chats, announcements, and notifications. Supports tab=all|announcement|notification, search by name, page, and pageSize. Direct replies enqueue `message.created` notification jobs and emit `message:created` over Socket.IO after the message transaction commits. Staff-originated direct chat messages create MESSAGE notification records for active admins and super admins when their message/in-app preferences allow them.', security: secured, parameters: [{ name: 'tab', in: 'query', schema: { type: 'string', enum: ['all', 'announcement', 'notification'] } }, { name: 'search', in: 'query', schema: { type: 'string' } }, { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } }, { name: 'pageSize', in: 'query', schema: { type: 'integer', default: 20 } }], responses: { '200': { description: 'Messages retrieved' } } },
     post: { tags: ['Messages'], summary: 'Start a direct staff chat', security: secured, requestBody: jsonBody({ type: 'object', required: ['staffId', 'message'], properties: { staffId: { type: 'string', format: 'uuid' }, message: { type: 'string' } } }, { staffId: '00000000-0000-0000-0000-000000000000', message: 'Hello Sarah' }), responses: { '201': { description: 'Conversation created or reused and first message appended' } } },
     delete: { tags: ['Messages'], summary: 'Bulk delete admin inbox items', security: secured, requestBody: jsonBody({ type: 'object', required: ['ids'], properties: { ids: { type: 'array', items: { type: 'string', format: 'uuid' } } } }, { ids: ['00000000-0000-0000-0000-000000000000'] }), responses: { '200': { description: 'Messages deleted' } } }
   },
@@ -112,7 +112,7 @@ export const communicationsPaths: OpenAPIV3.PathsObject = {
     post: {
       tags: ['Messages'],
       summary: 'Post message to thread',
-      description: 'Sends a text message and/or an HTTPS attachment URL to the selected thread. After commit, emits `message:created` to the conversation room and enqueues `message.created` notification delivery.',
+      description: 'Sends a text message and/or an HTTPS attachment URL to the selected thread. After commit, emits `message:created` to the conversation room and enqueues `message.created` notification delivery. Admin-originated messages notify the target staff member when preferences allow delivery.',
       security: secured,
       parameters: [idParam],
       requestBody: postMessageBody,
@@ -170,7 +170,7 @@ export const communicationsPaths: OpenAPIV3.PathsObject = {
     get: {
       tags: ['Notifications'],
       summary: 'List admin notification history',
-      description: 'Returns paginated notification history. Use type and unreadOnly filters for inbox views. Notification rows are created by the notification event worker after channel/category preference checks.',
+      description: 'Returns paginated notification history. Use type and unreadOnly filters for inbox views. Notification rows are created by the notification event worker after channel/category preference checks. Current admin-producing events include staff-originated direct messages (`MESSAGE`) plus staff visit check-in/check-out events (`VISIT`); announcement and other system events appear when targeted to the authenticated admin.',
       security: secured,
       parameters: [
         ...paginationParameters,
@@ -268,7 +268,7 @@ export const communicationsPaths: OpenAPIV3.PathsObject = {
     post: {
       tags: ['Messages'],
       summary: 'Post message in staff thread',
-      description: 'Sends a text message and/or an HTTPS attachment URL in the staff member’s thread. After commit, emits `message:created` to the conversation room and enqueues `message.created` notification delivery.',
+      description: 'Sends a text message and/or an HTTPS attachment URL in the staff member’s thread. After commit, emits `message:created` to the conversation room and enqueues `message.created` notification delivery. Staff-originated messages notify active admins and super admins when preferences allow delivery.',
       security: secured,
       parameters: [idParam],
       requestBody: postMessageBody,
@@ -312,7 +312,7 @@ export const communicationsPaths: OpenAPIV3.PathsObject = {
     get: {
       tags: ['Notifications'],
       summary: 'List staff notifications',
-      description: 'Returns notification history for the authenticated staff member. Notification rows are created by the notification event worker after channel/category preference checks.',
+      description: 'Returns notification history for the authenticated staff member. Notification rows are created by the notification event worker after channel/category preference checks. Current staff-producing events include admin-originated direct messages (`MESSAGE`), announcements (`ANNOUNCEMENT`), and visit assignment/reassignment/cancellation events (`VISIT`).',
       security: secured,
       parameters: [
         ...paginationParameters,

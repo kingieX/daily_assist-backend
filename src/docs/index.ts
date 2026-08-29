@@ -65,7 +65,13 @@ export const openApiSpec: OpenAPIV3.Document = {
       '## Response Envelope',
       'All responses follow a consistent shape:',
       '- **Success:** `{ success: true, message, data? }`',
-      '- **Error:** `{ success: false, message, code?, errors? }`'
+      '- **Error:** `{ success: false, message, code?, errors? }`',
+      '',
+      '## Email Deliverability',
+      'SMTP emails sent by the backend include both `text/html` and `text/plain` MIME parts. HTML bodies are sent as complete HTML documents (`<!doctype html><html><head>...</head><body>...</body></html>`) so password reset, staff credential, booking enquiry, and notification emails avoid SpamAssassin `HTML_MIME_NO_HTML_TAG` and `MIME_HTML_ONLY` penalties.',
+      '',
+      '## Notifications and Dashboard Alerts',
+      'Notification records are created by the notification event worker after user notification preferences are evaluated. Admin dashboard alerts are not a separate store; `/admin/dashboard/alerts` projects the authenticated admin notification rows into alert cards. Staff direct messages now produce admin `MESSAGE` notifications, and staff check-in/check-out events produce admin `VISIT` notifications when preferences allow them.'
     ].join('\n')
   },
 
