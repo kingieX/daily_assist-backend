@@ -55,7 +55,7 @@ const postMessage = asyncHandler(async (req: Request, res: Response) => {
 const deleteThread = asyncHandler(async (req: Request, res: Response) => {
   const user = currentUser(req);
   const result = await messagesService.deleteThread(req.params.id as string, user.role, user.id);
-  return sendSuccess(res, 200, 'Thread archived', result);
+  return sendSuccess(res, 200, 'Thread deleted', result);
 });
 
 const deleteMessage = asyncHandler(async (req: Request, res: Response) => {

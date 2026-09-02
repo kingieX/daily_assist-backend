@@ -226,10 +226,6 @@ async function getThreadMessages(conversationId: string, currentUserRole: Role, 
   if (currentUserRole === Role.STAFF && conversation.staffId !== currentUserId) {
     throw new ApiError(403, 'Forbidden for this conversation');
   }
-  if ((currentUserRole === Role.STAFF && conversation.staffArchivedAt) || (currentUserRole !== Role.STAFF && conversation.adminArchivedAt)) {
-    throw new ApiError(404, 'Conversation not found');
-  }
-
   return db.message.findMany({
     where: {
       conversationId,
@@ -261,10 +257,6 @@ async function postMessage(
   if (currentUserRole === Role.STAFF && conversation.staffId !== currentUserId) {
     throw new ApiError(403, 'Forbidden for this conversation');
   }
-  if ((currentUserRole === Role.STAFF && conversation.staffArchivedAt) || (currentUserRole !== Role.STAFF && conversation.adminArchivedAt)) {
-    throw new ApiError(404, 'Conversation not found');
-  }
-
   const message = await db.$transaction(async (tx: any) => {
     const created = await tx.message.create({
       data: {
@@ -329,13 +321,10 @@ async function deleteThread(conversationId: string, currentUserRole: Role, curre
     throw new ApiError(403, 'Forbidden for this conversation');
   }
 
-  const archivedAt = new Date();
-  await db.conversation.update({
-    where: { id: conversationId },
-    data: currentUserRole === Role.STAFF ? { staffArchivedAt: archivedAt } : { adminArchivedAt: archivedAt }
-  });
+  await db.conversation.delete({ where: { id: conversationId } });
+  realtimeGateway.emitToConversation(conversationId, 'conversation:deleted', { id: conversationId });
 
-  return { id: conversationId, archived: true, archivedAt };
+  return { id: conversationId, deleted: true };
 }
 
 async function deleteMessage(conversationId: string, messageId: string, currentUserRole: Role, currentUserId: string) {
@@ -352,8 +341,6 @@ async function deleteMessage(conversationId: string, messageId: string, currentU
   if (currentUserRole === Role.STAFF && message.conversation.staffId !== currentUserId) {
     throw new ApiError(403, 'Forbidden for this conversation');
   }
-  if (message.deletedAt) return { id: message.id, deleted: true };
-
   const isOwner = message.senderUserId === currentUserId;
   const isAdmin = currentUserRole === Role.ADMIN || currentUserRole === Role.SUPER_ADMIN;
 
@@ -361,10 +348,7 @@ async function deleteMessage(conversationId: string, messageId: string, currentU
     throw new ApiError(403, 'Only sender or admin can delete this message');
   }
 
-  await db.message.update({
-    where: { id: messageId },
-    data: { deletedAt: new Date() }
-  });
+  await db.message.delete({ where: { id: messageId } });
 
   realtimeGateway.emitToConversation(message.conversation.id, 'message:deleted', { id: messageId, conversationId: message.conversation.id });
   return { id: messageId, deleted: true };

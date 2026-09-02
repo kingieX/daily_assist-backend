@@ -103,11 +103,11 @@ export const communicationsPaths: OpenAPIV3.PathsObject = {
   '/admin/messages/threads/{id}': {
     delete: {
       tags: ['Messages'],
-      summary: 'Archive an admin message thread',
-      description: 'Archives the conversation only from the requesting admin view. Message history is retained and remains visible to the staff participant. A new message from staff restores the thread to the admin list.',
+      summary: 'Permanently delete an admin message thread',
+      description: 'Permanently deletes the conversation and all messages in it for every participant.',
       security: secured,
       parameters: [idParam],
-      responses: { '200': { description: 'Thread archived' } }
+      responses: { '200': { description: 'Thread deleted' } }
     }
   },
   '/admin/messages/threads/{id}/messages': {
@@ -133,7 +133,7 @@ export const communicationsPaths: OpenAPIV3.PathsObject = {
     delete: {
       tags: ['Messages'],
       summary: 'Delete a message from an admin thread',
-      description: 'Soft-deletes the specified message while retaining it for audit and history purposes. The message must belong to the specified thread.',
+      description: 'Permanently deletes the specified message. The message must belong to the specified thread.',
       security: secured,
       parameters: [idParam, { name: 'messageId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
       responses: { '200': { description: 'Message deleted' } }
@@ -279,11 +279,11 @@ export const communicationsPaths: OpenAPIV3.PathsObject = {
   '/staff/messages/threads/{id}': {
     delete: {
       tags: ['Messages'],
-      summary: 'Archive own staff message thread',
-      description: 'Archives the conversation only from the authenticated staff member\'s view. Message history is retained and remains visible to admins. A new message from an admin restores the thread to the staff list.',
+      summary: 'Permanently delete own staff message thread',
+      description: 'Permanently deletes the conversation and all messages in it for every participant.',
       security: secured,
       parameters: [idParam],
-      responses: { '200': { description: 'Thread archived' } }
+      responses: { '200': { description: 'Thread deleted' } }
     }
   },
   '/staff/messages/threads/{id}/messages': {
@@ -309,7 +309,7 @@ export const communicationsPaths: OpenAPIV3.PathsObject = {
     delete: {
       tags: ['Messages'],
       summary: 'Delete a message from own staff thread',
-      description: 'Soft-deletes the specified message while retaining it for audit and history purposes. The message must belong to a thread owned by the authenticated staff member.',
+      description: 'Permanently deletes the specified message. The message must belong to a thread owned by the authenticated staff member.',
       security: secured,
       parameters: [idParam, { name: 'messageId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
       responses: { '200': { description: 'Message deleted' } }
