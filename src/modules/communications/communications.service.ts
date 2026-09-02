@@ -132,7 +132,10 @@ async function createThread(input: CreateThreadInput, currentUserRole: Role, cur
         staffId
       }
     },
-    update: { updatedAt: new Date() },
+    update: {
+      updatedAt: new Date(),
+      ...(currentUserRole === Role.STAFF ? { staffArchivedAt: null } : { adminArchivedAt: null })
+    },
     create: {
       type: 'ADMIN_STAFF',
       staffId
@@ -167,8 +170,12 @@ async function listThreads(query: ListThreadsQuery, currentUserRole: Role, curre
 
   if (currentUserRole === Role.STAFF) {
     where.staffId = currentUserId;
+    where.staffArchivedAt = null;
   } else if (query.staffId) {
     where.staffId = query.staffId;
+    where.adminArchivedAt = null;
+  } else {
+    where.adminArchivedAt = null;
   }
 
   const [total, items] = await Promise.all([
@@ -212,7 +219,7 @@ async function listThreads(query: ListThreadsQuery, currentUserRole: Role, curre
 async function getThreadMessages(conversationId: string, currentUserRole: Role, currentUserId: string) {
   const conversation = await db.conversation.findUnique({
     where: { id: conversationId },
-    select: { id: true, staffId: true }
+    select: { id: true, staffId: true, adminArchivedAt: true, staffArchivedAt: true }
   });
 
   if (!conversation) throw new ApiError(404, 'Conversation not found');
@@ -243,7 +250,7 @@ async function postMessage(
 ) {
   const conversation = await db.conversation.findUnique({
     where: { id: conversationId },
-    select: { id: true, staffId: true }
+    select: { id: true, staffId: true, adminArchivedAt: true, staffArchivedAt: true }
   });
 
   if (!conversation) throw new ApiError(404, 'Conversation not found');
@@ -269,7 +276,10 @@ async function postMessage(
 
     await tx.conversation.update({
       where: { id: conversationId },
-      data: { updatedAt: new Date() }
+      data: {
+        updatedAt: new Date(),
+        ...(currentUserRole === Role.STAFF ? { adminArchivedAt: null } : { staffArchivedAt: null })
+      }
     });
 
     return created;

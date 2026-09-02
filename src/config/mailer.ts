@@ -44,36 +44,40 @@ export function isEmailDeliveryConfigured(): boolean {
 export async function verifyEmailDelivery(): Promise<void> {
   if (!transporter) {
     if (env.EMAIL_DELIVERY_REQUIRED) {
-      throw new Error('SMTP email delivery is required but no Mailtrap or generic SMTP transport is configured');
+      throw new Error(
+        "SMTP email delivery is required but no Mailtrap or generic SMTP transport is configured",
+      );
     }
-    logger.warn('SMTP email delivery is not configured; email senders will log messages instead of sending.');
+    logger.warn(
+      "SMTP email delivery is not configured; email senders will log messages instead of sending.",
+    );
     return;
   }
 
   await transporter.verify();
-  logger.info('SMTP email delivery verified');
+  logger.info("SMTP email delivery verified");
 }
 
 const BOOKING_INQUIRY_RECIPIENT = "info@dailyassistuk.com";
 
 function stripHtml(html: string): string {
   return html
-    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<br\s*\/?\s*>/gi, '\n')
-    .replace(/<\/p>/gi, '\n')
-    .replace(/<\/tr>/gi, '\n')
-    .replace(/<\/td>/gi, ' ')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<br\s*\/?\s*>/gi, "\n")
+    .replace(/<\/p>/gi, "\n")
+    .replace(/<\/tr>/gi, "\n")
+    .replace(/<\/td>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
-    .replace(/[ \t]+/g, ' ')
-    .replace(/\n\s+/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n\s+/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
 
@@ -88,7 +92,9 @@ ${html}
 </html>`;
 }
 
-async function sendStructuredMail(options: nodemailer.SendMailOptions & { html: string; text?: string }): Promise<void> {
+async function sendStructuredMail(
+  options: nodemailer.SendMailOptions & { html: string; text?: string },
+): Promise<void> {
   if (!transporter) return;
 
   const html = ensureHtmlDocument(options.html);
@@ -134,7 +140,6 @@ export async function sendPasswordResetEmail(
   logger.info({ to }, "Password reset email sent");
 }
 
-
 export type StaffCredentialsEmailInput = {
   to: string;
   email: string;
@@ -150,7 +155,11 @@ function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
-function professionalShell(title: string, preview: string, body: string): string {
+function professionalShell(
+  title: string,
+  preview: string,
+  body: string,
+): string {
   return `
   <!doctype html>
   <html>
@@ -177,7 +186,9 @@ function professionalShell(title: string, preview: string, body: string): string
   </html>`;
 }
 
-export async function sendStaffCredentialsEmail(input: StaffCredentialsEmailInput): Promise<void> {
+export async function sendStaffCredentialsEmail(
+  input: StaffCredentialsEmailInput,
+): Promise<void> {
   const subject = "DailyAssist Staff Dashboard Access";
   const html = professionalShell(
     "Your Staff Dashboard Access",
@@ -191,13 +202,18 @@ export async function sendStaffCredentialsEmail(input: StaffCredentialsEmailInpu
       </table>
       <p style="margin:22px 0 0;font-size:15px;line-height:1.7;color:#475569;">For security, keep these details private and store them safely. Your personal/primary email remains unchanged; the business email is only for staff dashboard access.</p>
       <p style="margin:24px 0 0;font-size:15px;line-height:1.7;color:#475569;">Kind regards,<br/><strong>The DailyAssist Team</strong></p>
-    `
+    `,
   );
   const text = `Your DailyAssist staff dashboard access is ready. Business login email: ${input.email}. Temporary password: ${input.password}. Your primary email remains unchanged.`;
 
   if (!transporter) {
     logger.info(
-      { to: input.to, email: input.email, password: input.password, mailer: 'smtp' },
+      {
+        to: input.to,
+        email: input.email,
+        password: input.password,
+        mailer: "smtp",
+      },
       "[DEV] Staff credentials email not sent — Mailtrap/SMTP config not set.",
     );
     return;
@@ -211,7 +227,7 @@ export async function sendStaffCredentialsEmail(input: StaffCredentialsEmailInpu
     text,
   });
 
-  logger.info({ to: input.to, mailer: 'smtp' }, "Staff credentials email sent");
+  logger.info({ to: input.to, mailer: "smtp" }, "Staff credentials email sent");
 }
 
 export type BookingInquiryEmailInput = {
@@ -269,17 +285,24 @@ export type GenericNotificationEmailInput = {
   body: string;
 };
 
-export async function sendNotificationEmail(input: GenericNotificationEmailInput): Promise<void> {
+export async function sendNotificationEmail(
+  input: GenericNotificationEmailInput,
+): Promise<void> {
   const html = professionalShell(
     input.title,
     input.body,
-    `<p style="margin:0;font-size:16px;line-height:1.7;">${escapeHtml(input.body)}</p>`
+    `<p style="margin:0;font-size:16px;line-height:1.7;">${escapeHtml(input.body)}</p>`,
   );
 
   if (!transporter) {
     logger.info(
-      { to: input.to, subject: input.subject, title: input.title, body: input.body },
-      '[DEV] Notification email not sent — Mailtrap/SMTP config not set.',
+      {
+        to: input.to,
+        subject: input.subject,
+        title: input.title,
+        body: input.body,
+      },
+      "[DEV] Notification email not sent — Mailtrap/SMTP config not set.",
     );
     return;
   }
@@ -292,5 +315,8 @@ export async function sendNotificationEmail(input: GenericNotificationEmailInput
     text: `${input.title}\n\n${input.body}`,
   });
 
-  logger.info({ to: input.to, subject: input.subject }, 'Notification email sent');
+  logger.info(
+    { to: input.to, subject: input.subject },
+    "Notification email sent",
+  );
 }
