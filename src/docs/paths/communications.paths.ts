@@ -10,6 +10,58 @@ const idParam: OpenAPIV3.ParameterObject = {
   description: 'Resource UUID.'
 };
 
+const messageIdParam: OpenAPIV3.ParameterObject = {
+  name: 'messageId',
+  in: 'path',
+  required: true,
+  schema: { type: 'string', format: 'uuid' },
+  description: 'Message UUID. It must belong to the thread identified by `id`.'
+};
+
+function permanentDeleteResponses(resource: 'Thread' | 'Message'): OpenAPIV3.ResponsesObject {
+  return {
+    '200': {
+      description: 'Resource permanently deleted',
+      content: {
+        'application/json': {
+          schema: {
+            type: 'object',
+            required: ['success', 'message', 'data'],
+            properties: {
+              success: { type: 'boolean', enum: [true] },
+              message: { type: 'string' },
+              data: {
+                type: 'object',
+                required: ['id', 'deleted'],
+                properties: {
+                  id: { type: 'string', format: 'uuid' },
+                  deleted: { type: 'boolean', enum: [true] }
+                }
+              }
+            }
+          },
+          example: {
+            success: true,
+            message: `${resource} deleted`,
+            data: { id: '00000000-0000-0000-0000-000000000000', deleted: true }
+          }
+        }
+      }
+    },
+    '401': { $ref: '#/components/responses/UnauthorizedError' },
+    '403': { $ref: '#/components/responses/ForbiddenError' },
+    '404': {
+      description: 'Thread or message was not found',
+      content: {
+        'application/json': {
+          schema: { $ref: '#/components/schemas/ErrorResponse' },
+          example: { success: false, message: 'Conversation not found' }
+        }
+      }
+    }
+  };
+}
+
 const paginationParameters: OpenAPIV3.ParameterObject[] = [
   { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 }, description: 'Page number.' },
   { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 }, description: 'Page size.' }
@@ -100,6 +152,16 @@ export const communicationsPaths: OpenAPIV3.PathsObject = {
       responses: { '200': { description: 'Threads retrieved' } }
     }
   },
+  '/admin/messages/threads/{id}': {
+    delete: {
+      tags: ['Messages'],
+      summary: 'Permanently delete an admin message thread',
+      description: 'Permanently deletes the conversation and all messages in it for every participant.',
+      security: secured,
+      parameters: [idParam],
+      responses: permanentDeleteResponses('Thread')
+    }
+  },
   '/admin/messages/threads/{id}/messages': {
     get: {
       tags: ['Messages'],
@@ -117,6 +179,16 @@ export const communicationsPaths: OpenAPIV3.PathsObject = {
       parameters: [idParam],
       requestBody: postMessageBody,
       responses: { '201': { description: 'Message sent' } }
+    }
+  },
+  '/admin/messages/threads/{id}/messages/{messageId}': {
+    delete: {
+      tags: ['Messages'],
+      summary: 'Delete a message from an admin thread',
+      description: 'Permanently deletes the specified message. The message must belong to the specified thread.',
+      security: secured,
+      parameters: [idParam, messageIdParam],
+      responses: permanentDeleteResponses('Message')
     }
   },
   '/admin/announcements': {
@@ -256,6 +328,16 @@ export const communicationsPaths: OpenAPIV3.PathsObject = {
       responses: { '200': { description: 'Threads retrieved' } }
     }
   },
+  '/staff/messages/threads/{id}': {
+    delete: {
+      tags: ['Messages'],
+      summary: 'Permanently delete own staff message thread',
+      description: 'Permanently deletes the conversation and all messages in it for every participant.',
+      security: secured,
+      parameters: [idParam],
+      responses: permanentDeleteResponses('Thread')
+    }
+  },
   '/staff/messages/threads/{id}/messages': {
     get: {
       tags: ['Messages'],
@@ -273,6 +355,16 @@ export const communicationsPaths: OpenAPIV3.PathsObject = {
       parameters: [idParam],
       requestBody: postMessageBody,
       responses: { '201': { description: 'Message sent' } }
+    }
+  },
+  '/staff/messages/threads/{id}/messages/{messageId}': {
+    delete: {
+      tags: ['Messages'],
+      summary: 'Delete a message from own staff thread',
+      description: 'Permanently deletes the specified message. The message must belong to a thread owned by the authenticated staff member.',
+      security: secured,
+      parameters: [idParam, messageIdParam],
+      responses: permanentDeleteResponses('Message')
     }
   },
   '/staff/announcements': {

@@ -51,8 +51,12 @@ async function postMessage(id: string, input: PostMessageInput, role: Role, user
   return communicationsService.postMessage(id, input, role, userId);
 }
 
-async function deleteMessage(id: string, role: Role, userId: string) {
-  return communicationsService.deleteMessage(id, role, userId);
+async function deleteThread(id: string, role: Role, userId: string) {
+  return communicationsService.deleteThread(id, role, userId);
+}
+
+async function deleteMessage(threadId: string, messageId: string, role: Role, userId: string) {
+  return communicationsService.deleteMessage(threadId, messageId, role, userId);
 }
 
 export const messagesService = {
@@ -68,5 +72,6 @@ export const messagesService = {
   listThreads,
   getThreadMessages,
   postMessage,
+  deleteThread,
   deleteMessage
 };
