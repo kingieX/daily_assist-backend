@@ -132,7 +132,10 @@ async function createThread(input: CreateThreadInput, currentUserRole: Role, cur
         staffId
       }
     },
-    update: { updatedAt: new Date() },
+    update: {
+      updatedAt: new Date(),
+      ...(currentUserRole === Role.STAFF ? { staffArchivedAt: null } : { adminArchivedAt: null })
+    },
     create: {
       type: 'ADMIN_STAFF',
       staffId
@@ -167,8 +170,12 @@ async function listThreads(query: ListThreadsQuery, currentUserRole: Role, curre
 
   if (currentUserRole === Role.STAFF) {
     where.staffId = currentUserId;
+    where.staffArchivedAt = null;
   } else if (query.staffId) {
     where.staffId = query.staffId;
+    where.adminArchivedAt = null;
+  } else {
+    where.adminArchivedAt = null;
   }
 
   const [total, items] = await Promise.all([
@@ -212,12 +219,15 @@ async function listThreads(query: ListThreadsQuery, currentUserRole: Role, curre
 async function getThreadMessages(conversationId: string, currentUserRole: Role, currentUserId: string) {
   const conversation = await db.conversation.findUnique({
     where: { id: conversationId },
-    select: { id: true, staffId: true }
+    select: { id: true, staffId: true, adminArchivedAt: true, staffArchivedAt: true }
   });
 
   if (!conversation) throw new ApiError(404, 'Conversation not found');
   if (currentUserRole === Role.STAFF && conversation.staffId !== currentUserId) {
     throw new ApiError(403, 'Forbidden for this conversation');
+  }
+  if ((currentUserRole === Role.STAFF && conversation.staffArchivedAt) || (currentUserRole !== Role.STAFF && conversation.adminArchivedAt)) {
+    throw new ApiError(404, 'Conversation not found');
   }
 
   return db.message.findMany({
@@ -244,12 +254,15 @@ async function postMessage(
 ) {
   const conversation = await db.conversation.findUnique({
     where: { id: conversationId },
-    select: { id: true, staffId: true }
+    select: { id: true, staffId: true, adminArchivedAt: true, staffArchivedAt: true }
   });
 
   if (!conversation) throw new ApiError(404, 'Conversation not found');
   if (currentUserRole === Role.STAFF && conversation.staffId !== currentUserId) {
     throw new ApiError(403, 'Forbidden for this conversation');
+  }
+  if ((currentUserRole === Role.STAFF && conversation.staffArchivedAt) || (currentUserRole !== Role.STAFF && conversation.adminArchivedAt)) {
+    throw new ApiError(404, 'Conversation not found');
   }
 
   const message = await db.$transaction(async (tx: any) => {
@@ -271,7 +284,10 @@ async function postMessage(
 
     await tx.conversation.update({
       where: { id: conversationId },
-      data: { updatedAt: new Date() }
+      data: {
+        updatedAt: new Date(),
+        ...(currentUserRole === Role.STAFF ? { adminArchivedAt: null } : { staffArchivedAt: null })
+      }
     });
 
     return created;
@@ -302,7 +318,27 @@ async function postMessage(
   return message;
 }
 
-async function deleteMessage(messageId: string, currentUserRole: Role, currentUserId: string) {
+async function deleteThread(conversationId: string, currentUserRole: Role, currentUserId: string) {
+  const conversation = await db.conversation.findUnique({
+    where: { id: conversationId },
+    select: { id: true, staffId: true }
+  });
+
+  if (!conversation) throw new ApiError(404, 'Conversation not found');
+  if (currentUserRole === Role.STAFF && conversation.staffId !== currentUserId) {
+    throw new ApiError(403, 'Forbidden for this conversation');
+  }
+
+  const archivedAt = new Date();
+  await db.conversation.update({
+    where: { id: conversationId },
+    data: currentUserRole === Role.STAFF ? { staffArchivedAt: archivedAt } : { adminArchivedAt: archivedAt }
+  });
+
+  return { id: conversationId, archived: true, archivedAt };
+}
+
+async function deleteMessage(conversationId: string, messageId: string, currentUserRole: Role, currentUserId: string) {
   const message = await db.message.findUnique({
     where: { id: messageId },
     include: {
@@ -312,7 +348,10 @@ async function deleteMessage(messageId: string, currentUserRole: Role, currentUs
     }
   });
 
-  if (!message) throw new ApiError(404, 'Message not found');
+  if (!message || message.conversationId !== conversationId) throw new ApiError(404, 'Message not found');
+  if (currentUserRole === Role.STAFF && message.conversation.staffId !== currentUserId) {
+    throw new ApiError(403, 'Forbidden for this conversation');
+  }
   if (message.deletedAt) return { id: message.id, deleted: true };
 
   const isOwner = message.senderUserId === currentUserId;
@@ -648,6 +687,7 @@ export const communicationsService = {
   listThreads,
   getThreadMessages,
   postMessage,
+  deleteThread,
   deleteMessage,
   listAnnouncements,
   markAnnouncementRead,
