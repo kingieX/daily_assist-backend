@@ -801,17 +801,6 @@ export const adminPaths: OpenAPIV3.PathsObject = {
       responses: { '204': { description: 'Application deleted' }, '404': { $ref: '#/components/responses/NotFound' } }
     }
   },
-  '/admin/recruitment/applications/{id}/status': {
-    patch: {
-      tags: ['Admin — Recruitment'],
-      summary: 'Removed: update application status',
-      deprecated: true,
-      description: 'Removed because RecruitmentPage.jsx has no status field or status action. Use DELETE for destructive actions or convert-to-staff for staff creation.',
-      security: adminSecurity,
-      parameters: [idParam],
-      responses: { '410': { description: 'Endpoint removed' } }
-    }
-  },
   '/admin/recruitment/applications/{id}/convert-to-staff': {
     post: {
       tags: ['Admin — Recruitment'],
