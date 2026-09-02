@@ -99,9 +99,9 @@ class RealtimeGateway extends EventEmitter {
   private async canAccessConversation(conversationId: string, userId: string, role: string): Promise<boolean> {
     if (typeof conversationId !== 'string' || !conversationId) return false;
     if (role === Role.ADMIN || role === Role.SUPER_ADMIN) {
-      return Boolean(await prisma.conversation.findUnique({ where: { id: conversationId }, select: { id: true } }));
+      return Boolean(await prisma.conversation.findFirst({ where: { id: conversationId, adminArchivedAt: null }, select: { id: true } }));
     }
-    return Boolean(await prisma.conversation.findFirst({ where: { id: conversationId, staffId: userId }, select: { id: true } }));
+    return Boolean(await prisma.conversation.findFirst({ where: { id: conversationId, staffId: userId, staffArchivedAt: null }, select: { id: true } }));
   }
 
   emitToUser(userId: string, event: string, payload: Record<string, unknown>): void {
