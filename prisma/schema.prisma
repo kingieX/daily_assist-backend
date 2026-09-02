@@ -458,13 +458,13 @@ model VisitEvent {
 }
 
 model Conversation {
-  id        String           @id @default(uuid())
-  type      ConversationType
-  staffId   String?          @map("staff_id")
-  staff     User?            @relation("ConversationStaff", fields: [staffId], references: [id])
-  createdAt DateTime         @default(now()) @map("created_at")
-  updatedAt DateTime         @updatedAt @map("updated_at")
-  messages  Message[]
+  id              String           @id @default(uuid())
+  type            ConversationType
+  staffId         String?          @map("staff_id")
+  staff           User?            @relation("ConversationStaff", fields: [staffId], references: [id])
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  messages        Message[]
 
   @@index([staffId])
   @@unique([type, staffId])
