@@ -6,7 +6,7 @@ import { prisma } from '../../config/prisma';
 import { logger } from '../../config/logger';
 import { env } from '../../config/env';
 import { sendNotificationEmail } from '../../config/mailer';
-import { realtimeGateway } from '../../realtime/realtime.gateway';
+import { emitRealtimeToUser } from '../../realtime/realtime-emitter';
 import { notificationsService } from './notifications.service';
 
 const db = prisma as any;
@@ -138,10 +138,10 @@ async function processJob(job: NotificationEventJob): Promise<void> {
       const notification = await db.notification.create({ data: { userId: recipient.id, type, title: job.payload.title, body: job.payload.body, metadataJson: { ...(job.payload.metadataJson ?? {}), eventType: job.eventType } } });
       notificationId = notification.id;
       await createDelivery({ notificationId, userId: recipient.id, channel: 'DASHBOARD', status: 'SENT' });
-      realtimeGateway.emitToUser(recipient.id, 'notification:created', notification);
-      realtimeGateway.emitToUser(recipient.id, 'alert:created', alertFromNotification(notification));
-      realtimeGateway.emitToUser(recipient.id, 'notification:unread_count', await notificationsService.getUnreadCount(recipient.id));
-      realtimeGateway.emitToUser(recipient.id, 'alert:unread_count', await notificationsService.getUnreadCount(recipient.id));
+      emitRealtimeToUser(recipient.id, 'notification:created', notification);
+      emitRealtimeToUser(recipient.id, 'alert:created', alertFromNotification(notification));
+      emitRealtimeToUser(recipient.id, 'notification:unread_count', await notificationsService.getUnreadCount(recipient.id));
+      emitRealtimeToUser(recipient.id, 'alert:unread_count', await notificationsService.getUnreadCount(recipient.id));
       await createDelivery({ notificationId, userId: recipient.id, channel: 'WEBSOCKET', status: 'SENT' });
     } else {
       await createDelivery({ userId: recipient.id, channel: 'DASHBOARD', status: 'SKIPPED', reason: 'Preference disabled' });

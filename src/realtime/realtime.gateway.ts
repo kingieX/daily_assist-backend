@@ -1,6 +1,8 @@
 import { EventEmitter } from 'events';
 import type { Server as HttpServer } from 'http';
 import { Server as SocketServer, Socket } from 'socket.io';
+import { createAdapter } from '@socket.io/redis-adapter';
+import IORedis from 'ioredis';
 import { Role, UserStatus } from '@prisma/client';
 import { logger } from '../config/logger';
 import { env } from '../config/env';
@@ -31,10 +33,13 @@ function tokenFromSocket(socket: Socket): string | null {
 
 class RealtimeGateway extends EventEmitter {
   private io: SocketServer | null = null;
+  private redisPubClient: IORedis | null = null;
+  private redisSubClient: IORedis | null = null;
 
   attach(server: HttpServer): void {
     if (this.io) return;
     this.io = new SocketServer(server, { cors: { origin: getCorsOrigin(), credentials: true } });
+    this.configureRedisAdapter();
     this.io.use(async (socket, next) => {
       try {
         const token = tokenFromSocket(socket);
@@ -81,12 +86,22 @@ class RealtimeGateway extends EventEmitter {
   }
 
 
+  private configureRedisAdapter(): void {
+    if (!this.io || !env.REDIS_URL) return;
+    this.redisPubClient = new IORedis(env.REDIS_URL, { maxRetriesPerRequest: null });
+    this.redisSubClient = this.redisPubClient.duplicate();
+    this.redisPubClient.on('error', (error) => logger.error({ error }, 'Socket.IO Redis pub connection error'));
+    this.redisSubClient.on('error', (error) => logger.error({ error }, 'Socket.IO Redis sub connection error'));
+    this.io.adapter(createAdapter(this.redisPubClient, this.redisSubClient));
+    logger.info('Socket.IO Redis adapter initialized for cross-process realtime events');
+  }
+
   private async canAccessConversation(conversationId: string, userId: string, role: string): Promise<boolean> {
     if (typeof conversationId !== 'string' || !conversationId) return false;
     if (role === Role.ADMIN || role === Role.SUPER_ADMIN) {
-      return Boolean(await prisma.conversation.findUnique({ where: { id: conversationId }, select: { id: true } }));
+      return Boolean(await prisma.conversation.findFirst({ where: { id: conversationId, adminArchivedAt: null }, select: { id: true } }));
     }
-    return Boolean(await prisma.conversation.findFirst({ where: { id: conversationId, staffId: userId }, select: { id: true } }));
+    return Boolean(await prisma.conversation.findFirst({ where: { id: conversationId, staffId: userId, staffArchivedAt: null }, select: { id: true } }));
   }
 
   emitToUser(userId: string, event: string, payload: Record<string, unknown>): void {

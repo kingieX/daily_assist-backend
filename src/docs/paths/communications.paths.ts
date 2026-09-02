@@ -100,6 +100,16 @@ export const communicationsPaths: OpenAPIV3.PathsObject = {
       responses: { '200': { description: 'Threads retrieved' } }
     }
   },
+  '/admin/messages/threads/{id}': {
+    delete: {
+      tags: ['Messages'],
+      summary: 'Archive an admin message thread',
+      description: 'Archives the conversation only from the requesting admin view. Message history is retained and remains visible to the staff participant. A new message from staff restores the thread to the admin list.',
+      security: secured,
+      parameters: [idParam],
+      responses: { '200': { description: 'Thread archived' } }
+    }
+  },
   '/admin/messages/threads/{id}/messages': {
     get: {
       tags: ['Messages'],
@@ -117,6 +127,16 @@ export const communicationsPaths: OpenAPIV3.PathsObject = {
       parameters: [idParam],
       requestBody: postMessageBody,
       responses: { '201': { description: 'Message sent' } }
+    }
+  },
+  '/admin/messages/threads/{id}/messages/{messageId}': {
+    delete: {
+      tags: ['Messages'],
+      summary: 'Delete a message from an admin thread',
+      description: 'Soft-deletes the specified message while retaining it for audit and history purposes. The message must belong to the specified thread.',
+      security: secured,
+      parameters: [idParam, { name: 'messageId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+      responses: { '200': { description: 'Message deleted' } }
     }
   },
   '/admin/announcements': {
@@ -256,6 +276,16 @@ export const communicationsPaths: OpenAPIV3.PathsObject = {
       responses: { '200': { description: 'Threads retrieved' } }
     }
   },
+  '/staff/messages/threads/{id}': {
+    delete: {
+      tags: ['Messages'],
+      summary: 'Archive own staff message thread',
+      description: 'Archives the conversation only from the authenticated staff member\'s view. Message history is retained and remains visible to admins. A new message from an admin restores the thread to the staff list.',
+      security: secured,
+      parameters: [idParam],
+      responses: { '200': { description: 'Thread archived' } }
+    }
+  },
   '/staff/messages/threads/{id}/messages': {
     get: {
       tags: ['Messages'],
@@ -273,6 +303,16 @@ export const communicationsPaths: OpenAPIV3.PathsObject = {
       parameters: [idParam],
       requestBody: postMessageBody,
       responses: { '201': { description: 'Message sent' } }
+    }
+  },
+  '/staff/messages/threads/{id}/messages/{messageId}': {
+    delete: {
+      tags: ['Messages'],
+      summary: 'Delete a message from own staff thread',
+      description: 'Soft-deletes the specified message while retaining it for audit and history purposes. The message must belong to a thread owned by the authenticated staff member.',
+      security: secured,
+      parameters: [idParam, { name: 'messageId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+      responses: { '200': { description: 'Message deleted' } }
     }
   },
   '/staff/announcements': {
