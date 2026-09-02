@@ -100,6 +100,16 @@ export const communicationsPaths: OpenAPIV3.PathsObject = {
       responses: { '200': { description: 'Threads retrieved' } }
     }
   },
+  '/admin/messages/threads/{id}': {
+    delete: {
+      tags: ['Messages'],
+      summary: 'Permanently delete an admin message thread',
+      description: 'Permanently deletes the conversation and all messages in it for every participant.',
+      security: secured,
+      parameters: [idParam],
+      responses: { '200': { description: 'Thread deleted' } }
+    }
+  },
   '/admin/messages/threads/{id}/messages': {
     get: {
       tags: ['Messages'],
@@ -117,6 +127,16 @@ export const communicationsPaths: OpenAPIV3.PathsObject = {
       parameters: [idParam],
       requestBody: postMessageBody,
       responses: { '201': { description: 'Message sent' } }
+    }
+  },
+  '/admin/messages/threads/{id}/messages/{messageId}': {
+    delete: {
+      tags: ['Messages'],
+      summary: 'Delete a message from an admin thread',
+      description: 'Permanently deletes the specified message. The message must belong to the specified thread.',
+      security: secured,
+      parameters: [idParam, { name: 'messageId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+      responses: { '200': { description: 'Message deleted' } }
     }
   },
   '/admin/announcements': {
@@ -256,6 +276,16 @@ export const communicationsPaths: OpenAPIV3.PathsObject = {
       responses: { '200': { description: 'Threads retrieved' } }
     }
   },
+  '/staff/messages/threads/{id}': {
+    delete: {
+      tags: ['Messages'],
+      summary: 'Permanently delete own staff message thread',
+      description: 'Permanently deletes the conversation and all messages in it for every participant.',
+      security: secured,
+      parameters: [idParam],
+      responses: { '200': { description: 'Thread deleted' } }
+    }
+  },
   '/staff/messages/threads/{id}/messages': {
     get: {
       tags: ['Messages'],
@@ -273,6 +303,16 @@ export const communicationsPaths: OpenAPIV3.PathsObject = {
       parameters: [idParam],
       requestBody: postMessageBody,
       responses: { '201': { description: 'Message sent' } }
+    }
+  },
+  '/staff/messages/threads/{id}/messages/{messageId}': {
+    delete: {
+      tags: ['Messages'],
+      summary: 'Delete a message from own staff thread',
+      description: 'Permanently deletes the specified message. The message must belong to a thread owned by the authenticated staff member.',
+      security: secured,
+      parameters: [idParam, { name: 'messageId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+      responses: { '200': { description: 'Message deleted' } }
     }
   },
   '/staff/announcements': {

@@ -74,12 +74,6 @@ const postMessage = asyncHandler(async (req: Request, res: Response) => {
   return sendSuccess(res, 201, 'Message sent', result);
 });
 
-const deleteMessage = asyncHandler(async (req: Request, res: Response) => {
-  const user = currentUser(req);
-  const result = await communicationsService.deleteMessage(req.params.id as string, user.role, user.id);
-  return sendSuccess(res, 200, 'Message deleted', result);
-});
-
 const listAnnouncements = asyncHandler(async (req: Request, res: Response) => {
   const user = currentUser(req);
   const result = await communicationsService.listAnnouncements(user.role, user.id, req.query as any);
@@ -132,7 +126,6 @@ export const adminCommunicationsController = {
   listThreads,
   getThreadMessages,
   postMessage,
-  deleteMessage,
   listAnnouncements,
   createAnnouncement,
   deleteAnnouncement,

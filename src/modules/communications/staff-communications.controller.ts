@@ -58,12 +58,6 @@ const postMessage = asyncHandler(async (req: Request, res: Response) => {
   return sendSuccess(res, 201, 'Message sent', result);
 });
 
-const deleteMessage = asyncHandler(async (req: Request, res: Response) => {
-  const user = currentUser(req);
-  const result = await communicationsService.deleteMessage(req.params.id as string, user.role, user.id);
-  return sendSuccess(res, 200, 'Message deleted', result);
-});
-
 const deleteInbox = asyncHandler(async (req: Request, res: Response) => {
   const user = currentUser(req);
   const result = await communicationsService.deleteInboxItem(req.params.id as string, user.id, user.role);
@@ -120,7 +114,6 @@ export const staffCommunicationsController = {
   listThreads,
   getThreadMessages,
   postMessage,
-  deleteMessage,
   deleteInbox,
   listAnnouncements,
   markAnnouncementRead,

@@ -22,6 +22,8 @@ adminMessagesRouter.post('/messages/threads', validate({ body: createThreadSchem
 adminMessagesRouter.get('/messages/threads', validate({ query: listThreadsQuerySchema }), adminMessagesController.listThreads);
 adminMessagesRouter.get('/messages/threads/:id/messages', validate({ params: idParamSchema }), adminMessagesController.getThreadMessages);
 adminMessagesRouter.post('/messages/threads/:id/messages', validate({ params: idParamSchema, body: postMessageSchema }), adminMessagesController.postMessage);
+adminMessagesRouter.delete('/messages/threads/:id', validate({ params: idParamSchema }), adminMessagesController.deleteThread);
+adminMessagesRouter.delete('/messages/threads/:id/messages/:messageId', validate({ params: idParamSchema.extend({ messageId: idParamSchema.shape.id }) }), adminMessagesController.deleteMessage);
 adminMessagesRouter.get('/messages/:id', validate({ params: idParamSchema }), adminMessagesController.getInboxDetail);
 adminMessagesRouter.post('/messages/:id/reply', validate({ params: idParamSchema, body: replyMessageSchema }), adminMessagesController.replyToMessage);
 adminMessagesRouter.delete('/messages/:id', validate({ params: idParamSchema }), adminMessagesController.deleteInbox);
