@@ -72,6 +72,9 @@ export const openApiSpec: OpenAPIV3.Document = {
       '',
       '## Notifications and Dashboard Alerts',
       'Notification records are created by the notification event worker after user notification preferences are evaluated. Admin dashboard alerts are not a separate store; `/admin/dashboard/alerts` projects the authenticated admin notification rows into alert cards. Staff direct messages now produce admin `MESSAGE` notifications, and staff check-in/check-out events produce admin `VISIT` notifications when preferences allow them. In multi-process deployments, the API Socket.IO server and notification worker share `REDIS_URL`: BullMQ uses it for jobs, the API uses it for the Socket.IO Redis adapter, and the worker uses it for the Redis emitter so `notification:*` and `alert:*` WebSocket events reach connected clients.'
+      '',
+      '## Message Thread Deletion',
+      'Thread APIs provide permanent deletion for admins and staff: `DELETE /admin/messages/threads/{id}` and `DELETE /staff/messages/threads/{id}` remove the entire conversation for all participants. The nested `.../messages/{messageId}` endpoints permanently remove one message. These operations cannot be undone.'
     ].join('\n')
   },
 
